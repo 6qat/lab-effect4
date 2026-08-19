@@ -52,8 +52,8 @@ const _program3 = Effect.gen(function* () {
   });
 
   // Run both fibers concurrently
-  const fiberA = yield* Effect.forkChild(taskA);
-  const fiberB = yield* Effect.forkChild(taskB);
+  const fiberA = yield* Effect.forkChild(taskB);
+  const fiberB = yield* Effect.forkChild(taskA);
 
   // Wait for both fibers to complete
   const both = yield* Fiber.joinAll([fiberA, fiberB]);
@@ -61,4 +61,4 @@ const _program3 = Effect.gen(function* () {
   console.log(both);
 });
 
-Effect.runPromise(_program3).then(console.log);
+Effect.runPromise(_program3).then(() => console.log("End."));
