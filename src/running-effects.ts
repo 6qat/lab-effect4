@@ -1,4 +1,4 @@
-import { Effect, Console, Fiber, Exit } from "effect";
+import { Console, Effect, Exit, Fiber } from "effect";
 
 // =========================================================================
 // Effect.runSync — runs an effect synchronously and returns the success value.
@@ -26,12 +26,12 @@ console.log("runSyncExit:", Exit.isFailure(syncExit) ? "Failure" : "Success");
 // =========================================================================
 
 const promiseProgram = Effect.succeed("hello").pipe(
-	Effect.delay("100 millis"),
-	Effect.tap(Console.log),
+  Effect.delay("100 millis"),
+  Effect.tap(Console.log),
 );
 
 await Effect.runPromise(promiseProgram).then((value) =>
-	console.log("runPromise resolved:", value),
+  console.log("runPromise resolved:", value),
 );
 
 // =========================================================================
@@ -40,7 +40,7 @@ await Effect.runPromise(promiseProgram).then((value) =>
 // =========================================================================
 
 await Effect.runPromiseExit(failingProgram).then((exit) =>
-	console.log("runPromiseExit:", Exit.isSuccess(exit) ? "Success" : "Failure"),
+  console.log("runPromiseExit:", Exit.isSuccess(exit) ? "Success" : "Failure"),
 );
 
 // =========================================================================
@@ -49,14 +49,14 @@ await Effect.runPromiseExit(failingProgram).then((exit) =>
 // =========================================================================
 
 const forkedProgram = Effect.succeed("background").pipe(
-	Effect.delay("100 millis"),
-	Effect.tap(Console.log),
+  Effect.delay("100 millis"),
+  Effect.tap(Console.log),
 );
 
 const fiber = Effect.runFork(forkedProgram);
 
 await Effect.runPromise(Fiber.join(fiber)).then((value) =>
-	console.log("runFork joined:", value),
+  console.log("runFork joined:", value),
 );
 
 // =========================================================================
@@ -65,12 +65,12 @@ await Effect.runPromise(Fiber.join(fiber)).then((value) =>
 // =========================================================================
 
 Effect.runCallback(Effect.succeed("callback"), {
-	onExit: (exit) =>
-		console.log(
-			"runCallback:",
-			Exit.isSuccess(exit) ? "Success" : "Failure",
-			Exit.isSuccess(exit) ? exit.value : exit.cause,
-		),
+  onExit: (exit) =>
+    console.log(
+      "runCallback:",
+      Exit.isSuccess(exit) ? "Success" : "Failure",
+      Exit.isSuccess(exit) ? exit.value : exit.cause,
+    ),
 });
 
 // =========================================================================
