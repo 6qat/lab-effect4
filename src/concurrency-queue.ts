@@ -1,4 +1,3 @@
-import { NodeRuntime } from "@effect/platform-node";
 import { Console, Effect, Fiber, Queue } from "effect";
 
 // Creating a bounded queue with a capacity of 100

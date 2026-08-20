@@ -1,12 +1,20 @@
 import * as NodeFS from "node:fs";
+import * as NodeFS2 from "node:fs/promises";
+import { $ } from "bun";
+
 import { Data, Effect, Fiber } from "effect";
 
-const readFile = (filename: string) =>
-  Effect.callback<Buffer, Error>((resume) => {
+class ReadFileError extends Data.TaggedError("ReadFileError")<{
+  readonly filename: string;
+  readonly cause: unknown;
+}> {}
+
+const _readFile = (filename: string) =>
+  Effect.callback<Buffer, ReadFileError>((resume) => {
     NodeFS.readFile(filename, (error, data) => {
       if (error) {
         // Resume with a failed Effect if an error occurs
-        resume(Effect.fail(error));
+        resume(Effect.fail(new ReadFileError({ filename, cause: error })));
       } else {
         // Resume with a succeeded Effect if successful
         resume(Effect.succeed(data));
@@ -14,11 +22,90 @@ const readFile = (filename: string) =>
     });
   });
 
+export const _readFile2 = (filename: string) =>
+  Effect.tryPromise({
+    // 1. Effect passes its fiber AbortSignal directly to Node
+    try: (signal) => NodeFS2.readFile(filename, { signal }),
+    // 2. Maps any thrown error into a typed, tagged error
+    catch: (cause) => new ReadFileError({ filename, cause }),
+  });
+
+export const _readFileBun = (filename: string) =>
+  Effect.tryPromise({
+    try: () => Bun.file(filename).text(),
+    catch: (cause) => new ReadFileError({ filename, cause }),
+  });
+
 //      ┌─── Effect<Buffer, Error, never>
 //      ▼
-const _p1 = readFile("example.txt");
+const _p1 = _readFileBun("example.txt");
 
 // =========================================================================
+// =========================================================================
+
+class WriteFileError extends Data.TaggedError("WriteFileError")<{
+  readonly filename?: string;
+  readonly cause?: unknown;
+}> {}
+
+// Bun.write accepts more than plain strings; widening the input type lets
+// callers pass binary data or Blobs directly. We define our own runtime-neutral
+// TypedArray union instead of exposing NodeJS.TypedArray in this Bun helper.
+type TypedArray =
+  | Uint8Array
+  | Uint8ClampedArray
+  | Uint16Array
+  | Uint32Array
+  | Int8Array
+  | Int16Array
+  | Int32Array
+  | BigUint64Array
+  | BigInt64Array
+  | Float16Array
+  | Float32Array
+  | Float64Array;
+
+type BunWritable = string | Blob | TypedArray | ArrayBufferLike;
+
+/**
+ * Writes a file atomically using Bun.write and Bun Shell's `mv` command.
+ *
+ * The destination is not touched until the temporary file is complete. The
+ * temporary file is removed on success, failure, move failure, or interruption.
+ */
+export const writeFileBun = (filename: string, content: BunWritable) => {
+  const tmpFilename = `${filename}.${crypto.randomUUID()}.tmp`;
+
+  const program = Effect.gen(function* () {
+    const bytesWritten = yield* Effect.tryPromise({
+      try: () => Bun.write(tmpFilename, content),
+      catch: (cause) => new WriteFileError({ filename, cause }),
+    });
+
+    yield* Effect.tryPromise({
+      try: async () => {
+        // Bun has no direct Bun.rename API; Bun Shell's `mv` performs the
+        // rename, and interpolated arguments are escaped by Bun Shell.
+        await $`mv ${tmpFilename} ${filename}`;
+      },
+      catch: (cause) => new WriteFileError({ filename, cause }),
+    });
+
+    return bytesWritten;
+  });
+
+  return program.pipe(
+    // After a successful move the temporary path no longer exists, so this is
+    // safe on success as well as on failure or interruption.
+    Effect.ensuring(
+      Effect.promise(() =>
+        Bun.file(tmpFilename)
+          .delete()
+          .catch(() => undefined),
+      ),
+    ),
+  );
+};
 
 // Simulates a long-running operation to write to a file
 const writeFileWithCleanup = (filename: string, data: string) =>
@@ -53,11 +140,37 @@ const _p2 = Effect.gen(function* () {
   yield* Fiber.join(fiber);
 });
 
-// ===========================================================================
+// =========================================================================
+// writeFileWithCleanupPromise: Idiomatic Promise-based version using
+// node:fs/promises, Effect.tryPromise with AbortSignal, and Effect.onInterrupt
+// for cleanup upon interruption.
+// =========================================================================
 
-class WriteFileError extends Data.TaggedError("WriteFileError")<{
-  readonly cause?: unknown;
-}> {}
+export const writeFileWithCleanupPromise = (filename: string, data: string) =>
+  Effect.tryPromise({
+    // NodeFS2.writeFile natively accepts an AbortSignal, canceling the I/O if the fiber is interrupted
+    try: (signal) => NodeFS2.writeFile(filename, data, { signal }),
+    catch: (cause) => new WriteFileError({ cause }),
+  }).pipe(
+    // Runs when the fiber is interrupted, removing any partially-written file
+    Effect.onInterrupt(() =>
+      Effect.promise(async () => {
+        console.log(`Cleaning up ${filename}`);
+        await NodeFS2.unlink(filename).catch(() => {});
+      }),
+    ),
+  );
+
+export const _p2Promise = Effect.gen(function* () {
+  const fiber = yield* Effect.forkChild(
+    writeFileWithCleanupPromise("example.txt", "Some long data..."),
+  );
+  yield* Effect.sleep("1 second");
+  yield* Fiber.interrupt(fiber); // Triggers the onInterrupt cleanup
+  yield* Fiber.join(fiber);
+});
+
+// ===========================================================================
 
 const _writeFileWithCleanupNoDie = (filename: string, data: string) =>
   Effect.callback<void, WriteFileError>((resume) => {
@@ -68,7 +181,7 @@ const _writeFileWithCleanupNoDie = (filename: string, data: string) =>
       writeStream.on("finish", () => resume(Effect.void));
       // In case of an error during writing, resume with failure
       writeStream.on("error", (err) =>
-        resume(Effect.fail(new WriteFileError({ cause: err }))),
+        resume(new WriteFileError({ cause: err })),
       );
 
       // Start writing data to the file
@@ -85,7 +198,7 @@ const _writeFileWithCleanupNoDie = (filename: string, data: string) =>
       });
     } catch (err) {
       // Safely routes synchronous throws to the typed error channel
-      resume(Effect.fail(new WriteFileError({ cause: err })));
+      resume(new WriteFileError({ cause: err }));
     }
   });
 
@@ -169,4 +282,4 @@ const _withSuspend = (a: number, b: number) =>
 
 // =========================================================================
 
-Effect.runPromise(p3).then((x) => console.log(x));
+Effect.runPromise(_p1).then((x) => console.log(x));
