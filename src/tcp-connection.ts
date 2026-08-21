@@ -231,12 +231,10 @@ const makeTcpStream = Effect.gen(function* () {
           });
 
           if (bytesWritten < 0) {
-            return yield* Effect.fail(
-              new TcpStreamError({
-                operation: "write",
-                message: "Socket closed while writing",
-              }),
-            );
+            return yield* new TcpStreamError({
+              operation: "write",
+              message: "Socket closed while writing",
+            });
           }
 
           offset += bytesWritten;
@@ -246,13 +244,11 @@ const makeTcpStream = Effect.gen(function* () {
             // registering the waiter. Check again before suspending.
             const stateAfterWrite = MutableRef.get(state);
             if (stateAfterWrite._tag === "Closed") {
-              return yield* Effect.fail(
-                stateAfterWrite.error ??
-                  new TcpStreamError({
-                    operation: "write",
-                    message: "Connection closed during a partial write",
-                  }),
-              );
+              return yield* stateAfterWrite.error ??
+                new TcpStreamError({
+                  operation: "write",
+                  message: "Connection closed during a partial write",
+                });
             }
 
             yield* Deferred.await(waiter);
