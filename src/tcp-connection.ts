@@ -2,6 +2,7 @@ import {
   Cause,
   Context,
   Data,
+  Deferred,
   Effect,
   Layer,
   MutableRef,
@@ -38,6 +39,7 @@ export class TcpStream extends Context.Service<TcpStream, TcpStreamShape>()(
 export interface ConnectionConfigShape {
   readonly host: string;
   readonly port: number;
+  readonly tls?: boolean | Bun.TLSOptions;
   readonly magicToken?: string;
   readonly username?: string;
   readonly password?: string;
@@ -70,6 +72,22 @@ const makeTcpStream = Effect.gen(function* () {
 
   const state = MutableRef.make<ConnectionState>({ _tag: "Open" });
   const hasEndedSocket = MutableRef.make(false);
+  const drainWaiter = MutableRef.make<
+    Deferred.Deferred<void, TcpStreamError> | undefined
+  >(undefined);
+
+  const completeDrainWaiter = (error?: TcpStreamError): void => {
+    const waiter = MutableRef.get(drainWaiter);
+    if (waiter === undefined) {
+      return;
+    }
+
+    MutableRef.set(drainWaiter, undefined);
+    Deferred.doneUnsafe(
+      waiter,
+      error === undefined ? Effect.void : Effect.fail(error),
+    );
+  };
 
   // Undefined error means graceful completion
   const finishIncoming = (error?: TcpStreamError): boolean => {
@@ -82,9 +100,16 @@ const makeTcpStream = Effect.gen(function* () {
 
     if (error) {
       MutableRef.set(state, { _tag: "Closed", error });
+      completeDrainWaiter(error);
       Queue.failCauseUnsafe(incoming, Cause.fail(error));
     } else {
       MutableRef.set(state, { _tag: "Closed" });
+      completeDrainWaiter(
+        new TcpStreamError({
+          operation: "write",
+          message: "Connection closed while waiting for socket drain",
+        }),
+      );
       Queue.endUnsafe(incoming);
     }
 
@@ -109,10 +134,14 @@ const makeTcpStream = Effect.gen(function* () {
       Bun.connect<undefined>({
         hostname: config.host,
         port: config.port,
+        ...(config.tls === undefined ? {} : { tls: config.tls }),
         socket: {
           binaryType: "uint8array",
           data(_socket, data) {
             Queue.offerUnsafe(incoming, data);
+          },
+          drain() {
+            completeDrainWaiter();
           },
           error(socket, cause) {
             const error = new TcpStreamError({
@@ -168,32 +197,77 @@ const makeTcpStream = Effect.gen(function* () {
       1,
     )(
       Effect.gen(function* () {
-        const currentState = MutableRef.get(state);
-        if (currentState._tag === "Closed") {
-          return yield* currentState.error ??
-            new TcpStreamError({
-              operation: "write",
-              message: "Connection is closed",
-            });
-        }
+        let offset = 0;
 
-        const bytesWritten = yield* Effect.try({
-          try: () => socket.write(data),
-          catch: (cause) =>
-            new TcpStreamError({
-              operation: "write",
-              message: `Socket write failed: ${unknownToMessage(cause)}`,
-              cause,
-            }),
-        });
+        while (offset < data.byteLength) {
+          const currentState = MutableRef.get(state);
+          if (currentState._tag === "Closed") {
+            return yield* Effect.fail(
+              currentState.error ??
+                new TcpStreamError({
+                  operation: "write",
+                  message: "Connection is closed",
+                }),
+            );
+          }
 
-        if (bytesWritten !== data.byteLength) {
-          return yield* new TcpStreamError({
-            operation: "write",
-            message: `Partial write: wrote ${bytesWritten} of ${data.byteLength} bytes`,
+          // Register before calling socket.write so a drain event cannot be
+          // missed if Bun emits it immediately after accepting a partial write.
+          const waiter = Deferred.makeUnsafe<void, TcpStreamError>();
+          MutableRef.set(drainWaiter, waiter);
+
+          const bytesWritten = yield* Effect.try({
+            try: () => {
+              const written = socket.write(data.subarray(offset));
+              socket.flush();
+              return written;
+            },
+            catch: (cause) =>
+              new TcpStreamError({
+                operation: "write",
+                message: `Socket write failed: ${unknownToMessage(cause)}`,
+                cause,
+              }),
           });
+
+          if (bytesWritten < 0) {
+            return yield* Effect.fail(
+              new TcpStreamError({
+                operation: "write",
+                message: "Socket closed while writing",
+              }),
+            );
+          }
+
+          offset += bytesWritten;
+
+          if (offset < data.byteLength) {
+            // The socket may have closed between the state check above and
+            // registering the waiter. Check again before suspending.
+            const stateAfterWrite = MutableRef.get(state);
+            if (stateAfterWrite._tag === "Closed") {
+              return yield* Effect.fail(
+                stateAfterWrite.error ??
+                  new TcpStreamError({
+                    operation: "write",
+                    message: "Connection closed during a partial write",
+                  }),
+              );
+            }
+
+            yield* Deferred.await(waiter);
+          } else {
+            MutableRef.set(drainWaiter, undefined);
+          }
         }
-      }).pipe(Effect.tapError(failConnection)),
+      }).pipe(
+        Effect.tapError(failConnection),
+        // If the sending fiber itself is interrupted while waiting for drain,
+        // remove its waiter before another sender acquires the semaphore.
+        Effect.ensuring(
+          Effect.sync(() => MutableRef.set(drainWaiter, undefined)),
+        ),
+      ),
     );
 
   return TcpStream.of({
@@ -209,19 +283,5 @@ const makeTcpStream = Effect.gen(function* () {
 
 export const TcpStreamLive = () => Layer.effect(TcpStream, makeTcpStream);
 
-export const ConnectionConfigLive = (
-  host: string,
-  port: number,
-  tickers: ReadonlyArray<string>,
-  magicToken: string,
-  username: string,
-  password: string,
-) =>
-  Layer.succeed(ConnectionConfig, {
-    host,
-    port,
-    tickers,
-    magicToken,
-    username,
-    password,
-  });
+export const ConnectionConfigLive = (config: ConnectionConfigShape) =>
+  Layer.succeed(ConnectionConfig, config);

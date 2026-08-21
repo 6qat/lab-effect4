@@ -9,29 +9,33 @@ const getUrl = (): URL => {
   const input = Bun.argv[2];
 
   if (input === undefined) {
-    console.error("Usage: bun src/tcp-connection-http-example.ts <http-url>");
+    console.error(
+      "Usage: bun src/tcp-connection-http-example.ts <http-or-https-url>",
+    );
     process.exit(1);
   }
 
   try {
     const url = new URL(input);
 
-    if (url.protocol !== "http:") {
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
       console.error(
-        `Unsupported protocol ${url.protocol}; this example supports only plain HTTP`,
+        `Unsupported protocol ${url.protocol}; expected http: or https:`,
       );
       process.exit(1);
     }
 
     return url;
   } catch {
-    console.error(`Invalid HTTP URL: ${input}`);
+    console.error(`Invalid HTTP(S) URL: ${input}`);
     process.exit(1);
   }
 };
 
 const url = getUrl();
-const port = url.port === "" ? 80 : Number.parseInt(url.port, 10);
+const isHttps = url.protocol === "https:";
+const port =
+  url.port === "" ? (isHttps ? 443 : 80) : Number.parseInt(url.port, 10);
 const requestTarget = `${url.pathname}${url.search}`;
 
 const request = [
@@ -70,14 +74,19 @@ const program = Effect.gen(function* () {
   ),
 );
 
-const connectionConfigLayer = ConnectionConfigLive(
-  url.hostname,
+const connectionConfigLayer = ConnectionConfigLive({
+  host: url.hostname,
   port,
-  [],
-  "",
-  "",
-  "",
-);
+  ...(isHttps
+    ? {
+        tls: {
+          serverName: url.hostname,
+          rejectUnauthorized: true,
+          ALPNProtocols: "http/1.1",
+        },
+      }
+    : {}),
+});
 
 const tcpLayer = TcpStreamLive().pipe(Layer.provide(connectionConfigLayer));
 
