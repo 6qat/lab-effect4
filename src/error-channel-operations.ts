@@ -64,6 +64,7 @@ const _task4 = Effect.filterOrElse(
 
 // Define a user interface
 interface User {
+  readonly id: number;
   readonly name: string;
 }
 
@@ -82,6 +83,11 @@ const _program = pipe(
 );
 
 // Custom type guard
-function _isUser(obj: any): obj is User {
-  return obj && typeof obj.id === "number" && typeof obj.name === "string";
+function _isUser(obj: unknown): obj is User {
+  if (typeof obj !== "object" || obj === null) {
+    return false;
+  }
+
+  const record = obj as Record<string, unknown>;
+  return typeof record.id === "number" && typeof record.name === "string";
 }

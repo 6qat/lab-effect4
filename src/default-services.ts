@@ -28,4 +28,4 @@ Effect.runPromise(override2);
 
 // =======================================================================
 
-const bytes = crypto.getRandomValues(new Uint8Array(32));
+const _bytes = crypto.getRandomValues(new Uint8Array(32));
