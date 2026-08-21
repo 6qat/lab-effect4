@@ -67,45 +67,65 @@ type TypedArray =
 
 type BunWritable = string | Blob | TypedArray | ArrayBufferLike;
 
-/**
- * Writes a file atomically using Bun.write and Bun Shell's `mv` command.
- *
- * The destination is not touched until the temporary file is complete. The
- * temporary file is removed on success, failure, move failure, or interruption.
- */
-export const writeFileBun = (filename: string, content: BunWritable) => {
-  const tmpFilename = `${filename}.${crypto.randomUUID()}.tmp`;
+const deleteFile = (filename: string) =>
+  Effect.promise(() =>
+    Bun.file(filename)
+      .delete()
+      .catch(() => undefined),
+  );
 
-  const program = Effect.gen(function* () {
-    const bytesWritten = yield* Effect.tryPromise({
-      try: () => Bun.write(tmpFilename, content),
-      catch: (cause) => new WriteFileError({ filename, cause }),
+const writeTemporaryFile = (filename: string, content: BunWritable) => {
+  const write = Effect.callback<number, WriteFileError>((resume) => {
+    let promise: Promise<number>;
+
+    try {
+      promise = Bun.write(filename, content);
+    } catch (cause) {
+      resume(Effect.fail(new WriteFileError({ filename, cause })));
+      return;
+    }
+
+    promise.then(
+      (bytesWritten) => resume(Effect.succeed(bytesWritten)),
+      (cause) => resume(Effect.fail(new WriteFileError({ filename, cause }))),
+    );
+
+    // Bun.write cannot be aborted. If interrupted, wait for it to settle
+    // before deleting the temporary file to avoid racing the write operation.
+    return Effect.promise(async () => {
+      await promise.catch(() => {});
+      await Bun.file(filename)
+        .delete()
+        .catch(() => {});
     });
-
-    yield* Effect.tryPromise({
-      try: async () => {
-        // Bun has no direct Bun.rename API; Bun Shell's `mv` performs the
-        // rename, and interpolated arguments are escaped by Bun Shell.
-        await $`mv ${tmpFilename} ${filename}`;
-      },
-      catch: (cause) => new WriteFileError({ filename, cause }),
-    });
-
-    return bytesWritten;
   });
 
-  return program.pipe(
-    // After a successful move the temporary path no longer exists, so this is
-    // safe on success as well as on failure or interruption.
-    Effect.ensuring(
-      Effect.promise(() =>
-        Bun.file(tmpFilename)
-          .delete()
-          .catch(() => undefined),
-      ),
-    ),
-  );
+  // Also clean up after an ordinary write failure. The interruption finalizer
+  // above handles interruption while the write is still pending.
+  return write.pipe(Effect.tapError(() => deleteFile(filename)));
 };
+
+export const writeFileBun = (filename: string, content: BunWritable) =>
+  Effect.suspend(() => {
+    const tmpFilename = `${filename}.${crypto.randomUUID()}.tmp`;
+
+    const program = Effect.gen(function* () {
+      const bytesWritten = yield* writeTemporaryFile(tmpFilename, content);
+
+      yield* Effect.tryPromise({
+        try: async () => {
+          await $`mv ${tmpFilename} ${filename}`;
+        },
+        catch: (cause) => new WriteFileError({ filename, cause }),
+      });
+
+      return bytesWritten;
+    });
+
+    // Handles move failure or interruption during the move. After a
+    // successful move, the temporary path no longer exists, so this is safe.
+    return program.pipe(Effect.ensuring(deleteFile(tmpFilename)));
+  });
 
 // Simulates a long-running operation to write to a file
 const writeFileWithCleanup = (filename: string, data: string) =>
