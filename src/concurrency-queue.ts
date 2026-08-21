@@ -64,7 +64,7 @@ const _program3 = Effect.gen(function* () {
   yield* Queue.shutdown(queue);
 
   // Joins the interrupted fiber
-  const f = yield* Fiber.join(fiber);
+  const _f = yield* Fiber.join(fiber);
 });
 // Effect.runPromiseExit(program3).then(console.log);
 
@@ -77,7 +77,7 @@ const _program4 = Effect.gen(function* () {
   );
 
   // Forks a fiber that waits to take an item from the queue
-  const fiber2 = yield* Effect.forkChild(Queue.take(queue));
+  const _fiber2 = yield* Effect.forkChild(Queue.take(queue));
 
   // Shuts down the queue, triggering the await in the fiber
   yield* Queue.shutdown(queue);

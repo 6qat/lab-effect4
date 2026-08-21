@@ -265,7 +265,7 @@ const interruptibleTask = Effect.callback<void, InterruptedError>(
   },
 );
 
-const p3 = Effect.gen(function* () {
+const _p3 = Effect.gen(function* () {
   const fiber = yield* Effect.forkChild(interruptibleTask);
   // Simulate interrupting the fiber after 1 second
   yield* Effect.sleep("1 second");

@@ -202,13 +202,11 @@ const makeTcpStream = Effect.gen(function* () {
         while (offset < data.byteLength) {
           const currentState = MutableRef.get(state);
           if (currentState._tag === "Closed") {
-            return yield* Effect.fail(
-              currentState.error ??
-                new TcpStreamError({
-                  operation: "write",
-                  message: "Connection is closed",
-                }),
-            );
+            return yield* currentState.error ??
+              new TcpStreamError({
+                operation: "write",
+                message: "Connection is closed",
+              });
           }
 
           // Register before calling socket.write so a drain event cannot be

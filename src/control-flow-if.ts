@@ -1,7 +1,7 @@
 import { Console, Effect, Option, pipe, Random } from "effect";
 
 // Function to validate weight and return an Option
-const validateWeightOption = (
+const _validateWeightOption = (
   weight: number,
 ): Effect.Effect<Option.Option<number>> => {
   if (weight >= 0) {
@@ -13,7 +13,7 @@ const validateWeightOption = (
 };
 
 // Function to validate weight or fail with an error
-const validateWeightOrFail = (
+const _validateWeightOrFail = (
   weight: number,
 ): Effect.Effect<number, string> => {
   if (weight >= 0) {
