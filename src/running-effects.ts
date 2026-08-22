@@ -1,3 +1,4 @@
+import { BunRuntime } from "@effect/platform-bun";
 import { Console, Effect, Exit, Fiber } from "effect";
 
 // =========================================================================
@@ -23,24 +24,38 @@ console.log("runSyncExit:", Exit.isFailure(syncExit) ? "Failure" : "Success");
 // =========================================================================
 // Effect.runPromise — runs the effect and returns a Promise that resolves
 // with the success value or rejects with the failure.
+// In this example we demonstrate it via BunRuntime.runMain, which provides
+// platform-specific services, signal handling, and exit-code management.
 // =========================================================================
 
 const promiseProgram = Effect.succeed("hello").pipe(
 	Effect.delay("100 millis"),
 	Effect.tap(Console.log),
+	Effect.tap((value) =>
+		Effect.sync(() => console.log("runPromise resolved:", value)),
+	),
 );
 
-await Effect.runPromise(promiseProgram).then((value) =>
-	console.log("runPromise resolved:", value),
-);
+BunRuntime.runMain(promiseProgram);
 
 // =========================================================================
 // Effect.runPromiseExit — runs the effect and returns a Promise of an Exit,
 // so failures don't reject the promise.
+// In this example we demonstrate it via BunRuntime.runMain, which observes
+// the resulting Exit and logs its outcome.
 // =========================================================================
 
-await Effect.runPromiseExit(failingProgram).then((exit) =>
-	console.log("runPromiseExit:", Exit.isSuccess(exit) ? "Success" : "Failure"),
+BunRuntime.runMain(
+	Effect.exit(failingProgram).pipe(
+		Effect.tap((exit) =>
+			Effect.sync(() =>
+				console.log(
+					"runPromiseExit:",
+					Exit.isSuccess(exit) ? "Success" : "Failure",
+				),
+			),
+		),
+	),
 );
 
 // =========================================================================
@@ -55,8 +70,12 @@ const forkedProgram = Effect.succeed("background").pipe(
 
 const fiber = Effect.runFork(forkedProgram);
 
-await Effect.runPromise(Fiber.join(fiber)).then((value) =>
-	console.log("runFork joined:", value),
+BunRuntime.runMain(
+	Fiber.join(fiber).pipe(
+		Effect.tap((value) =>
+			Effect.sync(() => console.log("runFork joined:", value)),
+		),
+	),
 );
 
 // =========================================================================
@@ -83,4 +102,6 @@ Effect.runCallback(Effect.succeed("callback"), {
   - runPromiseExit : async effect, returns a Promise<Exit>. Never rejects.
   - runFork        : fire-and-forget async execution, returns a Fiber.
   - runCallback    : async execution with a single onExit callback receiving an Exit.
+  - BunRuntime.runMain : runs an Effect as the process entrypoint with platform
+                         services, signal handling, and exit-code management.
 */
