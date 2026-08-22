@@ -31,9 +31,7 @@ console.log("runSyncExit:", Exit.isFailure(syncExit) ? "Failure" : "Success");
 const promiseProgram = Effect.succeed("hello").pipe(
 	Effect.delay("100 millis"),
 	Effect.tap(Console.log),
-	Effect.tap((value) =>
-		Effect.sync(() => console.log("runPromise resolved:", value)),
-	),
+	Effect.tap((value) => Console.log("runPromise resolved:", value)),
 );
 
 BunRuntime.runMain(promiseProgram);
@@ -48,11 +46,9 @@ BunRuntime.runMain(promiseProgram);
 BunRuntime.runMain(
 	Effect.exit(failingProgram).pipe(
 		Effect.tap((exit) =>
-			Effect.sync(() =>
-				console.log(
-					"runPromiseExit:",
-					Exit.isSuccess(exit) ? "Success" : "Failure",
-				),
+			Console.log(
+				"runPromiseExit:",
+				Exit.isSuccess(exit) ? "Success" : "Failure",
 			),
 		),
 	),
@@ -72,9 +68,7 @@ const fiber = Effect.runFork(forkedProgram);
 
 BunRuntime.runMain(
 	Fiber.join(fiber).pipe(
-		Effect.tap((value) =>
-			Effect.sync(() => console.log("runFork joined:", value)),
-		),
+		Effect.tap((value) => Console.log("runFork joined:", value)),
 	),
 );
 
