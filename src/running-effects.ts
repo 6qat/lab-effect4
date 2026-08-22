@@ -86,6 +86,18 @@ Effect.runCallback(Effect.succeed("callback"), {
 		),
 });
 
+BunRuntime.runMain(
+	Effect.exit(Effect.succeed("callback")).pipe(
+		Effect.tap((exit) =>
+			Console.log(
+				"runCallback:",
+				Exit.isSuccess(exit) ? "Success" : "Failure",
+				Exit.isSuccess(exit) ? exit.value : exit.cause,
+			),
+		),
+	),
+);
+
 // =========================================================================
 // Choosing the right runner
 // =========================================================================
