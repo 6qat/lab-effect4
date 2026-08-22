@@ -1,10 +1,10 @@
 import { Console, Effect } from "effect";
 
 const result = Effect.forEach(
-  [1, 2, 3, 4, 5],
-  (n, index) =>
-    Console.log(`Currently at index ${index}`).pipe(Effect.as(n * 2)),
-  //   { discard: true },
+	[1, 2, 3, 4, 5],
+	(n, index) =>
+		Console.log(`Currently at index ${index}`).pipe(Effect.as(n * 2)),
+	//   { discard: true },
 );
 
 Effect.runPromise(result).then(console.log);

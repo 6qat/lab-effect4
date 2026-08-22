@@ -26,64 +26,64 @@ So defects do not interrupt the fiber. Instead, the fiber fails with an unchecke
  */
 
 const _program1 = Effect.gen(function* () {
-  const queue = yield* Queue.bounded<number>(100);
-  // Adds 1 to the queue
-  yield* Queue.offer(queue, 1);
+	const queue = yield* Queue.bounded<number>(100);
+	// Adds 1 to the queue
+	yield* Queue.offer(queue, 1);
 });
 
 const _program2 = Effect.gen(function* () {
-  const queue = yield* Queue.bounded<number>(1);
+	const queue = yield* Queue.bounded<number>(1);
 
-  // Fill the queue with one item
-  yield* Queue.offer(queue, 1);
+	// Fill the queue with one item
+	yield* Queue.offer(queue, 1);
 
-  // Attempting to add a second item will suspend as the queue is full
-  const fiber = yield* Effect.forkChild(Queue.offer(queue, 2));
+	// Attempting to add a second item will suspend as the queue is full
+	const fiber = yield* Effect.forkChild(Queue.offer(queue, 2));
 
-  // Empties the queue to make space
-  yield* Queue.take(queue);
+	// Empties the queue to make space
+	yield* Queue.take(queue);
 
-  // Joins the fiber, completing the suspended offer
-  yield* Fiber.join(fiber);
+	// Joins the fiber, completing the suspended offer
+	yield* Fiber.join(fiber);
 
-  // the size of the queue after additions
-  const size = yield* Queue.size(queue);
-  yield* Effect.log(`Size: ${size}`);
+	// the size of the queue after additions
+	const size = yield* Queue.size(queue);
+	yield* Effect.log(`Size: ${size}`);
 
-  return yield* Queue.take(queue);
+	return yield* Queue.take(queue);
 });
 
 // Shutting down a Queue
 const _program3 = Effect.gen(function* () {
-  const queue = yield* Queue.bounded<number>(3);
+	const queue = yield* Queue.bounded<number>(3);
 
-  // Forks a fiber that waits to take an item from the queue
-  const fiber = yield* Effect.forkChild(Queue.take(queue));
+	// Forks a fiber that waits to take an item from the queue
+	const fiber = yield* Effect.forkChild(Queue.take(queue));
 
-  // Shuts down the queue, interrupting the fiber
-  yield* Queue.shutdown(queue);
+	// Shuts down the queue, interrupting the fiber
+	yield* Queue.shutdown(queue);
 
-  // Joins the interrupted fiber
-  const _f = yield* Fiber.join(fiber);
+	// Joins the interrupted fiber
+	const _f = yield* Fiber.join(fiber);
 });
 // Effect.runPromiseExit(program3).then(console.log);
 
 const _program4 = Effect.gen(function* () {
-  const queue = yield* Queue.bounded<number>(3);
+	const queue = yield* Queue.bounded<number>(3);
 
-  // Forks a fiber to await queue shutdown and log a message
-  const fiber1 = yield* Effect.forkChild(
-    Queue.await(queue).pipe(Effect.andThen(Console.log("shutting down"))),
-  );
+	// Forks a fiber to await queue shutdown and log a message
+	const fiber1 = yield* Effect.forkChild(
+		Queue.await(queue).pipe(Effect.andThen(Console.log("shutting down"))),
+	);
 
-  // Forks a fiber that waits to take an item from the queue
-  const _fiber2 = yield* Effect.forkChild(Queue.take(queue));
+	// Forks a fiber that waits to take an item from the queue
+	const _fiber2 = yield* Effect.forkChild(Queue.take(queue));
 
-  // Shuts down the queue, triggering the await in the fiber
-  yield* Queue.shutdown(queue);
+	// Shuts down the queue, triggering the await in the fiber
+	yield* Queue.shutdown(queue);
 
-  yield* Fiber.join(fiber1);
-  // yield* Fiber.join(fiber2);
+	yield* Fiber.join(fiber1);
+	// yield* Fiber.join(fiber2);
 });
 
 Effect.runPromiseExit(_program2).then(console.log);
