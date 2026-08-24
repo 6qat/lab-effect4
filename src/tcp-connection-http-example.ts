@@ -94,10 +94,9 @@ const tcpLayer = TcpStreamLive().pipe(Layer.provide(connectionConfigLayer));
 
 const main = program.pipe(Effect.provide(tcpLayer));
 
-console.log("Bla");
-
 BunRuntime.runMain(
-	main.pipe(
+	Console.log("Bla").pipe(
+		Effect.andThen(main),
 		Effect.tapError((error) =>
 			Console.error(`Handled error gracefully: ${error}`),
 		),
