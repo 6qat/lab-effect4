@@ -59,7 +59,7 @@ const program = Effect.gen(function* () {
 	// `Connection: close`, which completes the response stream.
 	const chunks = yield* Stream.runCollect(tcp.stream);
 
-	// Decode incrementally so a multi-byte UTF-8 character split across TCP
+	// Decode incrementally so a multibyte UTF-8 character split across TCP
 	// chunks is reconstructed correctly.
 	const decoder = new TextDecoder();
 	const response =
@@ -93,6 +93,8 @@ const connectionConfigLayer = ConnectionConfigLive({
 const tcpLayer = TcpStreamLive().pipe(Layer.provide(connectionConfigLayer));
 
 const main = program.pipe(Effect.provide(tcpLayer));
+
+console.log("Bla");
 
 BunRuntime.runMain(
 	main.pipe(
