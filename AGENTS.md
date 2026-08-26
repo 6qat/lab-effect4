@@ -56,7 +56,16 @@ This project targets **Effect v4**. Do not use deprecated Effect v3 patterns or 
   - Do not use raw `Effect.runPromise` or wrap `runMain` in synchronous `try/catch` blocks at the top level.
 
 - **Idiomatic TypeScript & Effect Patterns**:
-  - Prefer generator functions with `Effect.gen(function* () { ... })` and `yield*` for sequential, asynchronous, and contextual workflows.
+  - Prefer generator functions with `Effect.gen(function* () { ... })` and `yield*` for sequential, multi-step asynchronous, and contextual workflows.
+  - Avoid wrapping a single statement or Tag retrieval in `Effect.gen` (`effect(unnecessaryEffectGen)`). Use the Effect or Tag directly:
+    ```typescript
+    // ❌ Redundant:
+    Effect.gen(function* () {
+      return yield* TcpStream;
+    });
+    // ✅ Direct:
+    TcpStream;
+    ```
   - Define custom domain errors using `Schema.TaggedError` or class declarations extending `Data.TaggedError`.
   - Prefer services defined with `Context.Tag` / `Effect.Tag` and modular layers built with `Layer`.
   - Avoid unmanaged synchronous side-effects (e.g. `console.log`, `process.exit`) within business logic. Always use Effect managed services (e.g., `Console.log`, `Console.error`, `Effect.sync`, `Effect.fail`).
@@ -67,7 +76,7 @@ This project targets **Effect v4**. Do not use deprecated Effect v3 patterns or 
 
 Code formatting and linting are strictly enforced via **Biome**:
 
-- **Format Command**: `bun run format` (formats `./src` via `biome format --write ./src`)
+- **Format Command**: `bun run format` (formats `./src` via `biome format --write ./src`)\
 - **Lint Command**: `bun run lint` (lints the repository via `biome lint .`)
 - **Do not use Prettier or ESLint.**
 

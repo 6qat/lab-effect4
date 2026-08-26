@@ -23,11 +23,7 @@ describe("TcpStream retry policy", () => {
 		});
 
 		const tcpLayer = TcpStreamLive().pipe(Layer.provide(configLayer));
-
-		const program = Effect.gen(function* () {
-			const tcp = yield* TcpStream;
-			return tcp;
-		}).pipe(Effect.provide(tcpLayer));
+		const program = TcpStream.pipe(Effect.provide(tcpLayer));
 
 		const startTime = Date.now();
 		const exit = await Effect.runPromiseExit(program);
@@ -52,11 +48,7 @@ describe("TcpStream retry policy", () => {
 		});
 
 		const tcpLayer = TcpStreamLive().pipe(Layer.provide(configLayer));
-
-		const program = Effect.gen(function* () {
-			const tcp = yield* TcpStream;
-			return tcp;
-		}).pipe(Effect.provide(tcpLayer));
+		const program = TcpStream.pipe(Effect.provide(tcpLayer));
 
 		const startTime = Date.now();
 		const exit = await Effect.runPromiseExit(program);
@@ -86,10 +78,7 @@ describe("TcpStream retry policy", () => {
 		});
 
 		const tcpLayer = TcpStreamLive().pipe(Layer.provide(configLayer));
-
-		const program = Effect.gen(function* () {
-			return yield* TcpStream;
-		}).pipe(Effect.provide(tcpLayer));
+		const program = TcpStream.pipe(Effect.provide(tcpLayer));
 
 		const exit = await Effect.runPromiseExit(program);
 		expect(Exit.isFailure(exit)).toBe(true);
