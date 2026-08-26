@@ -1,26 +1,27 @@
-# AI Agent Instructions & Guidelines
+# AGENTS.md
 
-## 1. Project Overview & Runtime
+Welcome! This repository (`lab-effect4`) is built using **TypeScript**, **Effect version 4** (`effect@4.0.0-rc.*`, `@effect/platform-bun@4.0.0-rc.*`), and **Bun** as the primary runtime and package runner.
 
-- **Runtime**: Bun / Node.js
-- **Package Manager**: pnpm (configured in `devEngines`) / Bun
-- **Language**: TypeScript (strict mode)
+All AI agents and contributors working in this codebase **must strictly adhere** to the conventions and guidelines described below.
 
 ---
 
-## 2. Effect Version 4 Conventions (`effect@4.0.0-rc.*`)
+## 1. Effect Version 4 Conventions
 
-Always use **Effect v4** conventions, patterns, and APIs. Do not use legacy Effect v2/v3 signatures.
+This project targets **Effect v4**. Do not use deprecated Effect v3 patterns or combinators.
 
-### Key Differences & Migration: Effect v3 vs. Effect v4
+### Effect v3 vs. Effect v4 Key Differences
 
-| Area                      | Effect v3 (Legacy)                     | Effect v4 (Current / Preferred)                  | Notes                                                                                   |
+| Concept / Action          | Effect v3                              | Effect v4                                        | Description & Notes                                                                     |
 | :------------------------ | :------------------------------------- | :----------------------------------------------- | :-------------------------------------------------------------------------------------- |
-| **Catch All Errors**      | `Effect.catchAll`                      | `Effect.catch`                                   | Dropped the `*All` suffix across combinators.                                           |
+| **Catch All Errors**      | `Effect.catchAll`                      | `Effect.catch`                                   | Standard error-channel recovery combinator.                                             |
 | **Catch Defects**         | `Effect.catchAllDefect`                | `Effect.catchDefect`                             | Handles unexpected defects / dies.                                                      |
 | **Catch Causes**          | `Effect.catchAllCause`                 | `Effect.catchCause`                              | Handles full underlying `Cause` (interrupts, defects, failures).                        |
 | **Catch Predicates**      | `Effect.catchSome`                     | `Effect.catchIf` / `Effect.catchSome`            | Predicate-based error catching.                                                         |
 | **Tagged Errors**         | `Effect.catchTags` / `Effect.catchTag` | `Effect.catchTags` / `Effect.catchTag`           | Supports single tag or array of tags: `Effect.catchTag(["ErrorA", "ErrorB"], handler)`. |
+| **Fork Child Fiber**      | `Effect.fork`                          | `Effect.forkChild`                               | Explicitly forks a supervised child fiber bound to parent fiber lifetime.               |
+| **Fork Daemon Fiber**     | `Effect.forkDaemon`                    | `Effect.forkDetach`                              | Forks an un-parented / detached background fiber.                                       |
+| **Fork In Scope**         | `Effect.forkScoped` / `Effect.forkIn`  | `Effect.forkScoped` / `Effect.forkIn`            | Forks a fiber bound to the current or supplied `Scope`.                                 |
 | **Platform RunMain**      | Multi-package layers                   | `@effect/platform-bun` / `@effect/platform-node` | Dedicated `BunRuntime.runMain` and `NodeRuntime.runMain` runners.                       |
 | **Data & Error Modeling** | Custom classes / `Data.TaggedError`    | `Schema.TaggedError`                             | Built-in schema validation, serialization, and typing out-of-the-box.                   |
 
@@ -35,6 +36,12 @@ Always use **Effect v4** conventions, patterns, and APIs. Do not use legacy Effe
   - Use `Effect.catchDefect` instead of `Effect.catchAllDefect`.
   - Use `Effect.catchCause` instead of `Effect.catchAllCause`.
 
+- **Concurrency & Fibers**:
+  - Use `Effect.forkChild` to spawn supervised child fibers tied to parent lifetime (replaces `Effect.fork`).
+  - Use `Effect.forkDetach` to spawn detached/daemon background fibers (replaces `Effect.forkDaemon`).
+  - Use `Effect.forkScoped` or `Effect.forkIn` to tie fiber lifecycles to an explicit `Scope`.
+  - Use `FiberSet` / `FiberHandle` for structured, scoped pools of fibers.
+
 - **Application Entry Point**:
   - Run top-level applications/scripts using `BunRuntime.runMain` (from `@effect/platform-bun`) or `NodeRuntime.runMain` (from `@effect/platform-node`).
   - Do not use raw `Effect.runPromise` or wrap `runMain` in synchronous `try/catch` blocks at the top level.
@@ -47,11 +54,38 @@ Always use **Effect v4** conventions, patterns, and APIs. Do not use legacy Effe
 
 ---
 
-## 3. Code Formatting & Linting
+## 2. Code Formatting & Linting
 
-- **Formatter**: Use **Biome exclusively** for formatting code.
-- Check `package.json` for canonical script commands before running formatters or linters:
-  - Format: `bun run format` (or `pnpm run format`, which runs `biome format --write ./src`)
-  - Lint: `bun run lint` (or `pnpm run lint`, which runs `biome lint .`)
-  - Typecheck: `bun x tsc --noEmit` (or `pnpm exec tsc --noEmit`)
-- Always ensure code changes pass formatting and type checking cleanly without errors.
+Code formatting and linting are strictly enforced via **Biome**:
+
+- **Format Command**: `bun run format` (formats `./src` via `biome format --write ./src`)
+- **Lint Command**: `bun run lint` (lints the repository via `biome lint .`)
+- **Do not use Prettier or ESLint.**
+
+Always check [`package.json`](./package.json) for the exact scripts and execute `bun run format` and `bun run lint` before committing any changes.
+
+---
+
+## 3. Type Checking
+
+TypeScript types must compile cleanly with zero errors:
+
+```bash
+bun x tsc --noEmit
+# or
+pnpm exec tsc --noEmit
+```
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live in GitHub Issues; use the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the default canonical triage labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repository using root-level `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.

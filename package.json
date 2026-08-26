@@ -1,34 +1,35 @@
 {
-  "name": "lab-effect4",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "format": "biome format --write ./src",
-    "lint": "biome lint ."
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "^11.21.0",
-      "onFail": "download"
-    }
-  },
-  "type": "module",
-  "devDependencies": {
-    "@biomejs/biome": "^2.5.10",
-    "@effect/language-service": "^0.87.2",
-    "@types/bun": "^1.4.0",
-    "@types/node": "^26.2.0",
-    "typescript": "^6.0.3"
-  },
-  "dependencies": {
-    "@effect/platform-bun": "4.0.0-rc.111",
-    "@effect/platform-node": "4.0.0-rc.111",
-    "effect": "4.0.0-rc.109"
-  }
+	"name": "lab-effect4",
+	"version": "1.0.0",
+	"description": "",
+	"main": "index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"format": "biome format --write ./src",
+		"lint": "biome lint .",
+		"sync-prompts": "bun scripts/sync-zed-prompts.mjs"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"devEngines": {
+		"packageManager": {
+			"name": "pnpm",
+			"version": "^11.21.0",
+			"onFail": "download"
+		}
+	},
+	"type": "module",
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.10",
+		"@effect/language-service": "^0.87.2",
+		"@types/bun": "^1.4.0",
+		"@types/node": "^26.2.0",
+		"typescript": "^6.0.3"
+	},
+	"dependencies": {
+		"@effect/platform-bun": "4.0.0-rc.111",
+		"@effect/platform-node": "4.0.0-rc.111",
+		"effect": "4.0.0-rc.109"
+	}
 }
