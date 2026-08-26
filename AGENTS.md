@@ -42,6 +42,15 @@ This project targets **Effect v4**. Do not use deprecated Effect v3 patterns or 
   - Use `Effect.forkScoped` or `Effect.forkIn` to tie fiber lifecycles to an explicit `Scope`.
   - Use `FiberSet` / `FiberHandle` for structured, scoped pools of fibers.
 
+- **Layer Composition & Providing**:
+  - **Never chain multiple `Effect.provide` calls** (flags `effect(multipleEffectProvide)`).
+  - Always compose dependent layers using `Layer.provide` / `Layer.merge` into a single layer graph before providing to effects:
+    ```typescript
+    // Correct:
+    const tcpLayer = TcpStreamLive().pipe(Layer.provide(configLayer));
+    const programWithLayer = program.pipe(Effect.provide(tcpLayer));
+    ```
+
 - **Application Entry Point**:
   - Run top-level applications/scripts using `BunRuntime.runMain` (from `@effect/platform-bun`) or `NodeRuntime.runMain` (from `@effect/platform-node`).
   - Do not use raw `Effect.runPromise` or wrap `runMain` in synchronous `try/catch` blocks at the top level.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { Effect, Exit, Option, Schedule, Stream } from "effect";
+import { Effect, Exit, Layer, Option, Schedule, Stream } from "effect";
 import {
 	ConnectionConfigLive,
 	TcpStream,
@@ -22,10 +22,12 @@ describe("TcpStream retry policy", () => {
 			},
 		});
 
+		const tcpLayer = TcpStreamLive().pipe(Layer.provide(configLayer));
+
 		const program = Effect.gen(function* () {
 			const tcp = yield* TcpStream;
 			return tcp;
-		}).pipe(Effect.provide(TcpStreamLive()), Effect.provide(configLayer));
+		}).pipe(Effect.provide(tcpLayer));
 
 		const startTime = Date.now();
 		const exit = await Effect.runPromiseExit(program);
@@ -49,10 +51,12 @@ describe("TcpStream retry policy", () => {
 			retry: false,
 		});
 
+		const tcpLayer = TcpStreamLive().pipe(Layer.provide(configLayer));
+
 		const program = Effect.gen(function* () {
 			const tcp = yield* TcpStream;
 			return tcp;
-		}).pipe(Effect.provide(TcpStreamLive()), Effect.provide(configLayer));
+		}).pipe(Effect.provide(tcpLayer));
 
 		const startTime = Date.now();
 		const exit = await Effect.runPromiseExit(program);
@@ -81,9 +85,11 @@ describe("TcpStream retry policy", () => {
 			retrySchedule: customSchedule,
 		});
 
+		const tcpLayer = TcpStreamLive().pipe(Layer.provide(configLayer));
+
 		const program = Effect.gen(function* () {
 			return yield* TcpStream;
-		}).pipe(Effect.provide(TcpStreamLive()), Effect.provide(configLayer));
+		}).pipe(Effect.provide(tcpLayer));
 
 		const exit = await Effect.runPromiseExit(program);
 		expect(Exit.isFailure(exit)).toBe(true);
@@ -120,13 +126,15 @@ describe("TcpStream retry policy", () => {
 			},
 		});
 
+		const tcpLayer = TcpStreamLive().pipe(Layer.provide(configLayer));
+
 		const program = Effect.gen(function* () {
 			const tcp = yield* TcpStream;
 			yield* tcp.sendText("hello retry");
 			const chunk = yield* Stream.runHead(tcp.stream);
 			yield* tcp.close;
 			return chunk;
-		}).pipe(Effect.provide(TcpStreamLive()), Effect.provide(configLayer));
+		}).pipe(Effect.provide(tcpLayer));
 
 		try {
 			const exit = await Effect.runPromiseExit(program);
