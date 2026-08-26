@@ -52,10 +52,6 @@ export interface ConnectionConfigShape {
 	readonly tls?: boolean | Bun.TLSOptions;
 	readonly retry?: RetryPolicyConfig | false;
 	readonly retrySchedule?: Schedule.Schedule<unknown, unknown, unknown, never>;
-	readonly magicToken?: string;
-	readonly username?: string;
-	readonly password?: string;
-	readonly tickers?: ReadonlyArray<string>;
 }
 
 export class ConnectionConfig extends Context.Service<
