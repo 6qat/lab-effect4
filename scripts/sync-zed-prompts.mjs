@@ -7,9 +7,11 @@ const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, "..");
 const zedDir = path.join(rootDir, ".zed");
 const promptsDir = path.join(zedDir, "prompts");
+const zedSkillsDir = path.join(zedDir, "skills");
 
-// Ensure project-level .zed/prompts directory exists
+// Ensure project-level .zed directories exist
 fs.mkdirSync(promptsDir, { recursive: true });
+fs.mkdirSync(zedSkillsDir, { recursive: true });
 
 const skillDirs = [
 	path.join(rootDir, ".agents", "skills"),
@@ -30,19 +32,38 @@ for (const dir of skillDirs) {
 		const skillPath = path.join(dir, skillName, "SKILL.md");
 		if (!fs.existsSync(skillPath)) continue;
 
-		const relPath = path.relative(rootDir, skillPath);
-		processed.set(skillName, relPath);
+		processed.set(skillName, {
+			fullPath: path.join(dir, skillName),
+			relPath: path.relative(rootDir, skillPath),
+		});
 	}
 }
 
-// Generate project-level .zed/prompts/*.md templates for Zed's /prompt command
-for (const [skillName, relPath] of processed.entries()) {
+for (const [skillName, { fullPath, relPath }] of processed.entries()) {
+	// 1. Generate .zed/prompts/*.md
 	const promptFile = path.join(promptsDir, `${skillName}.md`);
 	const content = `Please follow the instructions in ${relPath} to execute the following request:\n`;
 	fs.writeFileSync(promptFile, content, "utf8");
+
+	// 2. Link/mirror to .zed/skills/<skillName> for native Zed slash commands
+	const targetSkillDir = path.join(zedSkillsDir, skillName);
+	if (!fs.existsSync(targetSkillDir)) {
+		try {
+			fs.symlinkSync(
+				path.relative(zedSkillsDir, fullPath),
+				targetSkillDir,
+				"dir",
+			);
+		} catch {
+			fs.cpSync(fullPath, targetSkillDir, { recursive: true });
+		}
+	}
 }
 
+console.log(`✓ Synchronized ${processed.size} skill(s) to:`);
 console.log(
-	`✓ Synchronized ${processed.size} skill prompt template(s) to ./.zed/prompts/`,
+	`  1. Native Zed skills: ./.zed/skills/<skill-name>/SKILL.md (triggers /<skill-name>)`,
 );
-console.log("Usage in Zed Assistant: Type '/prompt ' to select any skill.");
+console.log(
+	`  2. Prompt templates:  ./.zed/prompts/*.md (triggers /prompt <skill-name>)`,
+);

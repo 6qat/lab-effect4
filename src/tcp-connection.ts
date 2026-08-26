@@ -3,10 +3,12 @@ import {
 	Context,
 	Data,
 	Deferred,
+	type Duration,
 	Effect,
 	Layer,
 	MutableRef,
 	Queue,
+	Schedule,
 	Semaphore,
 	Stream,
 } from "effect";
@@ -36,10 +38,20 @@ export class TcpStream extends Context.Service<TcpStream, TcpStreamShape>()(
 	"TcpStream",
 ) {}
 
+export interface RetryPolicyConfig {
+	readonly initialDelay?: Duration.Input;
+	readonly factor?: number;
+	readonly maxAttempts?: number;
+	readonly maxDuration?: Duration.Input;
+	readonly jitter?: boolean;
+}
+
 export interface ConnectionConfigShape {
 	readonly host: string;
 	readonly port: number;
 	readonly tls?: boolean | Bun.TLSOptions;
+	readonly retry?: RetryPolicyConfig | false;
+	readonly retrySchedule?: Schedule.Schedule<unknown, unknown, unknown, never>;
 	readonly magicToken?: string;
 	readonly username?: string;
 	readonly password?: string;
@@ -61,6 +73,23 @@ type EndableSocket = {
 
 const unknownToMessage = (cause: unknown): string =>
 	cause instanceof Error ? cause.message : String(cause);
+
+const buildDefaultRetrySchedule = (config?: RetryPolicyConfig) => {
+	const initialDelay = config?.initialDelay ?? "100 millis";
+	const factor = config?.factor ?? 2.0;
+	const maxAttempts = config?.maxAttempts ?? 5;
+	const maxDuration = config?.maxDuration ?? "30 seconds";
+	const useJitter = config?.jitter ?? true;
+
+	let schedule = Schedule.exponential(initialDelay, factor);
+	if (useJitter) {
+		schedule = Schedule.jittered(schedule);
+	}
+	return Schedule.upTo(schedule, {
+		times: maxAttempts,
+		duration: maxDuration,
+	});
+};
 
 const makeTcpStream = Effect.gen(function* () {
 	const config = yield* ConnectionConfig;
@@ -129,7 +158,7 @@ const makeTcpStream = Effect.gen(function* () {
 		}
 	};
 
-	const connect = Effect.tryPromise<Bun.Socket<undefined>, TcpStreamError>({
+	const connectOnce = Effect.tryPromise<Bun.Socket<undefined>, TcpStreamError>({
 		try: () =>
 			Bun.connect<undefined>({
 				hostname: config.host,
@@ -177,6 +206,13 @@ const makeTcpStream = Effect.gen(function* () {
 					}),
 		),
 	);
+
+	const connect =
+		config.retrySchedule !== undefined
+			? Effect.retry(connectOnce, config.retrySchedule)
+			: config.retry === false
+				? connectOnce
+				: Effect.retry(connectOnce, buildDefaultRetrySchedule(config.retry));
 
 	const socket = yield* Effect.acquireRelease(connect, (socket) =>
 		Effect.sync(() => {
