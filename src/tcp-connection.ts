@@ -51,7 +51,7 @@ export interface ConnectionConfigShape {
 	readonly port: number;
 	readonly tls?: boolean | Bun.TLSOptions;
 	readonly retry?: RetryPolicyConfig | false;
-	readonly retrySchedule?: Schedule.Schedule<unknown, unknown, unknown, never>;
+	readonly retrySchedule?: Schedule.Schedule<unknown, unknown>;
 }
 
 export class ConnectionConfig extends Context.Service<
