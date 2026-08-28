@@ -8,10 +8,15 @@ import {
 	Layer,
 	MutableRef,
 	Queue,
+	Result,
 	Schedule,
 	Semaphore,
 	Stream,
 } from "effect";
+
+class ConnectionConfigError extends Data.TaggedError("ConnectionConfigError")<{
+	readonly message: string;
+}> {}
 
 export type TcpStreamOperation = "connect" | "read" | "write";
 
@@ -69,6 +74,26 @@ type EndableSocket = {
 
 const unknownToMessage = (cause: unknown): string =>
 	cause instanceof Error ? cause.message : String(cause);
+
+export const validateConnectionConfig = (
+	config: ConnectionConfigShape,
+): Result.Result<ConnectionConfigShape, ConnectionConfigError> => {
+	if (
+		!Number.isInteger(config.port) ||
+		config.port < 1 ||
+		config.port > 65535
+	) {
+		return Result.fail(
+			new ConnectionConfigError({ message: `Invalid port ${config.port}` }),
+		);
+	}
+	if (!config.host.trim()) {
+		return Result.fail(
+			new ConnectionConfigError({ message: "Host cannot be empty" }),
+		);
+	}
+	return Result.succeed(config);
+};
 
 const buildDefaultRetrySchedule = (config?: RetryPolicyConfig) => {
 	const initialDelay = config?.initialDelay ?? "100 millis";

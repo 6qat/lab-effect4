@@ -1,4 +1,4 @@
-import { Data, Effect, pipe, Random } from "effect";
+import { Data, Effect, pipe, Random, Result } from "effect";
 
 class MessageError extends Data.TaggedError("MessageError")<{
 	readonly message: string;
@@ -11,6 +11,12 @@ class UnauthorizedError extends Data.TaggedError("UnauthorizedError")<{
 
 class NegativeRandomError extends Data.TaggedError("NegativeRandomError")<{
 	readonly message: string;
+}> {}
+
+class InvalidUserPayloadError extends Data.TaggedError(
+	"InvalidUserPayloadError",
+)<{
+	readonly reason: string;
 }> {}
 
 //      ┌─── Effect<number, string, never>
@@ -91,3 +97,30 @@ function _isUser(obj: unknown): obj is User {
 	const record = obj as Record<string, unknown>;
 	return typeof record.id === "number" && typeof record.name === "string";
 }
+
+const validateUser = (
+	obj: unknown,
+): Result.Result<User, UnauthorizedError | InvalidUserPayloadError> => {
+	if (obj === null || obj === undefined) {
+		return Result.fail(new UnauthorizedError({ reason: "unauthorized" }));
+	}
+	if (typeof obj !== "object") {
+		return Result.fail(
+			new InvalidUserPayloadError({ reason: "Expected object" }),
+		);
+	}
+	const rec = obj as Record<string, unknown>;
+	if (typeof rec.id !== "number" || typeof rec.name !== "string") {
+		return Result.fail(
+			new InvalidUserPayloadError({ reason: "Missing id or name" }),
+		);
+	}
+	return Result.succeed({ id: rec.id, name: rec.name });
+};
+
+// No pipeline do Effect:
+const _program2 = Effect.gen(function* () {
+	const raw = yield* Effect.promise(() => auth());
+	const user = yield* Effect.fromResult(validateUser(raw));
+	return user.name;
+});
