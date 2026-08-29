@@ -2,7 +2,7 @@ import * as NodeFS from "node:fs";
 import * as NodeFS2 from "node:fs/promises";
 import { $ } from "bun";
 
-import { Data, Effect, Fiber } from "effect";
+import { Data, Effect, Fiber, Result } from "effect";
 
 class ReadFileError extends Data.TaggedError("ReadFileError")<{
 	readonly filename: string;
@@ -299,6 +299,24 @@ const _withSuspend = (a: number, b: number) =>
 	Effect.suspend(() =>
 		b === 0 ? Effect.fail(new DivisionByZeroError({})) : Effect.succeed(a / b),
 	);
+
+/*
+   With Effect, a conditional fail/succeed forces a union return type, requiring
+   Effect.suspend as a workaround to unify them:
+
+     (a: number, b: number) =>
+       Effect<never, DivisionByZeroError, never> | Effect<number, never, never>
+
+   Result has a single unified type out of the box, so neither the type
+   annotation workaround nor Effect.suspend is needed:
+
+     (a: number, b: number) => Result.Result<number, DivisionByZeroError>
+*/
+const _divide = (
+	a: number,
+	b: number,
+): Result.Result<number, DivisionByZeroError> =>
+	b === 0 ? Result.fail(new DivisionByZeroError({})) : Result.succeed(a / b);
 
 // =========================================================================
 

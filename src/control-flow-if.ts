@@ -1,27 +1,20 @@
-import { Console, Effect, Option, pipe, Random } from "effect";
+import { Console, Effect, Option, pipe, Random, Result } from "effect";
 
 // Function to validate weight and return an Option
-const _validateWeightOption = (
-	weight: number,
-): Effect.Effect<Option.Option<number>> => {
-	if (weight >= 0) {
-		// Return Some if the weight is valid
-		return Effect.succeed(Option.some(weight));
-	}
-	// Return None if the weight is invalid
-	return Effect.succeed(Option.none());
-};
+const _validateWeightOption = (weight: number): Option.Option<number> =>
+	// Some if the weight is valid, None otherwise
+	weight >= 0 ? Option.some(weight) : Option.none();
 
 // Function to validate weight or fail with an error
 const _validateWeightOrFail = (
 	weight: number,
-): Effect.Effect<number, string> => {
+): Result.Result<number, string> => {
 	if (weight >= 0) {
 		// Return the weight if valid
-		return Effect.succeed(weight);
+		return Result.succeed(weight);
 	}
 	// Fail with an error if invalid
-	return Effect.fail(`negative input: ${weight}`);
+	return Result.fail(`negative input: ${weight}`);
 };
 
 // Modern, recommended approach using Generators
