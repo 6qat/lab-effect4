@@ -1,4 +1,5 @@
 import { Context, Data, Effect, Layer, Result, type Stream } from "effect";
+import { frameLines } from "./line-framing.js";
 import { TcpStream, type TcpStreamError } from "./tcp-connection.js";
 
 export class CedroProtocolError extends Data.TaggedError("CedroProtocolError")<{
@@ -27,6 +28,8 @@ export interface CedroClientShape {
 		tickers: ReadonlyArray<string>,
 	) => Effect.Effect<void, TcpStreamError | CedroProtocolError>;
 	readonly rawStream: Stream.Stream<Uint8Array, TcpStreamError>;
+	/** Framed line stream: raw TCP bytes decoded to UTF-8 and split on line boundaries. */
+	readonly lines: Stream.Stream<string, TcpStreamError>;
 }
 
 export class CedroClient extends Context.Service<
@@ -82,6 +85,7 @@ export const makeCedroClient = Effect.gen(function* () {
 		authenticate,
 		subscribe,
 		rawStream: tcp.stream,
+		lines: frameLines(tcp.stream),
 	});
 });
 
