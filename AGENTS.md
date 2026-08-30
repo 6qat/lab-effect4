@@ -76,7 +76,7 @@ This project targets **Effect v4**. Do not use deprecated Effect v3 patterns or 
 
 Code formatting and linting are strictly enforced via **Biome**:
 
-- **Format Command**: `bun run format` (formats `./src` via `biome format --write ./src`)\
+- **Format Command**: `bun run format` (formats `./src` via `biome format --write ./src`)
 - **Lint Command**: `bun run lint` (lints the repository via `biome lint .`)
 - **Do not use Prettier or ESLint.**
 
@@ -94,11 +94,29 @@ bun x tsc --noEmit
 pnpm exec tsc --noEmit
 ```
 
-## Agent skills
+---
+
+## 4. Git & GitHub Operations (GitHub MCP Server)
+
+AI agents **must always prioritize using the GitHub MCP server (`mcp-server-github`)** for all Git and GitHub related operations:
+
+- **Commits & Pushes**: Use `mcp-server-github`'s `push_files` or `create_or_update_file` tools to stage, commit, and push files in single operations.
+- **Branches & Pull Requests**: Use `create_branch`, `list_branches`, `create_pull_request`, `update_pull_request`, and `merge_pull_request`.
+- **Issue Tracking**: Use `issue_read`, `issue_write`, `list_issues`, `add_issue_comment`, and sub-issue tools.
+- **Repository Parameters**:
+  - **Owner**: `6qat`
+  - **Repo**: `lab-effect4`
+  - **Default Branch**: `master`
+
+Avoid using raw shell `git push`, `git commit`, or `gh` CLI commands when corresponding MCP tools are available.
+
+---
+
+## 5. Agent Skills & Documentation
 
 ### Issue tracker
 
-Issues and specs live in GitHub Issues; use the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues and specs live in GitHub Issues; interact with them via GitHub MCP tools or `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
