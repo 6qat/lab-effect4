@@ -1,4 +1,4 @@
-import { Context, Data, Effect, Layer, Result, type Stream } from "effect";
+import { Context, Data, Effect, Layer, Result, Stream } from "effect";
 import { TcpStream, type TcpStreamError } from "./tcp-connection.js";
 
 export class CedroProtocolError extends Data.TaggedError("CedroProtocolError")<{
@@ -26,6 +26,7 @@ export interface CedroClientShape {
 	readonly subscribe: (
 		tickers: ReadonlyArray<string>,
 	) => Effect.Effect<void, TcpStreamError | CedroProtocolError>;
+	readonly lines: Stream.Stream<string, TcpStreamError>;
 	readonly rawStream: Stream.Stream<Uint8Array, TcpStreamError>;
 }
 
@@ -78,9 +79,12 @@ export const makeCedroClient = Effect.gen(function* () {
 			yield* tcp.sendText(payload);
 		});
 
+	const lines = tcp.stream.pipe(Stream.decodeText(), Stream.splitLines);
+
 	return CedroClient.of({
 		authenticate,
 		subscribe,
+		lines,
 		rawStream: tcp.stream,
 	});
 });
