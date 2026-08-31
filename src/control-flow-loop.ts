@@ -16,3 +16,15 @@ const result = Effect.gen(function* () {
 
 Effect.runPromise(result).then(console.log);
 // Output: [1, 2, 3, 4, 5]
+
+const result2 = Effect.forEach(
+	Array.from({ length: 5 }, (_, i) => i + 1),
+	(count) =>
+		Effect.gen(function* () {
+			yield* Effect.log(`Processing step ${count}`);
+			return count;
+		}),
+	{ concurrency: "unbounded" },
+);
+
+Effect.runPromise(result2).then(console.log);
