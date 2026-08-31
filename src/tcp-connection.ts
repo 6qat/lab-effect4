@@ -114,12 +114,15 @@ const buildDefaultRetrySchedule = (config?: RetryPolicyConfig) => {
 
 const makeTcpStream = Effect.gen(function* () {
 	const config = yield* ConnectionConfig;
+
 	const incoming = yield* Queue.unbounded<
 		Uint8Array,
 		TcpStreamError | Cause.Done
 	>();
+
 	const writeLock = yield* Semaphore.make(1);
 
+	// 3 mutable refs to manage connection state and socket drain events
 	const state = MutableRef.make<ConnectionState>({ _tag: "Open" });
 	const hasEndedSocket = MutableRef.make(false);
 	const drainWaiter = MutableRef.make<
@@ -321,10 +324,11 @@ const makeTcpStream = Effect.gen(function* () {
 			),
 		);
 
+	const textEncoder = new TextEncoder();
 	return TcpStream.of({
 		stream: Stream.fromQueue(incoming),
 		send,
-		sendText: (data) => send(new TextEncoder().encode(data)),
+		sendText: (data) => send(textEncoder.encode(data)),
 		close: Effect.sync(() => {
 			finishIncoming();
 			endSocket(socket);
