@@ -1,17 +1,16 @@
 import { describe, expect, it } from "bun:test";
 import { Effect, Exit, Layer, Option, Schedule, Stream } from "effect";
 import {
-	ConnectionConfigLive,
+	ConnectionConfigBunLive,
 	TcpStream,
-	TcpStreamLive,
-} from "./tcp-connection.js";
+	TcpStreamBunLive,
+} from "./tcp-connection-bun.js";
 
-describe("TcpStream retry policy", () => {
+describe("TcpStream Bun retry policy", () => {
 	it("fails with TcpStreamError after exhausting configured retry attempts on unreachable port", async () => {
-		// Use an unreachable port on localhost
 		const unreachablePort = 59123;
 
-		const configLayer = ConnectionConfigLive({
+		const configLayer = ConnectionConfigBunLive({
 			host: "127.0.0.1",
 			port: unreachablePort,
 			retry: {
@@ -22,7 +21,7 @@ describe("TcpStream retry policy", () => {
 			},
 		});
 
-		const tcpLayer = TcpStreamLive().pipe(Layer.provide(configLayer));
+		const tcpLayer = TcpStreamBunLive().pipe(Layer.provide(configLayer));
 		const program = TcpStream.pipe(Effect.provide(tcpLayer));
 
 		const startTime = Date.now();
@@ -34,20 +33,19 @@ describe("TcpStream retry policy", () => {
 			const error = exit.cause;
 			expect(error.toString()).toContain("TcpStreamError");
 		}
-		// Expect at least initialDelay * (1 + 1.5 + 2.25) ~ 40ms of backoff delay across 3 retries
 		expect(elapsed).toBeGreaterThanOrEqual(25);
 	});
 
 	it("fails immediately when retry is disabled (retry: false)", async () => {
 		const unreachablePort = 59124;
 
-		const configLayer = ConnectionConfigLive({
+		const configLayer = ConnectionConfigBunLive({
 			host: "127.0.0.1",
 			port: unreachablePort,
 			retry: false,
 		});
 
-		const tcpLayer = TcpStreamLive().pipe(Layer.provide(configLayer));
+		const tcpLayer = TcpStreamBunLive().pipe(Layer.provide(configLayer));
 		const program = TcpStream.pipe(Effect.provide(tcpLayer));
 
 		const startTime = Date.now();
@@ -55,7 +53,6 @@ describe("TcpStream retry policy", () => {
 		const elapsed = Date.now() - startTime;
 
 		expect(Exit.isFailure(exit)).toBe(true);
-		// Without retries, connection failure should be very fast (< 150ms)
 		expect(elapsed).toBeLessThan(150);
 	});
 
@@ -71,13 +68,13 @@ describe("TcpStream retry policy", () => {
 			),
 		);
 
-		const configLayer = ConnectionConfigLive({
+		const configLayer = ConnectionConfigBunLive({
 			host: "127.0.0.1",
 			port: unreachablePort,
 			retrySchedule: customSchedule,
 		});
 
-		const tcpLayer = TcpStreamLive().pipe(Layer.provide(configLayer));
+		const tcpLayer = TcpStreamBunLive().pipe(Layer.provide(configLayer));
 		const program = TcpStream.pipe(Effect.provide(tcpLayer));
 
 		const exit = await Effect.runPromiseExit(program);
@@ -91,20 +88,19 @@ describe("TcpStream retry policy", () => {
 			| { stop: (closeActiveConnections?: boolean) => void }
 			| undefined;
 
-		// Start server after a 50ms delay while client is retrying
 		setTimeout(() => {
 			server = Bun.listen({
 				hostname: "127.0.0.1",
 				port,
 				socket: {
 					data(socket, data) {
-						socket.write(data); // echo
+						socket.write(data);
 					},
 				},
 			});
 		}, 50);
 
-		const configLayer = ConnectionConfigLive({
+		const configLayer = ConnectionConfigBunLive({
 			host: "127.0.0.1",
 			port,
 			retry: {
@@ -115,7 +111,7 @@ describe("TcpStream retry policy", () => {
 			},
 		});
 
-		const tcpLayer = TcpStreamLive().pipe(Layer.provide(configLayer));
+		const tcpLayer = TcpStreamBunLive().pipe(Layer.provide(configLayer));
 
 		const program = Effect.gen(function* () {
 			const tcp = yield* TcpStream;
