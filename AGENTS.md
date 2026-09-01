@@ -8,7 +8,7 @@ All AI agents and contributors working in this codebase **must strictly adhere**
 
 ## 1. Effect Version 4 Conventions
 
-This project targets **Effect v4**. Do not use deprecated Effect v3 patterns or combinators.
+This project targets **Effect v4**. Do not use deprecated Effect v3 patterns or combinators. For detailed comparisons and primary source citations, see [`docs/research/effect-v3-vs-v4-differences.md`](docs/research/effect-v3-vs-v4-differences.md).
 
 ### Effect v3 vs. Effect v4 Key Differences
 
@@ -23,6 +23,9 @@ This project targets **Effect v4**. Do not use deprecated Effect v3 patterns or 
 | **Fork Daemon Fiber**     | `Effect.forkDaemon`                    | `Effect.forkDetach`                              | Forks an un-parented / detached background fiber.                                       |
 | **Fork In Scope**         | `Effect.forkScoped` / `Effect.forkIn`  | `Effect.forkScoped` / `Effect.forkIn`            | Forks a fiber bound to the current or supplied `Scope`.                                 |
 | **Platform RunMain**      | Multi-package layers                   | `@effect/platform-bun` / `@effect/platform-node` | Dedicated `BunRuntime.runMain` and `NodeRuntime.runMain` runners.                       |
+| **Scoped Layers**         | `Layer.scoped`                         | `Layer.effect`                                   | `Layer.scoped` is removed in v4; `Layer.effect` natively manages `Scope` and strips `Scope.Scope` from requirements (`Exclude<R, Scope.Scope>`). |
+| **Service Definition**    | `Context.GenericTag` / `Context.Tag`   | `Context.Service`                                | Class-based service definition extending `Context.Service<Self, Shape>()("Id")`.       |
+| **Pure Result / Either**  | `Either` (`left` / `right`)            | `Result` (`fail` / `succeed`)                    | Synchronous fallible computations use `Result.Result<A, E>` and `Result.gen`. `Either` is removed. |
 | **Data & Error Modeling** | Custom classes / `Data.TaggedError`    | `Schema.TaggedError`                             | Built-in schema validation, serialization, and typing out-of-the-box.                   |
 
 ---
@@ -43,6 +46,7 @@ This project targets **Effect v4**. Do not use deprecated Effect v3 patterns or 
   - Use `FiberSet` / `FiberHandle` for structured, scoped pools of fibers.
 
 - **Layer Composition & Providing**:
+  - **Scoped Resource Layers**: Use `Layer.effect` for scoped resources. `Layer.scoped` was removed in v4; `Layer.effect` executes the construction effect inside the layer's internal scope and automatically manages lifecycle and finalizers.
   - **Never chain multiple `Effect.provide` calls** (flags `effect(multipleEffectProvide)`).
   - Always compose dependent layers using `Layer.provide` / `Layer.merge` into a single layer graph before providing to effects:
     ```typescript
@@ -66,8 +70,12 @@ This project targets **Effect v4**. Do not use deprecated Effect v3 patterns or 
     // ✅ Direct:
     TcpStream;
     ```
+  - Define services using the class-based `Context.Service` pattern:
+    ```typescript
+    export class MyService extends Context.Service<MyService, MyServiceShape>()("MyService") {}
+    ```
+  - Use `Result.Result<A, E>` (with `Result.succeed`, `Result.fail`, `Result.gen`) for lightweight, synchronous, zero-runtime fallible operations. Do not use deprecated `Either`.
   - Define custom domain errors using `Schema.TaggedError` or class declarations extending `Data.TaggedError`.
-  - Prefer services defined with `Context.Tag` / `Effect.Tag` and modular layers built with `Layer`.
   - Avoid unmanaged synchronous side-effects (e.g. `console.log`, `process.exit`) within business logic. Always use Effect managed services (e.g., `Console.log`, `Console.error`, `Effect.sync`, `Effect.fail`).
 
 ---
