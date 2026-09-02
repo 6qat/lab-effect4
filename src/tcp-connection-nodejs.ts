@@ -123,6 +123,7 @@ const makeTcpStream = Effect.gen(function* () {
 		}
 
 		try {
+			socket.removeAllListeners();
 			socket.destroy(error);
 		} catch {
 			// Closing is idempotent and best-effort
@@ -234,10 +235,13 @@ const makeTcpStream = Effect.gen(function* () {
 
 	// Attach persistent event listeners to the acquired socket
 	socket.on("data", (chunk: Buffer) => {
-		Queue.offerUnsafe(
-			incoming,
-			new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength),
-		);
+		// Queue.offerUnsafe(
+		// 	incoming,
+		// 	new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength),
+		// );
+		// const data = new Uint8Array(chunk);
+		const dataFromChunk = new Uint8Array(chunk);
+		Queue.offerUnsafe(incoming, dataFromChunk);
 	});
 
 	socket.on("drain", () => {
