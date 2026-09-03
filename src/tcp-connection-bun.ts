@@ -7,7 +7,6 @@ import {
 	type RawSocketWriteResult,
 	type SocketCallbacks,
 	TcpStreamEngine,
-	type TcpStreamEngineShape,
 	TcpStreamError,
 	TcpStreamLayer,
 	unknownToMessage,
@@ -16,103 +15,86 @@ import {
 export * from "./tcp-connection-common.js";
 
 /**
- * Pure Bun socket adapter for TcpStreamEngine.
+ * Low-level adapter for Bun.connect implementing the TcpStreamEngine seam.
  *
  * Decisions made:
- * - Minimal raw socket adapter responsible solely for Bun.connect and socket callbacks (Q1 -> Option A).
- * - Normalizes Bun socket.write() to RawSocketWriteResult (Q4 -> Option A).
- * - Socket teardown handled via raw handle close() (Q6 -> Option B).
- */
-const makeTcpStreamEngineBun: TcpStreamEngineShape = {
-	connect: (
-		config: ConnectionConfigShape,
-		callbacks: SocketCallbacks,
-	): Effect.Effect<RawSocketHandle, TcpStreamError> => {
-		const connectOnce = Effect.tryPromise<RawSocketHandle, TcpStreamError>({
-			try: async () => {
-				const socket = await Bun.connect<undefined>({
-					hostname: config.host,
-					port: config.port,
-					...(config.tls === undefined
-						? {}
-						: { tls: config.tls as boolean | Bun.TLSOptions }),
-					socket: {
-						binaryType: "uint8array",
-						data(_socket, data) {
-							callbacks.onData(data);
-						},
-						drain() {
-							callbacks.onDrain();
-						},
-						error(_socket, cause) {
-							callbacks.onError(
-								cause instanceof Error ? cause : new Error(String(cause)),
-							);
-						},
-						close() {
-							callbacks.onClose();
-						},
-					},
-				});
-
-				let hasEnded = false;
-				const rawHandle: RawSocketHandle = {
-					write(chunk: Uint8Array): RawSocketWriteResult {
-						const written = socket.write(chunk);
-						socket.flush();
-						return {
-							bytesWritten: written,
-							flushed: written === chunk.byteLength,
-						};
-					},
-					close() {
-						if (!hasEnded) {
-							hasEnded = true;
-							try {
-								socket.end();
-							} catch {
-								// Best-effort teardown
-							}
-						}
-					},
-				};
-
-				return rawHandle;
-			},
-			catch: (cause) =>
-				new TcpStreamError({
-					operation: "connect",
-					message: `Connection failed: ${unknownToMessage(cause)}`,
-					cause,
-				}),
-		}).pipe(
-			Effect.timeout("3 seconds"),
-			Effect.mapError((cause) =>
-				cause instanceof TcpStreamError
-					? cause
-					: new TcpStreamError({
-							operation: "connect",
-							message: "Connection timeout",
-							cause,
-						}),
-			),
-		);
-
-		return connectOnce;
-	},
-};
-
-/**
- * Adapter layer providing Bun implementation of TcpStreamEngine.
+ * - Direct engine seam implementation (ADR 0002): Adapts Bun's socket callbacks
+ *   into the unified engine lifecycle.
+ * - Handles both end() (remote EOF) and close() (socket termination) events.
  */
 export const TcpStreamEngineBunLive = Layer.succeed(
 	TcpStreamEngine,
-	makeTcpStreamEngineBun,
+	TcpStreamEngine.of({
+		connect: (config: ConnectionConfigShape, callbacks: SocketCallbacks) => {
+			const connectOnce = Effect.tryPromise<RawSocketHandle, TcpStreamError>({
+				try: async () => {
+					const socket = await Bun.connect<undefined>({
+						hostname: config.host,
+						port: config.port,
+						...(config.tls === undefined
+							? {}
+							: { tls: config.tls as boolean | Bun.TLSOptions }),
+						socket: {
+							binaryType: "uint8array",
+							data(_socket, data) {
+								callbacks.onData(data);
+							},
+							drain() {
+								callbacks.onDrain();
+							},
+							error(_socket, cause) {
+								callbacks.onError(
+									cause instanceof Error ? cause : new Error(String(cause)),
+								);
+							},
+							end() {
+								callbacks.onClose();
+							},
+							close() {
+								callbacks.onClose();
+							},
+						},
+					});
+
+					let hasEnded = false;
+					const rawHandle: RawSocketHandle = {
+						write(chunk: Uint8Array): RawSocketWriteResult {
+							const written = socket.write(chunk);
+							socket.flush();
+							return {
+								bytesWritten: written,
+								flushed: written === chunk.byteLength,
+							};
+						},
+						close() {
+							if (!hasEnded) {
+								hasEnded = true;
+								try {
+									socket.end();
+								} catch {
+									// Best-effort teardown
+								}
+							}
+						},
+					};
+
+					return rawHandle;
+				},
+				catch: (cause) =>
+					new TcpStreamError({
+						operation: "connect",
+						message: `Failed to connect: ${unknownToMessage(cause)}`,
+						cause,
+					}),
+			});
+
+			return connectOnce;
+		},
+	}),
 );
 
 /**
- * Packaged convenience layer for Bun (Q2 -> Option C).
- * Combines TcpStreamLayer with TcpStreamEngineBunLive and optional ConnectionConfig.
+ * Convenience Layer providing TcpStream powered by the Bun engine.
  */
 export const TcpStreamBunLive = (config?: ConnectionConfigShape) => {
 	const base = TcpStreamLayer.pipe(Layer.provide(TcpStreamEngineBunLive));
