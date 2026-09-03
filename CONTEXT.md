@@ -20,3 +20,6 @@ _Avoid_: BufferFlush, WriteReady
 The underlying runtime implementation driving a `TcpStream` session, specifically Bun native sockets or Node.js `node:net`.
 _Avoid_: SocketDriver, TransportProvider
 
+**RawSocketHandle**:
+The minimal handle to an active raw socket returned by a `TcpStreamEngine`, providing raw byte writes with normalized backpressure signaling and teardown.
+_Avoid_: NativeSocket, SocketInstance

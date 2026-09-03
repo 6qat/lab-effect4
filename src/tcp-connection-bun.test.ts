@@ -2,8 +2,11 @@ import { describe, expect, it } from "bun:test";
 import { Effect, Exit, Layer, Option, Schedule, Stream } from "effect";
 import {
 	ConnectionConfigBunLive,
+	ConnectionConfigLive,
 	TcpStream,
 	TcpStreamBunLive,
+	TcpStreamEngineBunLive,
+	TcpStreamLayer,
 } from "./tcp-connection-bun.js";
 
 describe("TcpStream Bun retry policy", () => {
@@ -130,6 +133,58 @@ describe("TcpStream Bun retry policy", () => {
 				if (Option.isSome(maybeChunk)) {
 					const received = new TextDecoder().decode(maybeChunk.value);
 					expect(received).toBe("hello retry");
+				}
+			}
+		} finally {
+			server?.stop(true);
+		}
+	});
+
+	it("supports composable layer composition with TcpStreamLayer, TcpStreamEngineBunLive, and ConnectionConfigLive", async () => {
+		const port = 59127;
+		let server:
+			| { stop: (closeActiveConnections?: boolean) => void }
+			| undefined;
+
+		server = Bun.listen({
+			hostname: "127.0.0.1",
+			port,
+			socket: {
+				data(socket, data) {
+					socket.write(data);
+				},
+			},
+		});
+
+		const configLayer = ConnectionConfigLive({
+			host: "127.0.0.1",
+			port,
+			retry: false,
+		});
+
+		// Compose layers via the internal engine seam
+		const tcpLayer = TcpStreamLayer.pipe(
+			Layer.provide(TcpStreamEngineBunLive),
+			Layer.provide(configLayer),
+		);
+
+		const program = Effect.gen(function* () {
+			const tcp = yield* TcpStream;
+			yield* tcp.sendText("composable-engine");
+			const chunk = yield* Stream.runHead(tcp.stream);
+			yield* tcp.close;
+			return chunk;
+		}).pipe(Effect.provide(tcpLayer));
+
+		try {
+			const exit = await Effect.runPromiseExit(program);
+			expect(Exit.isSuccess(exit)).toBe(true);
+			if (Exit.isSuccess(exit)) {
+				const maybeChunk = exit.value;
+				expect(Option.isSome(maybeChunk)).toBe(true);
+				if (Option.isSome(maybeChunk)) {
+					const received = new TextDecoder().decode(maybeChunk.value);
+					expect(received).toBe("composable-engine");
 				}
 			}
 		} finally {

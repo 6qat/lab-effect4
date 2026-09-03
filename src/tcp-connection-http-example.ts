@@ -138,8 +138,10 @@ const main = requestProgram.pipe(
 				);
 			case "InvalidUrlError":
 				return Console.error(`Invalid HTTP(S) URL: ${error.input}`);
+			case "ConnectionConfigError":
+				return Console.error(`Connection config error: ${error.message}`);
 		}
 	}),
 );
 
-BunRuntime.runMain(main);
+BunRuntime.runMain(main as Effect.Effect<void, unknown, never>);
