@@ -104,19 +104,24 @@ pnpm exec tsc --noEmit
 
 ---
 
-## 4. Git & GitHub Operations (GitHub MCP Server)
+## 4. Git & GitHub Operations (GitKraken MCP Server & GitHub MCP)
 
-AI agents **must always prioritize using the GitHub MCP server (`mcp-server-github`)** for all Git and GitHub related operations:
+AI agents **must always prioritize using the GitKraken MCP server (`GitKraken`)** for all local Git operations instead of running Bash shell `git` commands:
 
-- **Commits & Pushes**: Use `mcp-server-github`'s `push_files` or `create_or_update_file` tools to stage, commit, and push files in single operations.
+- **Git Status & Diffs**: Use `GitKraken:git_status` and `GitKraken:git_log_or_diff` (with `action: "diff"` or `action: "log"`).
+- **Staging**: Use `GitKraken:git_add` (specifying `directory` and `files`).
+- **Committing**: Use `GitKraken:git_commit` (specifying `directory`, `message`, and `description`).
+- **Branching & Checkout**: Use `GitKraken:git_branch` and `GitKraken:git_checkout`.
+- **Sync & Stash**: Use `GitKraken:git_pull`, `GitKraken:git_push`, and `GitKraken:git_stash`.
+- **Prohibition on Raw Git Shell Commands**: Never execute raw Bash shell commands (such as `git add`, `git commit`, `git status`, `git diff`, etc.) when GitKraken MCP tools are available. Shell execution should be strictly reserved for non-git build and validation commands (e.g. `bun run format`, `bun run lint`, `bun x tsc`, `bun test`).
+
+When performing remote GitHub platform operations (issues, pull requests), prioritize the GitHub MCP server (`mcp-server-github`) or GitKraken PR/issue tools:
 - **Branches & Pull Requests**: Use `create_branch`, `list_branches`, `create_pull_request`, `update_pull_request`, and `merge_pull_request`.
 - **Issue Tracking**: Use `issue_read`, `issue_write`, `list_issues`, `add_issue_comment`, and sub-issue tools.
 - **Repository Parameters**:
   - **Owner**: `6qat`
   - **Repo**: `lab-effect4`
   - **Default Branch**: `master`
-
-Avoid using raw shell `git push`, `git commit`, or `gh` CLI commands when corresponding MCP tools are available.
 
 ---
 
