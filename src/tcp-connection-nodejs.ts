@@ -8,6 +8,7 @@ import {
 	type RawSocketHandle,
 	type RawSocketWriteResult,
 	type SocketCallbacks,
+	type TcpStream,
 	TcpStreamEngine,
 	type TcpStreamEngineShape,
 	TcpStreamError,
@@ -166,13 +167,26 @@ export const TcpStreamEngineNodejsLive = Layer.succeed(
 /**
  * Packaged convenience layer for Node.js (standardized to Nodejs suffix).
  * Combines TcpStreamLayer with TcpStreamEngineNodejsLive and optional ConnectionConfig.
+ *
+ * Decisions made:
+ * - Precise TypeScript function overloads: when config is passed, returns a fully
+ *   satisfied Layer with no unmet dependencies (RIn = never). When omitted, returns
+ *   a composable Layer awaiting ConnectionConfig in the environment.
  */
-export const TcpStreamNodejsLive = (config?: ConnectionConfigShape) => {
+export function TcpStreamNodejsLive(
+	config: ConnectionConfigShape,
+): Layer.Layer<TcpStream>;
+export function TcpStreamNodejsLive(): Layer.Layer<
+	TcpStream,
+	never,
+	ConnectionConfig
+>;
+export function TcpStreamNodejsLive(config?: ConnectionConfigShape) {
 	const base = TcpStreamLayer.pipe(Layer.provide(TcpStreamEngineNodejsLive));
 	return config !== undefined
 		? base.pipe(Layer.provide(ConnectionConfigLive(config)))
 		: base;
-};
+}
 
 // Aliases for backward compatibility
 export { TcpStreamNodejsLive as TcpStreamNodeLive };

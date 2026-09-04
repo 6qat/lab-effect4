@@ -58,6 +58,8 @@ export const parseCliArgs = (
 
 		if (arg.startsWith("--engine=")) {
 			rawEngine = arg.slice("--engine=".length);
+		} else if (arg.startsWith("-e=")) {
+			rawEngine = arg.slice("-e=".length);
 		} else if (arg === "--engine" || arg === "-e") {
 			const next = args[i + 1];
 			if (next !== undefined && !next.startsWith("-")) {
@@ -141,13 +143,13 @@ export const parseCliUrl = (
 	}
 };
 
-const parsedCli = Effect.fromResult(parseCliArgs(Bun.argv.slice(2)));
-const parsedRequestUrl = Effect.map(parsedCli, (parsed) => parsed.url);
+export const parsedCli = Effect.fromResult(parseCliArgs(Bun.argv.slice(2)));
+export const parsedRequestUrl = Effect.map(parsedCli, (parsed) => parsed.url);
 
 /**
  * Constructs a ConnectionConfigShape from a URL.
  */
-const makeConnectionConfig = (url: URL): ConnectionConfigShape => {
+export const makeConnectionConfig = (url: URL): ConnectionConfigShape => {
 	const isHttps = url.protocol === "https:";
 	const port =
 		url.port === "" ? (isHttps ? 443 : 80) : Number.parseInt(url.port, 10);
@@ -169,8 +171,9 @@ const makeConnectionConfig = (url: URL): ConnectionConfigShape => {
 
 /**
  * Shared HTTP GET request execution requiring a provided TcpStream (Q2 -> Option A).
+ * Returns the decoded string response for testing or console display.
  */
-const executeHttpRequest = (url: URL) =>
+export const executeHttpRequest = (url: URL) =>
 	Effect.gen(function* () {
 		const tcp = yield* TcpStream;
 		const requestTarget = `${url.pathname}${url.search}`;
@@ -198,7 +201,7 @@ const executeHttpRequest = (url: URL) =>
 			chunks.map((chunk) => decoder.decode(chunk, { stream: true })).join("") +
 			decoder.decode();
 
-		yield* Console.log(response);
+		return response;
 	});
 
 /**
@@ -207,7 +210,11 @@ const executeHttpRequest = (url: URL) =>
 export const requestProgramBun = Effect.gen(function* () {
 	const url = yield* parsedRequestUrl;
 	const config = makeConnectionConfig(url);
-	yield* executeHttpRequest(url).pipe(Effect.provide(TcpStreamBunLive(config)));
+	const response = yield* executeHttpRequest(url).pipe(
+		Effect.provide(TcpStreamBunLive(config)),
+	);
+	yield* Console.log(response);
+	return response;
 });
 
 /**
@@ -216,9 +223,11 @@ export const requestProgramBun = Effect.gen(function* () {
 export const requestProgramNodejs = Effect.gen(function* () {
 	const url = yield* parsedRequestUrl;
 	const config = makeConnectionConfig(url);
-	yield* executeHttpRequest(url).pipe(
+	const response = yield* executeHttpRequest(url).pipe(
 		Effect.provide(TcpStreamNodejsLive(config)),
 	);
+	yield* Console.log(response);
+	return response;
 });
 
 /**
@@ -227,15 +236,17 @@ export const requestProgramNodejs = Effect.gen(function* () {
 export const requestProgramPlatform = Effect.gen(function* () {
 	const url = yield* parsedRequestUrl;
 	const config = makeConnectionConfig(url);
-	yield* executeHttpRequest(url).pipe(
+	const response = yield* executeHttpRequest(url).pipe(
 		Effect.provide(TcpStreamPlatformLive(config)),
 	);
+	yield* Console.log(response);
+	return response;
 });
 
 /**
  * Dispatches to the chosen engine program based on CLI flags.
  */
-const selectedProgram = Effect.gen(function* () {
+export const selectedProgram = Effect.gen(function* () {
 	const { engine } = yield* parsedCli;
 	switch (engine) {
 		case "bun":
@@ -270,10 +281,10 @@ const main = selectedProgram.pipe(
 				return Console.error(
 					`Unsupported engine "${error.engine}". Supported engines: bun, nodejs, platform`,
 				);
-			case "ConnectionConfigError":
-				return Console.error(`Connection config error: ${error.message}`);
 		}
 	}),
 );
 
-BunRuntime.runMain(main as Effect.Effect<void, unknown, never>);
+if (import.meta.main) {
+	BunRuntime.runMain(main as Effect.Effect<void, unknown, never>);
+}

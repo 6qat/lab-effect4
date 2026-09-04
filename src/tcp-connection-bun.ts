@@ -6,6 +6,7 @@ import {
 	type RawSocketHandle,
 	type RawSocketWriteResult,
 	type SocketCallbacks,
+	type TcpStream,
 	TcpStreamEngine,
 	TcpStreamError,
 	TcpStreamLayer,
@@ -95,13 +96,26 @@ export const TcpStreamEngineBunLive = Layer.succeed(
 
 /**
  * Convenience Layer providing TcpStream powered by the Bun engine.
+ *
+ * Decisions made:
+ * - Precise TypeScript function overloads: when config is passed, returns a fully
+ *   satisfied Layer with no unmet dependencies (RIn = never). When omitted, returns
+ *   a composable Layer awaiting ConnectionConfig in the environment.
  */
-export const TcpStreamBunLive = (config?: ConnectionConfigShape) => {
+export function TcpStreamBunLive(
+	config: ConnectionConfigShape,
+): Layer.Layer<TcpStream>;
+export function TcpStreamBunLive(): Layer.Layer<
+	TcpStream,
+	never,
+	ConnectionConfig
+>;
+export function TcpStreamBunLive(config?: ConnectionConfigShape) {
 	const base = TcpStreamLayer.pipe(Layer.provide(TcpStreamEngineBunLive));
 	return config !== undefined
 		? base.pipe(Layer.provide(ConnectionConfigLive(config)))
 		: base;
-};
+}
 
 // Aliases for backward compatibility
 export { TcpStreamBunLive as TcpStreamLive };

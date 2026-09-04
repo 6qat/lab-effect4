@@ -303,9 +303,17 @@ export const makeTcpStreamPlatform = Effect.gen(function* () {
 /**
  * Convenience and composable layer for TcpStream using @effect/platform Socket.
  */
-export const TcpStreamPlatformLive = (config?: ConnectionConfigShape) => {
+export function TcpStreamPlatformLive(
+	config: ConnectionConfigShape,
+): Layer.Layer<TcpStream>;
+export function TcpStreamPlatformLive(): Layer.Layer<
+	TcpStream,
+	never,
+	ConnectionConfig
+>;
+export function TcpStreamPlatformLive(config?: ConnectionConfigShape) {
 	const base = Layer.effect(TcpStream, makeTcpStreamPlatform);
 	return config !== undefined
 		? base.pipe(Layer.provide(ConnectionConfigLive(config)))
 		: base;
-};
+}
