@@ -286,5 +286,5 @@ const main = selectedProgram.pipe(
 );
 
 if (import.meta.main) {
-	BunRuntime.runMain(main as Effect.Effect<void, unknown, never>);
+	BunRuntime.runMain(main);
 }
