@@ -6,7 +6,7 @@ import {
 	type ConnectionConfigShape,
 	TcpStream,
 } from "./tcp-connection-common.js";
-import { TcpStreamNodeLive } from "./tcp-connection-nodejs.js";
+import { TcpStreamNodejsLive } from "./tcp-connection-nodejs.js";
 import { TcpStreamPlatformLive } from "./tcp-connection-platform.js";
 
 export class MissingCliArgError extends Data.TaggedError("MissingCliArgError")<{
@@ -43,39 +43,20 @@ export interface ParsedCliArgs {
 }
 
 /**
- * Parses command-line arguments to extract target URL and optional TCP engine.
- * Defaults to "bun" if --engine is omitted (Q1 -> Option A).
+ * Validates and parses the `--engine=` CLI flag and URL.
  */
 export const parseCliArgs = (
-	argv: string[],
+	args: readonly string[],
 ): Result.Result<ParsedCliArgs, CliUrlError | UnsupportedEngineError> => {
 	let rawEngine = "bun";
 	let urlInput: string | undefined;
 
-	for (let i = 0; i < argv.length; i++) {
-		const arg = argv[i];
-		if (arg === undefined) continue;
-
+	for (const arg of args) {
 		if (arg.startsWith("--engine=")) {
 			rawEngine = arg.slice("--engine=".length);
-		} else if (arg === "-e" || arg === "--engine") {
-			const next = argv[i + 1];
-			if (next !== undefined) {
-				rawEngine = next;
-				i++;
-			}
-		} else if (!arg.startsWith("-")) {
+		} else if (!arg.startsWith("-") && urlInput === undefined) {
 			urlInput = arg;
 		}
-	}
-
-	if (urlInput === undefined) {
-		return Result.fail(
-			new MissingCliArgError({
-				message:
-					"Usage: bun src/tcp-connection-http-example.ts [--engine=bun|nodejs|platform] <http-or-https-url>",
-			}),
-		);
 	}
 
 	if (
@@ -86,6 +67,15 @@ export const parseCliArgs = (
 		return Result.fail(
 			new UnsupportedEngineError({
 				engine: rawEngine,
+			}),
+		);
+	}
+
+	if (urlInput === undefined) {
+		return Result.fail(
+			new MissingCliArgError({
+				message:
+					"Usage: bun src/tcp-connection-http-example.ts [--engine=bun|nodejs|platform] <http-or-https-url>",
 			}),
 		);
 	}
@@ -211,7 +201,7 @@ export const requestProgramNodejs = Effect.gen(function* () {
 	const url = yield* parsedRequestUrl;
 	const config = makeConnectionConfig(url);
 	yield* executeHttpRequest(url).pipe(
-		Effect.provide(TcpStreamNodeLive(config)),
+		Effect.provide(TcpStreamNodejsLive(config)),
 	);
 });
 

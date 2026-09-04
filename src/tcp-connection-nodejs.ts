@@ -164,10 +164,10 @@ export const TcpStreamEngineNodejsLive = Layer.succeed(
 );
 
 /**
- * Packaged convenience layer for Node.js (Q2 -> Option C).
+ * Packaged convenience layer for Node.js (standardized to Nodejs suffix).
  * Combines TcpStreamLayer with TcpStreamEngineNodejsLive and optional ConnectionConfig.
  */
-export const TcpStreamNodeLive = (config?: ConnectionConfigShape) => {
+export const TcpStreamNodejsLive = (config?: ConnectionConfigShape) => {
 	const base = TcpStreamLayer.pipe(Layer.provide(TcpStreamEngineNodejsLive));
 	return config !== undefined
 		? base.pipe(Layer.provide(ConnectionConfigLive(config)))
@@ -175,6 +175,10 @@ export const TcpStreamNodeLive = (config?: ConnectionConfigShape) => {
 };
 
 // Aliases for backward compatibility
-export { TcpStreamNodeLive as TcpStreamNodejsLive };
-export const ConnectionConfigNodeLive = ConnectionConfigLive;
-export { ConnectionConfig as ConnectionConfigNode };
+export { TcpStreamNodejsLive as TcpStreamNodeLive };
+export const ConnectionConfigNodejsLive = ConnectionConfigLive;
+export {
+	ConnectionConfig as ConnectionConfigNodejs,
+	ConnectionConfig as ConnectionConfigNode,
+	ConnectionConfigNodejsLive as ConnectionConfigNodeLive,
+};

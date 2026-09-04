@@ -1,16 +1,16 @@
 import { describe, expect, it } from "bun:test";
 import { Effect, Exit, Layer, Option, Schedule, Stream } from "effect";
 import {
-	ConnectionConfigNodeLive,
+	ConnectionConfigNodejsLive,
 	TcpStream,
-	TcpStreamNodeLive,
+	TcpStreamNodejsLive,
 } from "./tcp-connection-nodejs.js";
 
 describe("TcpStream Node.js retry policy and operations", () => {
 	it("fails with TcpStreamError after exhausting configured retry attempts on unreachable port", async () => {
 		const unreachablePort = 59223;
 
-		const configLayer = ConnectionConfigNodeLive({
+		const configLayer = ConnectionConfigNodejsLive({
 			host: "127.0.0.1",
 			port: unreachablePort,
 			retry: {
@@ -21,7 +21,7 @@ describe("TcpStream Node.js retry policy and operations", () => {
 			},
 		});
 
-		const tcpLayer = TcpStreamNodeLive().pipe(Layer.provide(configLayer));
+		const tcpLayer = TcpStreamNodejsLive().pipe(Layer.provide(configLayer));
 		const program = TcpStream.pipe(Effect.provide(tcpLayer));
 
 		const startTime = Date.now();
@@ -39,13 +39,13 @@ describe("TcpStream Node.js retry policy and operations", () => {
 	it("fails immediately when retry is disabled (retry: false)", async () => {
 		const unreachablePort = 59224;
 
-		const configLayer = ConnectionConfigNodeLive({
+		const configLayer = ConnectionConfigNodejsLive({
 			host: "127.0.0.1",
 			port: unreachablePort,
 			retry: false,
 		});
 
-		const tcpLayer = TcpStreamNodeLive().pipe(Layer.provide(configLayer));
+		const tcpLayer = TcpStreamNodejsLive().pipe(Layer.provide(configLayer));
 		const program = TcpStream.pipe(Effect.provide(tcpLayer));
 
 		const startTime = Date.now();
@@ -68,13 +68,13 @@ describe("TcpStream Node.js retry policy and operations", () => {
 			),
 		);
 
-		const configLayer = ConnectionConfigNodeLive({
+		const configLayer = ConnectionConfigNodejsLive({
 			host: "127.0.0.1",
 			port: unreachablePort,
 			retrySchedule: customSchedule,
 		});
 
-		const tcpLayer = TcpStreamNodeLive().pipe(Layer.provide(configLayer));
+		const tcpLayer = TcpStreamNodejsLive().pipe(Layer.provide(configLayer));
 		const program = TcpStream.pipe(Effect.provide(tcpLayer));
 
 		const exit = await Effect.runPromiseExit(program);
@@ -100,7 +100,7 @@ describe("TcpStream Node.js retry policy and operations", () => {
 			});
 		}, 50);
 
-		const configLayer = ConnectionConfigNodeLive({
+		const configLayer = ConnectionConfigNodejsLive({
 			host: "127.0.0.1",
 			port,
 			retry: {
@@ -111,7 +111,7 @@ describe("TcpStream Node.js retry policy and operations", () => {
 			},
 		});
 
-		const tcpLayer = TcpStreamNodeLive().pipe(Layer.provide(configLayer));
+		const tcpLayer = TcpStreamNodejsLive().pipe(Layer.provide(configLayer));
 
 		const program = Effect.gen(function* () {
 			const tcp = yield* TcpStream;
@@ -139,7 +139,11 @@ describe("TcpStream Node.js retry policy and operations", () => {
 
 	it("sends binary data and closes gracefully", async () => {
 		const port = 59227;
-		const server = Bun.listen({
+		let server:
+			| { stop: (closeActiveConnections?: boolean) => void }
+			| undefined;
+
+		server = Bun.listen({
 			hostname: "127.0.0.1",
 			port,
 			socket: {
@@ -149,17 +153,18 @@ describe("TcpStream Node.js retry policy and operations", () => {
 			},
 		});
 
-		const configLayer = ConnectionConfigNodeLive({
+		const configLayer = ConnectionConfigNodejsLive({
 			host: "127.0.0.1",
 			port,
 			retry: false,
 		});
 
-		const tcpLayer = TcpStreamNodeLive().pipe(Layer.provide(configLayer));
+		const tcpLayer = TcpStreamNodejsLive().pipe(Layer.provide(configLayer));
+
+		const payload = new Uint8Array([1, 2, 3, 4, 5]);
 
 		const program = Effect.gen(function* () {
 			const tcp = yield* TcpStream;
-			const payload = new Uint8Array([1, 2, 3, 4, 5]);
 			yield* tcp.send(payload);
 			const chunk = yield* Stream.runHead(tcp.stream);
 			yield* tcp.close;
@@ -173,11 +178,11 @@ describe("TcpStream Node.js retry policy and operations", () => {
 				const maybeChunk = exit.value;
 				expect(Option.isSome(maybeChunk)).toBe(true);
 				if (Option.isSome(maybeChunk)) {
-					expect(Array.from(maybeChunk.value)).toEqual([1, 2, 3, 4, 5]);
+					expect(Array.from(maybeChunk.value)).toEqual(Array.from(payload));
 				}
 			}
 		} finally {
-			server.stop(true);
+			server?.stop(true);
 		}
 	});
 });
