@@ -43,7 +43,8 @@ export interface ParsedCliArgs {
 }
 
 /**
- * Validates and parses the `--engine=` CLI flag and URL.
+ * Validates and parses CLI arguments:
+ * Supports `--engine=<engine>`, `--engine <engine>`, `-e <engine>`, and `<url>`.
  */
 export const parseCliArgs = (
 	args: readonly string[],
@@ -51,9 +52,24 @@ export const parseCliArgs = (
 	let rawEngine = "bun";
 	let urlInput: string | undefined;
 
-	for (const arg of args) {
+	for (let i = 0; i < args.length; i++) {
+		const arg = args[i];
+		if (arg === undefined) continue;
+
 		if (arg.startsWith("--engine=")) {
 			rawEngine = arg.slice("--engine=".length);
+		} else if (arg === "--engine" || arg === "-e") {
+			const next = args[i + 1];
+			if (next !== undefined && !next.startsWith("-")) {
+				rawEngine = next;
+				i++;
+			} else {
+				return Result.fail(
+					new UnsupportedEngineError({
+						engine: "",
+					}),
+				);
+			}
 		} else if (!arg.startsWith("-") && urlInput === undefined) {
 			urlInput = arg;
 		}
