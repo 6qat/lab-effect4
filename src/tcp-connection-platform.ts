@@ -1,5 +1,5 @@
 import * as tls from "node:tls";
-import * as NodeSocket from "@effect/platform-node/NodeSocket";
+import { BunSocket } from "@effect/platform-bun";
 import {
 	Cause,
 	Context,
@@ -81,14 +81,14 @@ const mapSocketError = (error: Socket.SocketError): TcpStreamError => {
  *
  * Decisions made:
  * - Dual-mode socket instantiation via fromDuplex (Q5 -> Option A):
- *   - Plain TCP: delegates to NodeSocket.makeNet({ host, port }).
- *   - TLS: connects via tls.connect and wraps duplex stream via NodeSocket.fromDuplex.
+ *   - Plain TCP: delegates to BunSocket.makeNet({ host, port }).
+ *   - TLS: connects via tls.connect and wraps duplex stream via BunSocket.fromDuplex.
  */
 const createPlatformSocket = (
 	config: ConnectionConfigShape,
 ): Effect.Effect<Socket.Socket, Socket.SocketError, Scope.Scope> => {
 	if (!config.tls) {
-		return NodeSocket.makeNet({
+		return BunSocket.makeNet({
 			host: config.host,
 			port: config.port,
 		});
@@ -99,7 +99,7 @@ const createPlatformSocket = (
 			? {}
 			: (config.tls as tls.ConnectionOptions);
 
-	return NodeSocket.fromDuplex(
+	return BunSocket.fromDuplex(
 		Effect.contextWith((context) => {
 			let socketInstance: tls.TLSSocket | undefined;
 			return Effect.flatMap(
