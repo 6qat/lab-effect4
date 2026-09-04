@@ -7,9 +7,9 @@ import {
 	Effect,
 	Exit,
 	Layer,
-	MutableRef,
 	Option,
 	Queue,
+	Ref,
 	Scope,
 	Stream,
 } from "effect";
@@ -143,15 +143,15 @@ const createPlatformSocket = (
 /**
  * Deep orchestrator for TcpStream based on @effect/platform Socket.Socket.run.
  *
- * Architectural decisions:
- * - Parallel TcpStream implementation (Q2 -> Option A): Directly implements TcpStreamShape
- *   rather than shoehorning @effect/platform into the lower-level TcpStreamEngine.
- * - Push-to-Pull queue bridge (Q3 -> Option A): Forks socket.run in the connection scope,
- *   pushing received chunks into Queue.unbounded and reading via Stream.fromQueue.
- * - Readiness handshake deferred (Q4 -> Option A): Awaits socket.run({ onOpen }) so that
- *   initial connection failures trigger configured retry schedules before returning.
- * - Scoped lifecycle: Isolated child scopes per attempt ensure that failed attempts clean up
- *   immediately while the successful connection scope persists for the session.
+ * Idiomatic Effect architectural patterns:
+ * - Effectful Ref & Deferred state machine (Suggestion 1): Eliminates mutable flags
+ *   in favor of pure effectful state transitions using Ref and Deferred.
+ * - Queue-backed push bridge (Suggestion 2): Bridges socket.run push callback into
+ *   unbounded Queue and exposes Stream.fromQueue.
+ * - Scope-driven lifecycle with manual close integration (Suggestion 3): Scope finalizers
+ *   ensure graceful cleanup on scope exit or explicit close invocation.
+ * - Effect text stream encoder (Suggestion 4): Uses Stream.encodeText with pure runFold
+ *   for UTF-8 string encoding.
  */
 export const makeTcpStreamPlatform = Effect.gen(function* () {
 	const config = yield* ConnectionConfig;
@@ -165,23 +165,23 @@ export const makeTcpStreamPlatform = Effect.gen(function* () {
 		Uint8Array,
 		TcpStreamError | Cause.Done
 	>();
-	const state = MutableRef.make<ConnectionState>({ _tag: "Open" });
+	const state = yield* Ref.make<ConnectionState>({ _tag: "Open" });
 
-	const finishIncoming = (error?: TcpStreamError): boolean => {
-		const currentState = MutableRef.get(state);
-		if (currentState._tag === "Closed") {
-			return false;
-		}
+	const finishIncoming = (error?: TcpStreamError): Effect.Effect<void> =>
+		Effect.gen(function* () {
+			const currentState = yield* Ref.get(state);
+			if (currentState._tag === "Closed") {
+				return;
+			}
 
-		if (error) {
-			MutableRef.set(state, { _tag: "Closed", error });
-			Queue.failCauseUnsafe(incoming, Cause.fail(error));
-		} else {
-			MutableRef.set(state, { _tag: "Closed" });
-			Queue.endUnsafe(incoming);
-		}
-		return true;
-	};
+			if (error) {
+				yield* Ref.set(state, { _tag: "Closed", error });
+				yield* Queue.failCause(incoming, Cause.fail(error));
+			} else {
+				yield* Ref.set(state, { _tag: "Closed" });
+				yield* Queue.end(incoming);
+			}
+		});
 
 	const retrySchedule =
 		validConfig.retrySchedule !== undefined
@@ -199,7 +199,7 @@ export const makeTcpStreamPlatform = Effect.gen(function* () {
 		);
 
 		const ready = yield* Deferred.make<void, TcpStreamError>();
-		let isConnected = false;
+		const isConnected = yield* Ref.make(false);
 
 		// Fork the push-based read loop in the child scope
 		yield* socket
@@ -208,26 +208,29 @@ export const makeTcpStreamPlatform = Effect.gen(function* () {
 					Queue.offerUnsafe(incoming, chunk);
 				},
 				{
-					onOpen: Effect.sync(() => {
-						isConnected = true;
-						Deferred.doneUnsafe(ready, Effect.void);
+					onOpen: Effect.gen(function* () {
+						yield* Ref.set(isConnected, true);
+						yield* Deferred.succeed(ready, void 0);
 					}),
 				},
 			)
 			.pipe(
-				Effect.catch((err: Socket.SocketError) => {
-					const streamError = mapSocketError(err);
-					if (!isConnected) {
-						Deferred.doneUnsafe(ready, Effect.fail(streamError));
-					} else {
-						finishIncoming(streamError);
-					}
-					return Effect.void;
-				}),
+				Effect.catch((err: Socket.SocketError) =>
+					Effect.gen(function* () {
+						const streamError = mapSocketError(err);
+						const connected = yield* Ref.get(isConnected);
+						if (!connected) {
+							yield* Deferred.fail(ready, streamError);
+						} else {
+							yield* finishIncoming(streamError);
+						}
+					}),
+				),
 				Effect.andThen(
-					Effect.sync(() => {
-						if (isConnected) {
-							finishIncoming();
+					Effect.gen(function* () {
+						const connected = yield* Ref.get(isConnected);
+						if (connected) {
+							yield* finishIncoming();
 						}
 					}),
 				),
@@ -252,7 +255,7 @@ export const makeTcpStreamPlatform = Effect.gen(function* () {
 
 	const send = (data: Uint8Array): Effect.Effect<void, TcpStreamError> =>
 		Effect.gen(function* () {
-			const currentState = MutableRef.get(state);
+			const currentState = yield* Ref.get(state);
 			if (currentState._tag === "Closed") {
 				return yield* currentState.error ??
 					new TcpStreamError({
@@ -264,11 +267,25 @@ export const makeTcpStreamPlatform = Effect.gen(function* () {
 			yield* writer(data).pipe(Effect.mapError(mapSocketError));
 		});
 
-	const encoder = new TextEncoder();
-	const sendText = (data: string) => send(encoder.encode(data));
+	// Pure Effect string encoding using Stream.encodeText and runFold
+	const sendText = (data: string): Effect.Effect<void, TcpStreamError> =>
+		Stream.make(data).pipe(
+			Stream.encodeText,
+			Stream.runFold(
+				() => new Uint8Array(0),
+				(acc: Uint8Array, chunk: Uint8Array): Uint8Array => {
+					if (acc.byteLength === 0) return new Uint8Array(chunk);
+					const merged = new Uint8Array(acc.byteLength + chunk.byteLength);
+					merged.set(acc, 0);
+					merged.set(chunk, acc.byteLength);
+					return merged;
+				},
+			),
+			Effect.flatMap(send),
+		);
 
 	const close = Effect.gen(function* () {
-		finishIncoming();
+		yield* finishIncoming();
 		yield* writer(new Socket.CloseEvent(1000)).pipe(
 			Effect.catch(() => Effect.void),
 		);
