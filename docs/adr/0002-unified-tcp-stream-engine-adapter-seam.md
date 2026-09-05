@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted (Amended by [ADR 0005](0005-unified-platform-socket-engine-adapter-and-test-suite.md) and [ADR 0006](0006-scope-owned-platform-engine-lifecycle.md): `RawSocketHandle.write`/`close` are now effectful, and `TcpStreamEngineShape.connect` may require `Scope.Scope`)
 
 ## Context
 
@@ -20,6 +20,7 @@ We extracted a shared engine adapter seam ([`TcpStreamEngine`](file:///home/guig
    - Defined `TcpStreamEngineShape` requiring `connect(config, callbacks): Effect<RawSocketHandle, TcpStreamError>`.
    - `RawSocketHandle` provides `write(chunk): RawSocketWriteResult` and `close(): void`.
    - `SocketCallbacks` provides `onData`, `onDrain`, `onError`, and `onClose`.
+   - _(As amended by ADR 0005 and ADR 0006: `write`/`close` return effects, and `connect` may require `Scope.Scope` so an adapter's Effect-managed resources are torn down when the caller's scope closes or is interrupted, not only when `close()` is called explicitly.)_
 
 3. **Thin Engine Adapters**:
    - `src/tcp-connection-bun.ts`: Contains only `Bun.connect` mapping and exports `TcpStreamEngineBunLive`.

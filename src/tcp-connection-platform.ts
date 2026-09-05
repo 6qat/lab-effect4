@@ -133,9 +133,14 @@ const makeTcpStreamEnginePlatform: TcpStreamEngineShape = {
 	connect: (
 		config: ConnectionConfigShape,
 		callbacks: SocketCallbacks,
-	): Effect.Effect<RawSocketHandle, TcpStreamError> =>
+	): Effect.Effect<RawSocketHandle, TcpStreamError, Scope.Scope> =>
 		Effect.gen(function* () {
-			const childScope = yield* Scope.make();
+			// Fork a child of the ambient scope (rather than an orphaned
+			// Scope.make()) so an interrupted or finalizing ambient scope
+			// always tears down this connection too, even if `close()` is
+			// never explicitly invoked.
+			const parentScope = yield* Scope.Scope;
+			const childScope = yield* Scope.fork(parentScope);
 
 			const socket = yield* createPlatformSocket(config).pipe(
 				Effect.mapError(mapSocketError),
@@ -171,7 +176,6 @@ const makeTcpStreamEnginePlatform: TcpStreamEngineShape = {
 					),
 					Effect.andThen(
 						Effect.gen(function* () {
-							hasClosed = true;
 							const connected = yield* Ref.get(isConnected);
 							if (connected) {
 								callbacks.onClose();
@@ -189,7 +193,6 @@ const makeTcpStreamEnginePlatform: TcpStreamEngineShape = {
 
 			const writer = yield* socket.writer.pipe(Scope.provide(childScope));
 
-			let hasClosed = false;
 			const rawHandle: RawSocketHandle = {
 				write: (
 					chunk: Uint8Array,
@@ -203,13 +206,15 @@ const makeTcpStreamEnginePlatform: TcpStreamEngineShape = {
 							}),
 						}),
 					),
-				close: (): Effect.Effect<void> =>
-					Effect.gen(function* () {
-						if (!hasClosed) {
-							hasClosed = true;
-							yield* Scope.close(childScope, Exit.void);
-						}
-					}),
+				// Scope.close is idempotent (a no-op once the scope is already
+				// closed), so close() can unconditionally close childScope
+				// instead of tracking "already closed" separately from
+				// "the read loop already ended" — the two are not the same
+				// thing, and conflating them previously skipped teardown
+				// (destroying the socket, ending the writer) whenever the
+				// remote side closed the connection before close() was
+				// called explicitly.
+				close: (): Effect.Effect<void> => Scope.close(childScope, Exit.void),
 			};
 
 			return rawHandle;

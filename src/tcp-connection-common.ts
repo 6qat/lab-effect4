@@ -12,6 +12,7 @@ import {
 	Queue,
 	Result,
 	Schedule,
+	type Scope,
 	Semaphore,
 	Stream,
 } from "effect";
@@ -160,13 +161,22 @@ export interface RawSocketHandle {
 
 /**
  * Runtime-agnostic engine adapter service.
- * Two real adapters satisfy this seam: Bun native sockets and Node.js node:net/node:tls.
+ * Three adapters satisfy this seam: Bun native sockets, Node.js node:net/node:tls,
+ * and @effect/platform Socket.Socket.
+ *
+ * `connect` may require `Scope.Scope`: an adapter that owns Effect-managed
+ * child resources (forked fibers, `@effect/platform` writer scopes, etc.)
+ * should fork a child of that ambient scope — rather than an unlinked
+ * `Scope.make()` — so those resources are torn down whenever the caller's
+ * own scope closes or is interrupted, even if `RawSocketHandle.close()` is
+ * never explicitly invoked. Adapters with nothing to scope (Bun, Node.js)
+ * simply don't consume it.
  */
 export interface TcpStreamEngineShape {
 	readonly connect: (
 		config: ConnectionConfigShape,
 		callbacks: SocketCallbacks,
-	) => Effect.Effect<RawSocketHandle, TcpStreamError>;
+	) => Effect.Effect<RawSocketHandle, TcpStreamError, Scope.Scope>;
 }
 
 export class TcpStreamEngine extends Context.Service<
@@ -270,17 +280,31 @@ export const makeTcpStream = Effect.gen(function* () {
 		},
 	});
 
-	const socketHandle = yield* Option.match(retrySchedule, {
+	const connectWithRetry = Option.match(retrySchedule, {
 		onNone: () => connectEffect,
 		onSome: (schedule) => Effect.retry(connectEffect, schedule),
 	});
 
-	// Register scoped socket finalizer (Q6 -> Option B)
-	yield* Effect.addFinalizer(() =>
-		Effect.gen(function* () {
-			finishIncoming();
-			yield* socketHandle.close().pipe(Effect.catch(() => Effect.void));
-		}),
+	// Acquire and register teardown atomically (Q6 -> Option B): a separate
+	// "connect, then addFinalizer" pair leaves a window, between a
+	// successful connect and the finalizer registration, where an
+	// interruption would skip closing the socket entirely. acquireRelease
+	// guarantees the release (close) runs whenever the enclosing scope
+	// closes, including on interruption of this very step — and, per its
+	// own contract, still guarantees this even with `interruptible: true`:
+	// that option only controls whether a still-in-flight connect/retry
+	// attempt can itself be cancelled (which it must remain, so callers can
+	// still time out or shut down while retries are backing off); once
+	// `connectWithRetry` actually produces a handle, release is registered
+	// and guaranteed to run regardless.
+	const socketHandle = yield* Effect.acquireRelease(
+		connectWithRetry,
+		(handle) =>
+			Effect.gen(function* () {
+				finishIncoming();
+				yield* handle.close().pipe(Effect.catch(() => Effect.void));
+			}),
+		{ interruptible: true },
 	);
 
 	const send = (data: Uint8Array): Effect.Effect<void, TcpStreamError> =>

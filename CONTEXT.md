@@ -17,7 +17,7 @@ The flow-control event signaled when a socket's kernel and userland write buffer
 _Avoid_: BufferFlush, WriteReady
 
 **TcpStreamEngine**:
-The underlying runtime implementation driving a `TcpStream` session, specifically Bun native sockets or Node.js `node:net`.
+The underlying runtime implementation driving a `TcpStream` session: Bun native sockets, Node.js `node:net`/`node:tls`, or `@effect/platform` `Socket.Socket`.
 _Avoid_: SocketDriver, TransportProvider
 
 **RawSocketHandle**:
