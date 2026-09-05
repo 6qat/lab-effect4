@@ -3,13 +3,12 @@ import {
 	ConnectionConfig,
 	ConnectionConfigLive,
 	type ConnectionConfigShape,
+	makeConvenienceLayer,
 	type RawSocketHandle,
 	type RawSocketWriteResult,
 	type SocketCallbacks,
-	type TcpStream,
 	TcpStreamEngine,
 	TcpStreamError,
-	TcpStreamLayer,
 	unknownToMessage,
 } from "./tcp-connection-common.js";
 
@@ -59,23 +58,37 @@ export const TcpStreamEngineBunLive = Layer.succeed(
 
 					let hasEnded = false;
 					const rawHandle: RawSocketHandle = {
-						write(chunk: Uint8Array): RawSocketWriteResult {
-							const written = socket.write(chunk);
-							socket.flush();
-							return {
-								bytesWritten: written,
-								flushed: written === chunk.byteLength,
-							};
+						write(
+							chunk: Uint8Array,
+						): Effect.Effect<RawSocketWriteResult, TcpStreamError> {
+							return Effect.try({
+								try: () => {
+									const written = socket.write(chunk);
+									socket.flush();
+									return {
+										bytesWritten: written,
+										flushed: written === chunk.byteLength,
+									};
+								},
+								catch: (cause) =>
+									new TcpStreamError({
+										operation: "write",
+										message: `Socket write failed: ${unknownToMessage(cause)}`,
+										cause,
+									}),
+							});
 						},
-						close() {
-							if (!hasEnded) {
-								hasEnded = true;
-								try {
-									socket.end();
-								} catch {
-									// Best-effort teardown
+						close(): Effect.Effect<void> {
+							return Effect.sync(() => {
+								if (!hasEnded) {
+									hasEnded = true;
+									try {
+										socket.end();
+									} catch {
+										// Best-effort teardown
+									}
 								}
-							}
+							});
 						},
 					};
 
@@ -96,26 +109,8 @@ export const TcpStreamEngineBunLive = Layer.succeed(
 
 /**
  * Convenience Layer providing TcpStream powered by the Bun engine.
- *
- * Decisions made:
- * - Precise TypeScript function overloads: when config is passed, returns a fully
- *   satisfied Layer with no unmet dependencies (RIn = never). When omitted, returns
- *   a composable Layer awaiting ConnectionConfig in the environment.
  */
-export function TcpStreamBunLive(
-	config: ConnectionConfigShape,
-): Layer.Layer<TcpStream>;
-export function TcpStreamBunLive(): Layer.Layer<
-	TcpStream,
-	never,
-	ConnectionConfig
->;
-export function TcpStreamBunLive(config?: ConnectionConfigShape) {
-	const base = TcpStreamLayer.pipe(Layer.provide(TcpStreamEngineBunLive));
-	return config !== undefined
-		? base.pipe(Layer.provide(ConnectionConfigLive(config)))
-		: base;
-}
+export const TcpStreamBunLive = makeConvenienceLayer(TcpStreamEngineBunLive);
 
 // Aliases for backward compatibility
 export { TcpStreamBunLive as TcpStreamLive };

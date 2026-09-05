@@ -105,13 +105,8 @@ export const validateHostAndPort = (
 
 export const validateConnectionConfig = (
 	config: ConnectionConfigShape,
-): Result.Result<ConnectionConfigShape, ConnectionConfigError> => {
-	const valid = validateHostAndPort(config.host, config.port);
-	if (valid._tag === "Failure") {
-		return valid;
-	}
-	return Result.succeed(config);
-};
+): Result.Result<ConnectionConfigShape, ConnectionConfigError> =>
+	Result.map(validateHostAndPort(config.host, config.port), () => config);
 
 export const buildDefaultRetrySchedule = (config?: RetryPolicyConfig) => {
 	const initialDelay = config?.initialDelay ?? "100 millis";
@@ -157,8 +152,10 @@ export interface RawSocketWriteResult {
  * - Teardown via `close()` callback, managed via Effect Scope in TcpStream (Q6 -> Option B).
  */
 export interface RawSocketHandle {
-	readonly write: (chunk: Uint8Array) => RawSocketWriteResult;
-	readonly close: () => void;
+	readonly write: (
+		chunk: Uint8Array,
+	) => Effect.Effect<RawSocketWriteResult, TcpStreamError>;
+	readonly close: () => Effect.Effect<void>;
 }
 
 /**
@@ -280,9 +277,9 @@ export const makeTcpStream = Effect.gen(function* () {
 
 	// Register scoped socket finalizer (Q6 -> Option B)
 	yield* Effect.addFinalizer(() =>
-		Effect.sync(() => {
+		Effect.gen(function* () {
 			finishIncoming();
-			socketHandle.close();
+			yield* socketHandle.close().pipe(Effect.catch(() => Effect.void));
 		}),
 	);
 
@@ -308,15 +305,7 @@ export const makeTcpStream = Effect.gen(function* () {
 					MutableRef.set(drainWaiter, waiter);
 
 					const chunkToWrite = data.subarray(offset);
-					const writeResult = yield* Effect.try({
-						try: () => socketHandle.write(chunkToWrite),
-						catch: (cause) =>
-							new TcpStreamError({
-								operation: "write",
-								message: `Socket write failed: ${unknownToMessage(cause)}`,
-								cause,
-							}),
-					});
+					const writeResult = yield* socketHandle.write(chunkToWrite);
 
 					if (writeResult.bytesWritten < 0) {
 						return yield* new TcpStreamError({
@@ -349,9 +338,9 @@ export const makeTcpStream = Effect.gen(function* () {
 	const encoder = new TextEncoder();
 	const sendText = (data: string) => send(encoder.encode(data));
 
-	const close = Effect.sync(() => {
+	const close = Effect.gen(function* () {
 		finishIncoming();
-		socketHandle.close();
+		yield* socketHandle.close().pipe(Effect.catch(() => Effect.void));
 	});
 
 	return TcpStream.of({
@@ -366,3 +355,25 @@ export const makeTcpStream = Effect.gen(function* () {
  * Standard composable layer requiring TcpStreamEngine and ConnectionConfig.
  */
 export const TcpStreamLayer = Layer.effect(TcpStream, makeTcpStream);
+
+/**
+ * Generic convenience layer factory for runtime engine adapters.
+ */
+export interface ConvenienceLayer<S> {
+	(config: ConnectionConfigShape): Layer.Layer<S>;
+	(): Layer.Layer<S, never, ConnectionConfig>;
+}
+
+export const makeConvenienceLayer = (
+	engineLayer: Layer.Layer<TcpStreamEngine>,
+): ConvenienceLayer<TcpStream> => {
+	const base = TcpStreamLayer.pipe(Layer.provide(engineLayer));
+	function layer(config: ConnectionConfigShape): Layer.Layer<TcpStream>;
+	function layer(): Layer.Layer<TcpStream, never, ConnectionConfig>;
+	function layer(config?: ConnectionConfigShape) {
+		return config !== undefined
+			? base.pipe(Layer.provide(ConnectionConfigLive(config)))
+			: base;
+	}
+	return layer;
+};

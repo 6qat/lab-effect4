@@ -1,5 +1,5 @@
 import { BunRuntime } from "@effect/platform-bun";
-import { Console, Data, Effect, Result, Stream } from "effect";
+import { Console, Data, Effect, type Layer, Result, Stream } from "effect";
 
 import { TcpStreamBunLive } from "./tcp-connection-bun.js";
 import {
@@ -205,43 +205,35 @@ export const executeHttpRequest = (url: URL) =>
 	});
 
 /**
+ * Factory for engine-specific HTTP request programs.
+ */
+export const makeRequestProgram = (
+	layerFactory: (config: ConnectionConfigShape) => Layer.Layer<TcpStream>,
+) =>
+	Effect.gen(function* () {
+		const url = yield* parsedRequestUrl;
+		const config = makeConnectionConfig(url);
+		const response = yield* executeHttpRequest(url).pipe(
+			Effect.provide(layerFactory(config)),
+		);
+		yield* Console.log(response);
+		return response;
+	});
+
+/**
  * 1. Executes the HTTP request using Bun's native socket implementation (tcp-connection-bun.ts).
  */
-export const requestProgramBun = Effect.gen(function* () {
-	const url = yield* parsedRequestUrl;
-	const config = makeConnectionConfig(url);
-	const response = yield* executeHttpRequest(url).pipe(
-		Effect.provide(TcpStreamBunLive(config)),
-	);
-	yield* Console.log(response);
-	return response;
-});
+export const requestProgramBun = makeRequestProgram(TcpStreamBunLive);
 
 /**
  * 2. Executes the HTTP request using Node.js net/tls implementation (tcp-connection-nodejs.ts).
  */
-export const requestProgramNodejs = Effect.gen(function* () {
-	const url = yield* parsedRequestUrl;
-	const config = makeConnectionConfig(url);
-	const response = yield* executeHttpRequest(url).pipe(
-		Effect.provide(TcpStreamNodejsLive(config)),
-	);
-	yield* Console.log(response);
-	return response;
-});
+export const requestProgramNodejs = makeRequestProgram(TcpStreamNodejsLive);
 
 /**
  * 3. Executes the HTTP request using @effect/platform Socket.Socket.run implementation (tcp-connection-platform.ts).
  */
-export const requestProgramPlatform = Effect.gen(function* () {
-	const url = yield* parsedRequestUrl;
-	const config = makeConnectionConfig(url);
-	const response = yield* executeHttpRequest(url).pipe(
-		Effect.provide(TcpStreamPlatformLive(config)),
-	);
-	yield* Console.log(response);
-	return response;
-});
+export const requestProgramPlatform = makeRequestProgram(TcpStreamPlatformLive);
 
 /**
  * Dispatches to the chosen engine program based on CLI flags.

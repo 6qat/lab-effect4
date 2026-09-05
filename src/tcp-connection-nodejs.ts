@@ -5,14 +5,13 @@ import {
 	ConnectionConfig,
 	ConnectionConfigLive,
 	type ConnectionConfigShape,
+	makeConvenienceLayer,
 	type RawSocketHandle,
 	type RawSocketWriteResult,
 	type SocketCallbacks,
-	type TcpStream,
 	TcpStreamEngine,
 	type TcpStreamEngineShape,
 	TcpStreamError,
-	TcpStreamLayer,
 	unknownToMessage,
 } from "./tcp-connection-common.js";
 
@@ -67,22 +66,36 @@ const makeTcpStreamEngineNodejs: TcpStreamEngineShape = {
 
 						let hasDestroyed = false;
 						const rawHandle: RawSocketHandle = {
-							write(chunk: Uint8Array): RawSocketWriteResult {
-								const flushed = socket.write(chunk);
-								return {
-									bytesWritten: chunk.byteLength,
-									flushed,
-								};
+							write(
+								chunk: Uint8Array,
+							): Effect.Effect<RawSocketWriteResult, TcpStreamError> {
+								return Effect.try({
+									try: () => {
+										const flushed = socket.write(chunk);
+										return {
+											bytesWritten: chunk.byteLength,
+											flushed,
+										};
+									},
+									catch: (cause) =>
+										new TcpStreamError({
+											operation: "write",
+											message: `Socket write failed: ${unknownToMessage(cause)}`,
+											cause,
+										}),
+								});
 							},
-							close() {
-								if (!hasDestroyed) {
-									hasDestroyed = true;
-									try {
-										socket?.destroy();
-									} catch {
-										// Best-effort teardown
+							close(): Effect.Effect<void> {
+								return Effect.sync(() => {
+									if (!hasDestroyed) {
+										hasDestroyed = true;
+										try {
+											socket?.destroy();
+										} catch {
+											// Best-effort teardown
+										}
 									}
-								}
+								});
 							},
 						};
 
@@ -167,26 +180,10 @@ export const TcpStreamEngineNodejsLive = Layer.succeed(
 /**
  * Packaged convenience layer for Node.js (standardized to Nodejs suffix).
  * Combines TcpStreamLayer with TcpStreamEngineNodejsLive and optional ConnectionConfig.
- *
- * Decisions made:
- * - Precise TypeScript function overloads: when config is passed, returns a fully
- *   satisfied Layer with no unmet dependencies (RIn = never). When omitted, returns
- *   a composable Layer awaiting ConnectionConfig in the environment.
  */
-export function TcpStreamNodejsLive(
-	config: ConnectionConfigShape,
-): Layer.Layer<TcpStream>;
-export function TcpStreamNodejsLive(): Layer.Layer<
-	TcpStream,
-	never,
-	ConnectionConfig
->;
-export function TcpStreamNodejsLive(config?: ConnectionConfigShape) {
-	const base = TcpStreamLayer.pipe(Layer.provide(TcpStreamEngineNodejsLive));
-	return config !== undefined
-		? base.pipe(Layer.provide(ConnectionConfigLive(config)))
-		: base;
-}
+export const TcpStreamNodejsLive = makeConvenienceLayer(
+	TcpStreamEngineNodejsLive,
+);
 
 // Aliases for backward compatibility
 export { TcpStreamNodejsLive as TcpStreamNodeLive };
