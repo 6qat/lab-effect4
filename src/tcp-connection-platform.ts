@@ -142,82 +142,97 @@ const makeTcpStreamEnginePlatform: TcpStreamEngineShape = {
 			const parentScope = yield* Scope.Scope;
 			const childScope = yield* Scope.fork(parentScope);
 
-			const socket = yield* createPlatformSocket(config).pipe(
-				Effect.mapError(mapSocketError),
-				Scope.provide(childScope),
-			);
-
-			const ready = yield* Deferred.make<void, TcpStreamError>();
-			const isConnected = yield* Ref.make(false);
-
-			yield* socket
-				.run(
-					(chunk) => {
-						callbacks.onData(chunk);
-					},
-					{
-						onOpen: Effect.gen(function* () {
-							yield* Ref.set(isConnected, true);
-							yield* Deferred.succeed(ready, void 0);
-						}),
-					},
-				)
-				.pipe(
-					Effect.catch((err: Socket.SocketError) =>
-						Effect.gen(function* () {
-							const streamError = mapSocketError(err);
-							const connected = yield* Ref.get(isConnected);
-							if (!connected) {
-								yield* Deferred.fail(ready, streamError);
-							} else {
-								callbacks.onError(new Error(streamError.message));
-							}
-						}),
-					),
-					Effect.andThen(
-						Effect.gen(function* () {
-							const connected = yield* Ref.get(isConnected);
-							if (connected) {
-								callbacks.onClose();
-							}
-						}),
-					),
-					Effect.forkIn(childScope),
+			// All per-attempt resources (socket finalizers, forked `run` fiber,
+			// writer scope) are owned by `childScope`. If any step below fails,
+			// close it with the failure exit so failed retry attempts don't
+			// accumulate empty child scopes; on success the returned handle
+			// owns it (closed via `close()` or parent teardown).
+			const setup = Effect.gen(function* () {
+				const socket = yield* createPlatformSocket(config).pipe(
+					Effect.mapError(mapSocketError),
+					Scope.provide(childScope),
 				);
 
-			const readyExit = yield* Effect.exit(Deferred.await(ready));
-			if (Exit.isFailure(readyExit)) {
-				yield* Scope.close(childScope, Exit.void);
-				return yield* Effect.failCause(readyExit.cause);
+				const ready = yield* Deferred.make<void, TcpStreamError>();
+				const isConnected = yield* Ref.make(false);
+
+				yield* socket
+					.run(
+						(chunk) => {
+							callbacks.onData(chunk);
+						},
+						{
+							onOpen: Effect.gen(function* () {
+								yield* Ref.set(isConnected, true);
+								yield* Deferred.succeed(ready, void 0);
+							}),
+						},
+					)
+					.pipe(
+						Effect.catch((err: Socket.SocketError) =>
+							Effect.gen(function* () {
+								const streamError = mapSocketError(err);
+								const connected = yield* Ref.get(isConnected);
+								if (!connected) {
+									yield* Deferred.fail(ready, streamError);
+								} else {
+									callbacks.onError(new Error(streamError.message));
+								}
+							}),
+						),
+						Effect.andThen(
+							Effect.gen(function* () {
+								const connected = yield* Ref.get(isConnected);
+								if (connected) {
+									callbacks.onClose();
+								}
+							}),
+						),
+						Effect.forkIn(childScope),
+					);
+
+				// A connect-time failure fails here; the outer exit handler
+				// below closes `childScope` with this same failure exit.
+				yield* Deferred.await(ready);
+
+				const writer = yield* socket.writer.pipe(Scope.provide(childScope));
+
+				const rawHandle: RawSocketHandle = {
+					write: (
+						chunk: Uint8Array,
+					): Effect.Effect<RawSocketWriteResult, TcpStreamError> =>
+						writer(chunk).pipe(
+							Effect.mapBoth({
+								onFailure: mapSocketError,
+								onSuccess: () => ({
+									bytesWritten: chunk.byteLength,
+									// `flushed: true` always: semantics are
+									// documented on `RawSocketHandle`.
+									flushed: true,
+								}),
+							}),
+						),
+					// Scope.close is idempotent (a no-op once the scope is already
+					// closed), so close() can unconditionally close childScope
+					// instead of tracking "already closed" separately from
+					// "the read loop already ended" — the two are not the same
+					// thing, and conflating them previously skipped teardown
+					// (destroying the socket, ending the writer) whenever the
+					// remote side closed the connection before close() was
+					// called explicitly.
+					close: (): Effect.Effect<void> => Scope.close(childScope, Exit.void),
+				};
+
+				return rawHandle;
+			});
+
+			const setupExit = yield* Effect.exit(setup);
+			if (Exit.isFailure(setupExit)) {
+				yield* Scope.close(childScope, setupExit);
+				return yield* Effect.failCause(setupExit.cause);
 			}
 
-			const writer = yield* socket.writer.pipe(Scope.provide(childScope));
-
-			const rawHandle: RawSocketHandle = {
-				write: (
-					chunk: Uint8Array,
-				): Effect.Effect<RawSocketWriteResult, TcpStreamError> =>
-					writer(chunk).pipe(
-						Effect.mapBoth({
-							onFailure: mapSocketError,
-							onSuccess: () => ({
-								bytesWritten: chunk.byteLength,
-								flushed: true,
-							}),
-						}),
-					),
-				// Scope.close is idempotent (a no-op once the scope is already
-				// closed), so close() can unconditionally close childScope
-				// instead of tracking "already closed" separately from
-				// "the read loop already ended" — the two are not the same
-				// thing, and conflating them previously skipped teardown
-				// (destroying the socket, ending the writer) whenever the
-				// remote side closed the connection before close() was
-				// called explicitly.
-				close: (): Effect.Effect<void> => Scope.close(childScope, Exit.void),
-			};
-
-			return rawHandle;
+			return setupExit.value;
 		}),
 };
 

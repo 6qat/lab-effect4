@@ -45,7 +45,10 @@ We modernized and unified the engine seam across all three runtime targets, supe
    Extracted [`makeConvenienceLayer`](../../src/tcp-connection-common.ts) in common to eliminate repeated function overload boilerplate across `TcpStreamBunLive`, `TcpStreamNodejsLive`, and `TcpStreamPlatformLive`.
 
 4. **Parameterized HTTP Example Request Programs (`makeRequestProgram`)**:
-   Deduplicated the request execution pipelines in [`src/tcp-connection-http-example.ts`](../../src/tcp-connection-http-example.ts) using a shared program factory.
+    Deduplicated the request execution pipelines in [`src/tcp-connection-http-example.ts`](../../src/tcp-connection-http-example.ts) using a shared program factory.
+    `makeRequestProgram(layerFactory, url)` takes the target URL explicitly so it stays
+    pure and testable; the CLI-wired `requestProgram*` constants delegate to
+    `makeCliRequestProgram(layerFactory)`, which reads the URL from argv.
 
 5. **Deduplicated Parameterized Test Runner (`defineTcpStreamTestSuite`)**:
    Extracted a parameterized test suite in [`src/tcp-connection-test-suite.ts`](../../src/tcp-connection-test-suite.ts) verifying all 6 key operational scenarios:
@@ -62,7 +65,7 @@ We modernized and unified the engine seam across all three runtime targets, supe
 ### Positive
 
 - **True Single Orchestrator**: Bun, Node.js, and `@effect/platform` now all route through the same shared `makeTcpStream` orchestrator. Zero duplicate concurrency, queueing, or retry logic remains.
-- **Over 400 Lines Saved**: Production code reduced by ~200 lines and test boilerplate reduced by ~350 lines while expanding test coverage to 48 passing tests.
+- **Over 400 Lines Saved**: Production code reduced by ~200 lines and test boilerplate reduced by ~350 lines while expanding test coverage.
 - **Full Backward Compatibility**: All public types, layer signatures, CLI options, and alias exports remain identical.
 - **Resource Safety**: Scoped lifecycle teardown handles graceful and unexpected socket closures without deadlocks or lingering fibers.
 

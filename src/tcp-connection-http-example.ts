@@ -206,12 +206,16 @@ export const executeHttpRequest = (url: URL) =>
 
 /**
  * Factory for engine-specific HTTP request programs.
+ *
+ * Takes the target `url` explicitly (instead of closing over the global
+ * `parsedRequestUrl`) so the program is pure and directly testable; the
+ * CLI-wired `requestProgram*` constants below supply the parsed argv URL.
  */
 export const makeRequestProgram = (
 	layerFactory: (config: ConnectionConfigShape) => Layer.Layer<TcpStream>,
+	url: URL,
 ) =>
 	Effect.gen(function* () {
-		const url = yield* parsedRequestUrl;
 		const config = makeConnectionConfig(url);
 		const response = yield* executeHttpRequest(url).pipe(
 			Effect.provide(layerFactory(config)),
@@ -221,19 +225,33 @@ export const makeRequestProgram = (
 	});
 
 /**
+ * CLI-wired variant reading the URL from argv (thin wrapper over the pure
+ * `makeRequestProgram(layerFactory, url)` above).
+ */
+export const makeCliRequestProgram = (
+	layerFactory: (config: ConnectionConfigShape) => Layer.Layer<TcpStream>,
+) =>
+	Effect.gen(function* () {
+		const url = yield* parsedRequestUrl;
+		return yield* makeRequestProgram(layerFactory, url);
+	});
+
+/**
  * 1. Executes the HTTP request using Bun's native socket implementation (tcp-connection-bun.ts).
  */
-export const requestProgramBun = makeRequestProgram(TcpStreamBunLive);
+export const requestProgramBun = makeCliRequestProgram(TcpStreamBunLive);
 
 /**
  * 2. Executes the HTTP request using Node.js net/tls implementation (tcp-connection-nodejs.ts).
  */
-export const requestProgramNodejs = makeRequestProgram(TcpStreamNodejsLive);
+export const requestProgramNodejs = makeCliRequestProgram(TcpStreamNodejsLive);
 
 /**
  * 3. Executes the HTTP request using @effect/platform Socket.Socket.run implementation (tcp-connection-platform.ts).
  */
-export const requestProgramPlatform = makeRequestProgram(TcpStreamPlatformLive);
+export const requestProgramPlatform = makeCliRequestProgram(
+	TcpStreamPlatformLive,
+);
 
 /**
  * Dispatches to the chosen engine program based on CLI flags.

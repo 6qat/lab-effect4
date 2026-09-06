@@ -149,6 +149,11 @@ export interface RawSocketWriteResult {
  *
  * Decision: Raw socket handle returns normalized write status (Q4 -> Option A).
  * - `flushed`: `true` if kernel/userland buffers flushed without backpressure.
+ *   The Platform adapter always reports `flushed: true` because
+ *   `@effect/platform`'s `socket.writer` applies backpressure by suspending
+ *   until the kernel buffer drains instead of returning `flushed: false`
+ *   plus an `onDrain` callback; its `send` path therefore never waits on the
+ *   drain waiter (kept for the Bun/Node adapters, which do report it).
  * - `bytesWritten`: number of bytes accepted (supports partial writes in Bun).
  * - Teardown via `close()` callback, managed via Effect Scope in TcpStream (Q6 -> Option B).
  */
