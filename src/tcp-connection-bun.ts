@@ -101,21 +101,31 @@ export const TcpStreamEngineBunLive = Layer.succeed(
 							socket: {
 								binaryType: "uint8array",
 								data(_socket, data) {
-									callbacks.onData(data);
+									if (!cancelled) {
+										callbacks.onData(data);
+									}
 								},
 								drain() {
-									callbacks.onDrain();
+									if (!cancelled) {
+										callbacks.onDrain();
+									}
 								},
 								error(_socket, cause) {
-									callbacks.onError(
-										cause instanceof Error ? cause : new Error(String(cause)),
-									);
+									if (!cancelled) {
+										callbacks.onError(
+											cause instanceof Error ? cause : new Error(String(cause)),
+										);
+									}
 								},
 								end() {
-									notifyClose();
+									if (!cancelled) {
+										notifyClose();
+									}
 								},
 								close() {
-									notifyClose();
+									if (!cancelled) {
+										notifyClose();
+									}
 								},
 							},
 						}).then(

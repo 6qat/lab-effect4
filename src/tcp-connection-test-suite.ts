@@ -298,73 +298,76 @@ export const defineTcpStreamTestSuite = ({
 			);
 			const keyPath = `${tmpDir}/key.pem`;
 			const certPath = `${tmpDir}/cert.pem`;
-			const generated = await Effect.runPromiseExit(
-				Effect.tryPromise({
-					try: async () => {
-						const proc = Bun.spawnSync([
-							"openssl",
-							"req",
-							"-x509",
-							"-newkey",
-							"rsa:2048",
-							"-keyout",
-							keyPath,
-							"-out",
-							certPath,
-							"-days",
-							"1",
-							"-nodes",
-							"-subj",
-							"/CN=127.0.0.1",
-						]);
-						if (proc.exitCode !== 0) {
-							throw new Error(`openssl exited ${proc.exitCode}`);
-						}
-					},
-					catch: (cause) => cause,
-				}).pipe(Effect.timeout("15 seconds")),
-			);
-			// Fail loudly (not silently skip) if the fixture can't be built:
-			// a missing openssl or tmpdir would otherwise hide a real
-			// regression behind a green suite.
-			expect(Exit.isSuccess(generated)).toBe(true);
 			const [{ readFile, rm }, tls] = await Promise.all([
 				import("node:fs/promises"),
 				import("node:tls"),
 			]);
-			const [key, cert] = await Promise.all([
-				readFile(keyPath),
-				readFile(certPath),
-			]);
-			const server = tls.createServer({ key, cert }, (socket) => {
-				socket.on("data", (chunk: Buffer) => {
-					socket.write(chunk);
-				});
-			});
-			await new Promise<void>((resolve) => {
-				server.listen(0, "127.0.0.1", resolve);
-			});
-			const address = server.address();
-			const port =
-				typeof address === "object" && address !== null ? address.port : 0;
 
-			const configLayer = ConnectionConfigLive({
-				host: "127.0.0.1",
-				port,
-				retry: false,
-				tls: { rejectUnauthorized: false },
-			});
-
-			const tcpLayer = layerFactory().pipe(Layer.provide(configLayer));
-			const program = Effect.gen(function* () {
-				const tcp = yield* TcpStream;
-				yield* tcp.sendText(`hello ${engineName} tls`);
-				const chunk = yield* Stream.runHead(tcp.stream);
-				yield* tcp.close;
-				return chunk;
-			}).pipe(Effect.provide(tcpLayer), Effect.timeout("10 seconds"));
-
+			let server: import("node:tls").Server | undefined;
 			try {
+				const generated = await Effect.runPromiseExit(
+					Effect.tryPromise({
+						try: async () => {
+							const proc = Bun.spawnSync([
+								"openssl",
+								"req",
+								"-x509",
+								"-newkey",
+								"rsa:2048",
+								"-keyout",
+								keyPath,
+								"-out",
+								certPath,
+								"-days",
+								"1",
+								"-nodes",
+								"-subj",
+								"/CN=127.0.0.1",
+							]);
+							if (proc.exitCode !== 0) {
+								throw new Error(`openssl exited ${proc.exitCode}`);
+							}
+						},
+						catch: (cause) => cause,
+					}).pipe(Effect.timeout("15 seconds")),
+				);
+				// Fail loudly (not silently skip) if the fixture can't be built:
+				// a missing openssl or tmpdir would otherwise hide a real
+				// regression behind a green suite.
+				expect(Exit.isSuccess(generated)).toBe(true);
+
+				const [key, cert] = await Promise.all([
+					readFile(keyPath),
+					readFile(certPath),
+				]);
+				server = tls.createServer({ key, cert }, (socket) => {
+					socket.on("data", (chunk: Buffer) => {
+						socket.write(chunk);
+					});
+				});
+				await new Promise<void>((resolve) => {
+					server?.listen(0, "127.0.0.1", resolve);
+				});
+				const address = server.address();
+				const port =
+					typeof address === "object" && address !== null ? address.port : 0;
+
+				const configLayer = ConnectionConfigLive({
+					host: "127.0.0.1",
+					port,
+					retry: false,
+					tls: { rejectUnauthorized: false },
+				});
+
+				const tcpLayer = layerFactory().pipe(Layer.provide(configLayer));
+				const program = Effect.gen(function* () {
+					const tcp = yield* TcpStream;
+					yield* tcp.sendText(`hello ${engineName} tls`);
+					const chunk = yield* Stream.runHead(tcp.stream);
+					yield* tcp.close;
+					return chunk;
+				}).pipe(Effect.provide(tcpLayer), Effect.timeout("10 seconds"));
+
 				const exit = await Effect.runPromiseExit(program);
 				expect(Exit.isSuccess(exit)).toBe(true);
 				if (Exit.isSuccess(exit) && Option.isSome(exit.value)) {
@@ -372,7 +375,7 @@ export const defineTcpStreamTestSuite = ({
 					expect(received).toBe(`hello ${engineName} tls`);
 				}
 			} finally {
-				server.close();
+				server?.close();
 				await rm(tmpDir, { recursive: true, force: true });
 			}
 		});
@@ -507,6 +510,7 @@ export const defineTcpStreamTestSuite = ({
 			const program = TcpStream.pipe(
 				Effect.provide(tcpLayer),
 				Effect.onExit((exit) => Deferred.succeed(programExitGate, exit)),
+				Effect.timeout("5 seconds"),
 			);
 
 			try {
@@ -514,7 +518,9 @@ export const defineTcpStreamTestSuite = ({
 				await Effect.runPromise(Deferred.await(openGate));
 
 				const startTime = Date.now();
-				await Effect.runPromise(Fiber.interrupt(fiber));
+				await Effect.runPromise(
+					Fiber.interrupt(fiber).pipe(Effect.timeout("5 seconds")),
+				);
 				const elapsed = Date.now() - startTime;
 
 				const fiberExit = await Effect.runPromise(
