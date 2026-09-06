@@ -26,10 +26,146 @@ type EchoServer = {
 	readonly stop: (closeActiveConnections?: boolean) => void;
 };
 
+type TlsServer = import("node:tls").Server;
+type UnreachableEndpoint = {
+	readonly host: "127.0.0.2";
+	readonly port: number;
+	readonly release: () => void;
+};
+
+type TlsServerLifecycle = {
+	readonly ready: Promise<number>;
+	readonly close: () => Promise<void>;
+};
+
+const listenTlsServer = (
+	server: TlsServer,
+	signal: AbortSignal,
+	forceClose: () => void,
+): TlsServerLifecycle => {
+	let startupPending = true;
+	let startupFailed = false;
+	let aborted = false;
+	let closePromise: Promise<void> | undefined;
+
+	const close = (): Promise<void> => {
+		if (closePromise !== undefined) {
+			return closePromise;
+		}
+
+		closePromise = new Promise((resolve) => {
+			let finished = false;
+			const finish = () => {
+				if (finished) return;
+				finished = true;
+				server.removeListener("close", onClose);
+				server.removeListener("listening", onLateListening);
+				resolve();
+			};
+			const onClose = () => finish();
+			const onLateListening = () => {
+				server.removeListener("listening", onLateListening);
+				requestClose();
+			};
+			const requestClose = () => {
+				forceClose();
+				if (startupFailed || (!startupPending && !server.listening)) {
+					finish();
+					return;
+				}
+				if (!server.listening) {
+					server.once("listening", onLateListening);
+					try {
+						server.close();
+					} catch {
+						// The pending listen may still emit `listening` later.
+					}
+					return;
+				}
+				server.once("close", onClose);
+				try {
+					server.close();
+				} catch {
+					finish();
+				}
+			};
+
+			server.once("close", onClose);
+			requestClose();
+		});
+
+		return closePromise;
+	};
+
+	const ready = new Promise<number>((resolve, reject) => {
+		const cleanup = () => {
+			server.removeListener("error", onError);
+			server.removeListener("listening", onListening);
+			server.removeListener("close", onStartupClose);
+			signal.removeEventListener("abort", onAbort);
+		};
+		const onStartupClose = () => {
+			cleanup();
+		};
+		const onAbort = () => {
+			aborted = true;
+			void close().then(() => {
+				cleanup();
+				reject(new Error("TLS server startup was interrupted"));
+			});
+		};
+		const onError = (cause: Error) => {
+			startupPending = false;
+			startupFailed = true;
+			cleanup();
+			reject(cause);
+		};
+		const onListening = () => {
+			startupPending = false;
+			if (aborted) {
+				void close();
+				return;
+			}
+			const address = server.address();
+			if (typeof address !== "object" || address === null) {
+				startupFailed = true;
+				cleanup();
+				reject(new Error("TLS server did not expose a TCP address"));
+				return;
+			}
+			cleanup();
+			resolve(address.port);
+		};
+
+		server.once("error", onError);
+		server.once("listening", onListening);
+		server.once("close", onStartupClose);
+		signal.addEventListener("abort", onAbort, { once: true });
+		if (signal.aborted) {
+			aborted = true;
+			startupPending = false;
+			startupFailed = true;
+			cleanup();
+			reject(new Error("TLS server startup was interrupted"));
+			return;
+		}
+		try {
+			server.listen(0, "127.0.0.1");
+			if (server.listening) {
+				onListening();
+			}
+		} catch (cause) {
+			onError(cause instanceof Error ? cause : new Error(String(cause)));
+		}
+	});
+
+	return { ready, close };
+};
+
 /** Shared plaintext echo server fixture (one handler set, not ~7 copies). */
-const startEchoServer = (port = 0): EchoServer => {
+const startEchoServer = (port = 0, hostname = "127.0.0.1"): EchoServer => {
 	const server = Bun.listen({
-		hostname: "127.0.0.1",
+		hostname,
 		port,
 		socket: {
 			data(socket, data) {
@@ -45,18 +181,26 @@ const startEchoServer = (port = 0): EchoServer => {
 };
 
 /**
- * Returns an unused ephemeral port by binding briefly on port 0 and releasing it.
+ * Reserves a port on one loopback address while tests use the same port on a
+ * different loopback address. This removes the release-then-connect race from
+ * unreachable-port tests while still allowing the retry-recovery test to bind
+ * the target address later.
  */
-const getAvailablePort = (): number => {
-	const tempServer = Bun.listen({
+const reserveUnreachableEndpoint = (): UnreachableEndpoint => {
+	const reservation = Bun.listen({
 		hostname: "127.0.0.1",
 		port: 0,
 		socket: { data() {} },
 	});
-	const port = tempServer.port;
-	tempServer.stop(true);
-	return port;
+	return {
+		host: "127.0.0.2",
+		port: reservation.port,
+		release: () => reservation.stop(true),
+	};
 };
+
+const interruptTestFiber = (fiber: Fiber.Fiber<unknown, unknown>) =>
+	Fiber.interrupt(fiber).pipe(Effect.timeout("5 seconds"));
 
 export interface TcpStreamTestSuiteOptions {
 	readonly engineName: string;
@@ -74,140 +218,152 @@ export const defineTcpStreamTestSuite = ({
 }: TcpStreamTestSuiteOptions) => {
 	describe(`TcpStream ${engineName} operations and retry policy`, () => {
 		it("fails with TcpStreamError after exhausting configured retry attempts on unreachable port", async () => {
-			const unreachablePort = getAvailablePort();
+			const endpoint = reserveUnreachableEndpoint();
+			try {
+				const configLayer = ConnectionConfigLive({
+					host: endpoint.host,
+					port: endpoint.port,
+					retry: {
+						initialDelay: "10 millis",
+						factor: 1.5,
+						maxAttempts: 3,
+						jitter: false,
+					},
+				});
 
-			const configLayer = ConnectionConfigLive({
-				host: "127.0.0.1",
-				port: unreachablePort,
-				retry: {
-					initialDelay: "10 millis",
-					factor: 1.5,
-					maxAttempts: 3,
-					jitter: false,
-				},
-			});
+				const tcpLayer = layerFactory().pipe(Layer.provide(configLayer));
+				const program = TcpStream.pipe(Effect.provide(tcpLayer));
 
-			const tcpLayer = layerFactory().pipe(Layer.provide(configLayer));
-			const program = TcpStream.pipe(Effect.provide(tcpLayer));
+				const startTime = Date.now();
+				const exit = await Effect.runPromiseExit(program);
+				const elapsed = Date.now() - startTime;
 
-			const startTime = Date.now();
-			const exit = await Effect.runPromiseExit(program);
-			const elapsed = Date.now() - startTime;
-
-			expect(Exit.isFailure(exit)).toBe(true);
-			if (Exit.isFailure(exit)) {
-				const error = exit.cause;
-				expect(error.toString()).toContain("TcpStreamError");
+				expect(Exit.isFailure(exit)).toBe(true);
+				if (Exit.isFailure(exit)) {
+					const error = exit.cause;
+					expect(error.toString()).toContain("TcpStreamError");
+				}
+				expect(elapsed).toBeGreaterThanOrEqual(25);
+				// An upper bound (generous relative to the ~10-25ms schedule) catches
+				// a retry attempt that fails to clean up and hangs instead of moving
+				// on to the next attempt or failing.
+				expect(elapsed).toBeLessThan(2000);
+			} finally {
+				endpoint.release();
 			}
-			expect(elapsed).toBeGreaterThanOrEqual(25);
-			// An upper bound (generous relative to the ~10-25ms schedule) catches
-			// a retry attempt that fails to clean up and hangs instead of moving
-			// on to the next attempt or failing.
-			expect(elapsed).toBeLessThan(2000);
 		});
 
 		it("fails immediately when retry is disabled (retry: false)", async () => {
-			const unreachablePort = getAvailablePort();
+			const endpoint = reserveUnreachableEndpoint();
+			try {
+				const configLayer = ConnectionConfigLive({
+					host: endpoint.host,
+					port: endpoint.port,
+					retry: false,
+				});
 
-			const configLayer = ConnectionConfigLive({
-				host: "127.0.0.1",
-				port: unreachablePort,
-				retry: false,
-			});
+				const tcpLayer = layerFactory().pipe(Layer.provide(configLayer));
+				const program = TcpStream.pipe(Effect.provide(tcpLayer));
 
-			const tcpLayer = layerFactory().pipe(Layer.provide(configLayer));
-			const program = TcpStream.pipe(Effect.provide(tcpLayer));
+				const startTime = Date.now();
+				const exit = await Effect.runPromiseExit(program);
+				const elapsed = Date.now() - startTime;
 
-			const startTime = Date.now();
-			const exit = await Effect.runPromiseExit(program);
-			const elapsed = Date.now() - startTime;
-
-			expect(Exit.isFailure(exit)).toBe(true);
-			expect(elapsed).toBeLessThan(150);
+				expect(Exit.isFailure(exit)).toBe(true);
+				expect(elapsed).toBeLessThan(150);
+			} finally {
+				endpoint.release();
+			}
 		});
 
 		it("supports custom retrySchedule", async () => {
-			const unreachablePort = getAvailablePort();
-			let attempts = 0;
+			const endpoint = reserveUnreachableEndpoint();
+			try {
+				let attempts = 0;
 
-			const customSchedule = Schedule.recurs(2).pipe(
-				Schedule.tap(() =>
-					Effect.sync(() => {
-						attempts++;
-					}),
-				),
-			);
+				const customSchedule = Schedule.recurs(2).pipe(
+					Schedule.tap(() =>
+						Effect.sync(() => {
+							attempts++;
+						}),
+					),
+				);
 
-			const configLayer = ConnectionConfigLive({
-				host: "127.0.0.1",
-				port: unreachablePort,
-				retrySchedule: customSchedule,
-			});
+				const configLayer = ConnectionConfigLive({
+					host: endpoint.host,
+					port: endpoint.port,
+					retrySchedule: customSchedule,
+				});
 
-			const tcpLayer = layerFactory().pipe(Layer.provide(configLayer));
-			const program = TcpStream.pipe(Effect.provide(tcpLayer));
+				const tcpLayer = layerFactory().pipe(Layer.provide(configLayer));
+				const program = TcpStream.pipe(Effect.provide(tcpLayer));
 
-			const exit = await Effect.runPromiseExit(program);
-			expect(Exit.isFailure(exit)).toBe(true);
-			expect(attempts).toBe(2);
+				const exit = await Effect.runPromiseExit(program);
+				expect(Exit.isFailure(exit)).toBe(true);
+				expect(attempts).toBe(2);
+			} finally {
+				endpoint.release();
+			}
 		});
 
 		it("recovers and connects successfully when server opens during retry backoff window", async () => {
-			const port = getAvailablePort();
-
-			// Gate server startup on the client actually entering backoff
-			// (rather than a blind `setTimeout(50)`): each failed attempt
-			// increments via the tapped schedule, and the gate opens on the
-			// first failure. This removes the race where a slow initial
-			// attempt (e.g. Platform connect + readiness round-trip) eats the
-			// whole backoff window before the server exists.
-			const attemptGate = await Effect.runPromise(Deferred.make<void>());
-			let attempts = 0;
-			const backoffGateSchedule = Schedule.spaced("20 millis").pipe(
-				Schedule.tap(() =>
-					Effect.gen(function* () {
-						attempts++;
-						// `Deferred.succeed` completes immediately; no need to
-						// fork an unmanaged fiber just to open the gate.
-						yield* Deferred.succeed(attemptGate, void 0);
-					}),
-				),
-			);
-
-			const serverFiber = Effect.runFork(
-				Effect.gen(function* () {
-					yield* Deferred.await(attemptGate);
-					const server = startEchoServer(port);
-					yield* Effect.addFinalizer(() =>
-						Effect.sync(() => server.stop(true)),
-					);
-					yield* Effect.never;
-				}).pipe(Effect.scoped),
-			);
-
-			const configLayer = ConnectionConfigLive({
-				host: "127.0.0.1",
-				port,
-				retrySchedule: backoffGateSchedule,
-			});
-
-			const tcpLayer = layerFactory().pipe(Layer.provide(configLayer));
-
-			const program = Effect.gen(function* () {
-				const tcp = yield* TcpStream;
-				yield* tcp.sendText(`hello ${engineName} retry`);
-				const chunk = yield* Stream.runHead(tcp.stream);
-				yield* tcp.close;
-				return chunk;
-			}).pipe(
-				Effect.provide(tcpLayer),
-				// The gate opens on the first failed attempt, so this settles in
-				// a few hundred ms; the bound turns a broken gate into a clear
-				// timeout failure instead of relying on the runner's default.
-				Effect.timeout("5 seconds"),
-			);
+			const endpoint = reserveUnreachableEndpoint();
+			const port = endpoint.port;
+			let serverFiber: Fiber.Fiber<unknown, unknown> | undefined;
 
 			try {
+				// Gate server startup on the client actually entering backoff
+				// (rather than a blind `setTimeout(50)`): each failed attempt
+				// increments via the tapped schedule, and the gate opens on the
+				// first failure. This removes the race where a slow initial
+				// attempt (e.g. Platform connect + readiness round-trip) eats the
+				// whole backoff window before the server exists.
+				const attemptGate = await Effect.runPromise(Deferred.make<void>());
+				let attempts = 0;
+				const backoffGateSchedule = Schedule.spaced("20 millis").pipe(
+					Schedule.tap(() =>
+						Effect.gen(function* () {
+							attempts++;
+							// `Deferred.succeed` completes immediately; no need to
+							// fork an unmanaged fiber just to open the gate.
+							yield* Deferred.succeed(attemptGate, void 0);
+						}),
+					),
+				);
+
+				serverFiber = Effect.runFork(
+					Effect.gen(function* () {
+						yield* Deferred.await(attemptGate);
+						const server = startEchoServer(port, endpoint.host);
+						yield* Effect.addFinalizer(() =>
+							Effect.sync(() => server.stop(true)),
+						);
+						yield* Effect.never;
+					}).pipe(Effect.scoped),
+				);
+
+				const configLayer = ConnectionConfigLive({
+					host: endpoint.host,
+					port,
+					retrySchedule: backoffGateSchedule,
+				});
+
+				const tcpLayer = layerFactory().pipe(Layer.provide(configLayer));
+
+				const program = Effect.gen(function* () {
+					const tcp = yield* TcpStream;
+					yield* tcp.sendText(`hello ${engineName} retry`);
+					const chunk = yield* Stream.runHead(tcp.stream);
+					yield* tcp.close;
+					return chunk;
+				}).pipe(
+					Effect.provide(tcpLayer),
+					// The gate opens on the first failed attempt, so this settles in
+					// a few hundred ms; the bound turns a broken gate into a clear
+					// timeout failure instead of relying on the runner's default.
+					Effect.timeout("5 seconds"),
+				);
+
 				const exit = await Effect.runPromiseExit(program);
 				expect(attempts).toBeGreaterThanOrEqual(1);
 				expect(Exit.isSuccess(exit)).toBe(true);
@@ -220,7 +376,13 @@ export const defineTcpStreamTestSuite = ({
 					}
 				}
 			} finally {
-				await Effect.runPromise(Fiber.interrupt(serverFiber));
+				try {
+					if (serverFiber !== undefined) {
+						await Effect.runPromise(interruptTestFiber(serverFiber));
+					}
+				} finally {
+					endpoint.release();
+				}
 			}
 		});
 
@@ -261,22 +423,25 @@ export const defineTcpStreamTestSuite = ({
 		});
 
 		it("a failed connection attempt fails cleanly with no defects in the Cause", async () => {
-			const unreachablePort = getAvailablePort();
+			const endpoint = reserveUnreachableEndpoint();
+			try {
+				const configLayer = ConnectionConfigLive({
+					host: endpoint.host,
+					port: endpoint.port,
+					retry: false,
+				});
 
-			const configLayer = ConnectionConfigLive({
-				host: "127.0.0.1",
-				port: unreachablePort,
-				retry: false,
-			});
+				const tcpLayer = layerFactory().pipe(Layer.provide(configLayer));
+				const program = TcpStream.pipe(Effect.provide(tcpLayer));
 
-			const tcpLayer = layerFactory().pipe(Layer.provide(configLayer));
-			const program = TcpStream.pipe(Effect.provide(tcpLayer));
+				const exit = await Effect.runPromiseExit(program);
 
-			const exit = await Effect.runPromiseExit(program);
-
-			expect(Exit.isFailure(exit)).toBe(true);
-			if (Exit.isFailure(exit)) {
-				expect(Cause.hasDies(exit.cause)).toBe(false);
+				expect(Exit.isFailure(exit)).toBe(true);
+				if (Exit.isFailure(exit)) {
+					expect(Cause.hasDies(exit.cause)).toBe(false);
+				}
+			} finally {
+				endpoint.release();
 			}
 		});
 
@@ -303,7 +468,8 @@ export const defineTcpStreamTestSuite = ({
 				import("node:tls"),
 			]);
 
-			let server: import("node:tls").Server | undefined;
+			let listenAbort: AbortController | undefined;
+			let tlsLifecycle: TlsServerLifecycle | undefined;
 			try {
 				const generated = await Effect.runPromiseExit(
 					Effect.tryPromise({
@@ -340,17 +506,35 @@ export const defineTcpStreamTestSuite = ({
 					readFile(keyPath),
 					readFile(certPath),
 				]);
-				server = tls.createServer({ key, cert }, (socket) => {
+				const activeSockets = new Set<import("node:net").Socket>();
+				const tlsServer = tls.createServer({ key, cert }, (socket) => {
 					socket.on("data", (chunk: Buffer) => {
 						socket.write(chunk);
 					});
 				});
-				await new Promise<void>((resolve) => {
-					server?.listen(0, "127.0.0.1", resolve);
+				tlsServer.on("connection", (socket) => {
+					activeSockets.add(socket);
+					socket.once("close", () => activeSockets.delete(socket));
 				});
-				const address = server.address();
-				const port =
-					typeof address === "object" && address !== null ? address.port : 0;
+				const startupAbort = new AbortController();
+				listenAbort = startupAbort;
+				const lifecycle = listenTlsServer(
+					tlsServer,
+					startupAbort.signal,
+					() => {
+						for (const socket of activeSockets) {
+							socket.destroy();
+						}
+					},
+				);
+				tlsLifecycle = lifecycle;
+				const port = await Effect.runPromise(
+					Effect.tryPromise({
+						try: () => lifecycle.ready,
+						catch: (cause) =>
+							cause instanceof Error ? cause : new Error(String(cause)),
+					}).pipe(Effect.timeout("5 seconds")),
+				);
 
 				const configLayer = ConnectionConfigLive({
 					host: "127.0.0.1",
@@ -370,13 +554,28 @@ export const defineTcpStreamTestSuite = ({
 
 				const exit = await Effect.runPromiseExit(program);
 				expect(Exit.isSuccess(exit)).toBe(true);
-				if (Exit.isSuccess(exit) && Option.isSome(exit.value)) {
-					const received = new TextDecoder().decode(exit.value.value);
-					expect(received).toBe(`hello ${engineName} tls`);
+				if (Exit.isSuccess(exit)) {
+					expect(Option.isSome(exit.value)).toBe(true);
+					if (Option.isSome(exit.value)) {
+						const received = new TextDecoder().decode(exit.value.value);
+						expect(received).toBe(`hello ${engineName} tls`);
+					}
 				}
 			} finally {
-				server?.close();
-				await rm(tmpDir, { recursive: true, force: true });
+				listenAbort?.abort();
+				try {
+					if (tlsLifecycle !== undefined) {
+						await Effect.runPromise(
+							Effect.tryPromise({
+								try: () => tlsLifecycle?.close() ?? Promise.resolve(),
+								catch: (cause) =>
+									cause instanceof Error ? cause : new Error(String(cause)),
+							}).pipe(Effect.timeout("5 seconds")),
+						);
+					}
+				} finally {
+					await rm(tmpDir, { recursive: true, force: true });
+				}
 			}
 		});
 
@@ -416,6 +615,8 @@ export const defineTcpStreamTestSuite = ({
 				expect(Exit.isFailure(exit)).toBe(true);
 				if (Exit.isFailure(exit)) {
 					expect(Cause.hasDies(exit.cause)).toBe(false);
+					expect(exit.cause.toString()).toContain("TcpStreamError");
+					expect(exit.cause.toString()).not.toContain("TimeoutError");
 				}
 			} finally {
 				server.stop(true);
@@ -470,14 +671,16 @@ export const defineTcpStreamTestSuite = ({
 			}
 		});
 
-		it("interrupting a connect attempt that never completes exits promptly with no defects", async () => {
+		it("interrupting a connect attempt that never completes exits promptly without defects", async () => {
 			// A TLS server that accepts the TCP connection but never completes
 			// the handshake leaves the engine's connect pending indefinitely,
 			// so the interruption below lands mid-setup — while the attempt's
-			// per-connection resources (pending socket, forked read fiber,
-			// child scope) exist. The bounded interrupt proves the engine
-			// tears those down instead of stalling, and `Cause.hasDies`
-			// proves the teardown path fails cleanly rather than defecting.
+			// per-connection resources exist. The bounded interrupt proves the
+			// engine does not stall the owning fiber, and `Cause.hasDies`
+			// proves the interruption path fails cleanly rather than defecting.
+			// Bun cannot expose or terminate this socket until `Bun.connect`
+			// settles; the established-socket teardown contract is covered by
+			// the test below.
 			const openGate = await Effect.runPromise(Deferred.make<void>());
 			const server = Bun.listen({
 				hostname: "127.0.0.1",
@@ -513,18 +716,19 @@ export const defineTcpStreamTestSuite = ({
 				Effect.timeout("5 seconds"),
 			);
 
+			let fiber: Fiber.Fiber<unknown, unknown> | undefined;
 			try {
-				const fiber = Effect.runFork(program);
-				await Effect.runPromise(Deferred.await(openGate));
+				fiber = Effect.runFork(program);
+				await Effect.runPromise(
+					Deferred.await(openGate).pipe(Effect.timeout("5 seconds")),
+				);
 
 				const startTime = Date.now();
-				await Effect.runPromise(
-					Fiber.interrupt(fiber).pipe(Effect.timeout("5 seconds")),
-				);
+				await Effect.runPromise(interruptTestFiber(fiber));
 				const elapsed = Date.now() - startTime;
 
 				const fiberExit = await Effect.runPromise(
-					Deferred.await(programExitGate),
+					Deferred.await(programExitGate).pipe(Effect.timeout("5 seconds")),
 				);
 				expect(Exit.isFailure(fiberExit)).toBe(true);
 				if (Exit.isFailure(fiberExit)) {
@@ -532,40 +736,58 @@ export const defineTcpStreamTestSuite = ({
 				}
 				expect(elapsed).toBeLessThan(1500);
 			} finally {
-				server.stop(true);
+				try {
+					server.stop(true);
+				} finally {
+					if (fiber !== undefined) {
+						await Effect.runPromise(interruptTestFiber(fiber));
+					}
+				}
 			}
 		});
 
 		it("interrupting during retry backoff, before any successful connection, does not hang", async () => {
-			const unreachablePort = getAvailablePort();
+			const endpoint = reserveUnreachableEndpoint();
+			let fiber: Fiber.Fiber<unknown, unknown> | undefined;
+			try {
+				// Synchronize on the retry schedule itself (`enteredBackoff`
+				// opens on the first backoff decision) instead of a blind
+				// wall-clock `setTimeout(50)`: this guarantees the fiber under
+				// test is inside the ~200ms backoff sleep — not still resolving
+				// the initial connection attempt — regardless of CI timing.
+				const enteredBackoff = await Effect.runPromise(Deferred.make<void>());
+				const gatedSchedule = Schedule.spaced("200 millis").pipe(
+					Schedule.tap(() => Deferred.succeed(enteredBackoff, void 0)),
+				);
 
-			// Synchronize on the retry schedule itself (`enteredBackoff`
-			// opens on the first backoff decision) instead of a blind
-			// wall-clock `setTimeout(50)`: this guarantees the fiber under
-			// test is inside the ~200ms backoff sleep — not still resolving
-			// the initial connection attempt — regardless of CI timing.
-			const enteredBackoff = await Effect.runPromise(Deferred.make<void>());
-			const gatedSchedule = Schedule.spaced("200 millis").pipe(
-				Schedule.tap(() => Deferred.succeed(enteredBackoff, void 0)),
-			);
+				const configLayer = ConnectionConfigLive({
+					host: endpoint.host,
+					port: endpoint.port,
+					retrySchedule: gatedSchedule,
+				});
 
-			const configLayer = ConnectionConfigLive({
-				host: "127.0.0.1",
-				port: unreachablePort,
-				retrySchedule: gatedSchedule,
-			});
+				const tcpLayer = layerFactory().pipe(Layer.provide(configLayer));
+				const program = TcpStream.pipe(Effect.provide(tcpLayer));
 
-			const tcpLayer = layerFactory().pipe(Layer.provide(configLayer));
-			const program = TcpStream.pipe(Effect.provide(tcpLayer));
+				fiber = Effect.runFork(program);
+				await Effect.runPromise(
+					Deferred.await(enteredBackoff).pipe(Effect.timeout("5 seconds")),
+				);
 
-			const fiber = Effect.runFork(program);
-			await Effect.runPromise(Deferred.await(enteredBackoff));
+				const startTime = Date.now();
+				await Effect.runPromise(interruptTestFiber(fiber));
+				const elapsed = Date.now() - startTime;
 
-			const startTime = Date.now();
-			await Effect.runPromise(Fiber.interrupt(fiber));
-			const elapsed = Date.now() - startTime;
-
-			expect(elapsed).toBeLessThan(150);
+				expect(elapsed).toBeLessThan(150);
+			} finally {
+				try {
+					if (fiber !== undefined) {
+						await Effect.runPromise(interruptTestFiber(fiber));
+					}
+				} finally {
+					endpoint.release();
+				}
+			}
 		});
 
 		it("interrupting the program after connecting still tears down the underlying socket", async () => {
@@ -608,12 +830,15 @@ export const defineTcpStreamTestSuite = ({
 				yield* Effect.never;
 			}).pipe(Effect.provide(tcpLayer));
 
+			let fiber: Fiber.Fiber<unknown, unknown> | undefined;
 			try {
-				const fiber = Effect.runFork(program);
+				fiber = Effect.runFork(program);
 				// Wait for the echo round-trip to complete (rendezvous) rather
 				// than a fixed wall-clock sleep before interrupting.
-				await Effect.runPromise(Deferred.await(echoed));
-				await Effect.runPromise(Fiber.interrupt(fiber));
+				await Effect.runPromise(
+					Deferred.await(echoed).pipe(Effect.timeout("5 seconds")),
+				);
+				await Effect.runPromise(interruptTestFiber(fiber));
 				// Wait for the server to observe the disconnect (rendezvous),
 				// bounded so a teardown regression fails fast instead of
 				// hanging the suite.
@@ -622,7 +847,13 @@ export const defineTcpStreamTestSuite = ({
 				);
 				expect(Exit.isSuccess(sawClose)).toBe(true);
 			} finally {
-				server?.stop(true);
+				try {
+					if (fiber !== undefined) {
+						await Effect.runPromise(interruptTestFiber(fiber));
+					}
+				} finally {
+					server?.stop(true);
+				}
 			}
 		});
 

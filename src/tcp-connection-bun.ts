@@ -29,10 +29,22 @@ export const TcpStreamEngineBunLive = Layer.succeed(
 			const connectOnce = Effect.callback<RawSocketHandle, TcpStreamError>(
 				(resume) => {
 					let hasClosed = false;
+					let connectedSocket: Bun.Socket<undefined> | undefined;
 					const notifyClose = () => {
 						if (!hasClosed) {
 							hasClosed = true;
 							callbacks.onClose();
+						}
+					};
+					const terminateSocket = (socket: Bun.Socket<undefined>) => {
+						try {
+							socket.terminate();
+						} catch {
+							try {
+								socket.end();
+							} catch {
+								// Best-effort teardown
+							}
 						}
 					};
 
@@ -127,15 +139,19 @@ export const TcpStreamEngineBunLive = Layer.succeed(
 										notifyClose();
 									}
 								},
+								connectError(socket, cause) {
+									if (cancelled) {
+										terminateSocket(socket);
+										return;
+									}
+									resume(failConnect(cause));
+								},
 							},
 						}).then(
 							(socket) => {
+								connectedSocket = socket;
 								if (cancelled) {
-									try {
-										socket.end();
-									} catch {
-										// Best-effort teardown
-									}
+									terminateSocket(socket);
 									return;
 								}
 								resume(Effect.succeed(makeHandle(socket)));
@@ -150,12 +166,16 @@ export const TcpStreamEngineBunLive = Layer.succeed(
 					}
 
 					// Interruption cleanup: mark the in-flight connect cancelled.
-					// `Bun.connect` exposes no abort signal, so a connect that is
-					// still pending at this point cannot be torn down until the
-					// promise settles — the `cancelled` flag guarantees that
-					// settlement never leaks the socket.
+					// `Bun.connect` exposes no abort signal or socket handle before
+					// settlement, so a still-pending connect cannot be torn down at
+					// this point. If the socket becomes visible during the race,
+					// terminate it immediately; otherwise the late-resolution branch
+					// does the same and all event callbacks remain inert.
 					return Effect.sync(() => {
 						cancelled = true;
+						if (connectedSocket !== undefined) {
+							terminateSocket(connectedSocket);
+						}
 					});
 				},
 			);
