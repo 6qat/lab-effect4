@@ -146,10 +146,12 @@ const makeTcpStreamEnginePlatform: TcpStreamEngineShape = {
 			const childScope = yield* Scope.fork(parentScope, "sequential");
 
 			// All per-attempt resources (socket finalizers, forked `run` fiber,
-			// writer scope) are owned by `childScope`. If any step below fails,
-			// close it with the failure exit so failed retry attempts don't
-			// accumulate empty child scopes; on success the returned handle
-			// owns it (closed via `close()` or parent teardown).
+			// writer scope) are owned by `childScope`. If any step below
+			// fails OR the acquiring fiber is interrupted mid-setup, close it
+			// with that exit so failed/interrupted attempts don't leave a
+			// live socket and read fiber parked on the ambient scope; on
+			// success the returned handle owns it (closed via `close()` or
+			// parent teardown).
 			const setup = Effect.gen(function* () {
 				const socket = yield* createPlatformSocket(config).pipe(
 					Effect.mapError(mapSocketError),
@@ -229,13 +231,16 @@ const makeTcpStreamEnginePlatform: TcpStreamEngineShape = {
 				return rawHandle;
 			});
 
-			const setupExit = yield* Effect.exit(setup);
-			if (Exit.isFailure(setupExit)) {
-				yield* Scope.close(childScope, setupExit);
-				return yield* Effect.failCause(setupExit.cause);
-			}
-
-			return setupExit.value;
+			// `Effect.onExit` (unlike `Effect.exit`) observes interruption of
+			// the acquiring fiber as well as failures, and runs its handler
+			// in an uninterruptible region — so a mid-setup interrupt closes
+			// `childScope` (destroying the pending socket and interrupting
+			// the forked read fiber) instead of relying on the ambient
+			// scope's cascade during unwinding. A successful setup leaves
+			// the scope open: the returned handle now owns it.
+			return yield* Effect.onExit(setup, (exit) =>
+				Exit.isSuccess(exit) ? Effect.void : Scope.close(childScope, exit),
+			);
 		}),
 };
 

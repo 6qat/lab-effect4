@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (Supersedes [ADR 0003](0003-effect-platform-push-socket-implementation.md))
+Accepted (Supersedes [ADR 0003](0003-effect-platform-push-socket-implementation.md); corrected by [ADR 0007](0007-interruption-safe-engine-connect.md): the "Full Backward Compatibility" and "Resource Safety" claims in Consequences below were inaccurate — `RawSocketHandle.write`/`close` becoming effectful is a breaking change for external engine implementors, and scoped teardown left interruption gaps that ADRs 0006 and 0007 close)
 
 ## Context
 

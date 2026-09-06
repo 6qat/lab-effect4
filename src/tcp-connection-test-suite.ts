@@ -16,7 +16,9 @@ import {
 	type ConnectionConfigShape,
 	TcpStream,
 	type TcpStreamEngine,
+	type TcpStreamError,
 	TcpStreamLayer,
+	type TcpStreamShape,
 } from "./tcp-connection-common.js";
 
 type EchoServer = {
@@ -62,7 +64,6 @@ export interface TcpStreamTestSuiteOptions {
 		(config: ConnectionConfigShape): Layer.Layer<TcpStream>;
 		(): Layer.Layer<TcpStream, never, ConnectionConfig>;
 	};
-	readonly basePort?: number;
 	readonly engineLayer?: Layer.Layer<TcpStreamEngine>;
 }
 
@@ -164,9 +165,11 @@ export const defineTcpStreamTestSuite = ({
 			let attempts = 0;
 			const backoffGateSchedule = Schedule.spaced("20 millis").pipe(
 				Schedule.tap(() =>
-					Effect.sync(() => {
+					Effect.gen(function* () {
 						attempts++;
-						Effect.runFork(Deferred.succeed(attemptGate, void 0));
+						// `Deferred.succeed` completes immediately; no need to
+						// fork an unmanaged fiber just to open the gate.
+						yield* Deferred.succeed(attemptGate, void 0);
 					}),
 				),
 			);
@@ -196,7 +199,13 @@ export const defineTcpStreamTestSuite = ({
 				const chunk = yield* Stream.runHead(tcp.stream);
 				yield* tcp.close;
 				return chunk;
-			}).pipe(Effect.provide(tcpLayer));
+			}).pipe(
+				Effect.provide(tcpLayer),
+				// The gate opens on the first failed attempt, so this settles in
+				// a few hundred ms; the bound turns a broken gate into a clear
+				// timeout failure instead of relying on the runner's default.
+				Effect.timeout("5 seconds"),
+			);
 
 			try {
 				const exit = await Effect.runPromiseExit(program);
@@ -281,8 +290,8 @@ export const defineTcpStreamTestSuite = ({
 			const tmpDir = await Effect.runPromise(
 				Effect.tryPromise({
 					try: () =>
-						import("node:fs/promises").then((fs) =>
-							fs.mkdtemp("/tmp/lab-effect4-tls-"),
+						Promise.all([import("node:fs/promises"), import("node:os")]).then(
+							([fs, os]) => fs.mkdtemp(`${os.tmpdir()}/lab-effect4-tls-`),
 						),
 					catch: () => new Error("mkdtemp failed"),
 				}),
@@ -319,11 +328,7 @@ export const defineTcpStreamTestSuite = ({
 			// a missing openssl or tmpdir would otherwise hide a real
 			// regression behind a green suite.
 			expect(Exit.isSuccess(generated)).toBe(true);
-			if (Exit.isFailure(generated)) {
-				return;
-			}
-			const [{ readFile }, { rm }, tls] = await Promise.all([
-				import("node:fs/promises"),
+			const [{ readFile, rm }, tls] = await Promise.all([
 				import("node:fs/promises"),
 				import("node:tls"),
 			]);
@@ -442,17 +447,86 @@ export const defineTcpStreamTestSuite = ({
 
 			const program = Effect.gen(function* () {
 				const tcp = yield* TcpStream;
-				yield* Stream.runDrain(tcp.stream).pipe(
-					Effect.catch(() => Effect.void),
-				);
+				// Observe the stream's own outcome: a regression that turns a
+				// clean remote close into a stream failure must fail the
+				// assertion below, so the drain result is deliberately NOT
+				// caught here.
+				const drainExit = yield* Effect.exit(Stream.runDrain(tcp.stream));
 				yield* tcp.close;
+				return drainExit;
 			}).pipe(Effect.provide(tcpLayer), Effect.timeout("2 seconds"));
 
 			try {
 				const exit = await Effect.runPromiseExit(program);
 				expect(Exit.isSuccess(exit)).toBe(true);
+				if (Exit.isSuccess(exit)) {
+					expect(Exit.isSuccess(exit.value)).toBe(true);
+				}
 			} finally {
 				server?.stop(true);
+			}
+		});
+
+		it("interrupting a connect attempt that never completes exits promptly with no defects", async () => {
+			// A TLS server that accepts the TCP connection but never completes
+			// the handshake leaves the engine's connect pending indefinitely,
+			// so the interruption below lands mid-setup — while the attempt's
+			// per-connection resources (pending socket, forked read fiber,
+			// child scope) exist. The bounded interrupt proves the engine
+			// tears those down instead of stalling, and `Cause.hasDies`
+			// proves the teardown path fails cleanly rather than defecting.
+			const openGate = await Effect.runPromise(Deferred.make<void>());
+			const server = Bun.listen({
+				hostname: "127.0.0.1",
+				port: 0,
+				socket: {
+					open() {
+						// No Effect context exists inside a Bun socket callback,
+						// so forking is the only way to complete the gate; the
+						// fiber completes immediately after `Deferred.succeed`.
+						Effect.runFork(Deferred.succeed(openGate, void 0));
+					},
+					data() {},
+				},
+			});
+
+			const configLayer = ConnectionConfigLive({
+				host: "127.0.0.1",
+				port: server.port,
+				retry: false,
+				tls: { rejectUnauthorized: false },
+			});
+
+			const tcpLayer = layerFactory().pipe(Layer.provide(configLayer));
+			// `Fiber.interrupt` discards the interrupted fiber's exit, so the
+			// program reports its own final exit through an onExit handler
+			// (which runs on interruption as well, uninterruptibly).
+			const programExitGate = await Effect.runPromise(
+				Deferred.make<Exit.Exit<TcpStreamShape, TcpStreamError>>(),
+			);
+			const program = TcpStream.pipe(
+				Effect.provide(tcpLayer),
+				Effect.onExit((exit) => Deferred.succeed(programExitGate, exit)),
+			);
+
+			try {
+				const fiber = Effect.runFork(program);
+				await Effect.runPromise(Deferred.await(openGate));
+
+				const startTime = Date.now();
+				await Effect.runPromise(Fiber.interrupt(fiber));
+				const elapsed = Date.now() - startTime;
+
+				const fiberExit = await Effect.runPromise(
+					Deferred.await(programExitGate),
+				);
+				expect(Exit.isFailure(fiberExit)).toBe(true);
+				if (Exit.isFailure(fiberExit)) {
+					expect(Cause.hasDies(fiberExit.cause)).toBe(false);
+				}
+				expect(elapsed).toBeLessThan(1500);
+			} finally {
+				server.stop(true);
 			}
 		});
 
@@ -466,11 +540,7 @@ export const defineTcpStreamTestSuite = ({
 			// the initial connection attempt — regardless of CI timing.
 			const enteredBackoff = await Effect.runPromise(Deferred.make<void>());
 			const gatedSchedule = Schedule.spaced("200 millis").pipe(
-				Schedule.tap(() =>
-					Effect.succeed(
-						Effect.runFork(Deferred.succeed(enteredBackoff, void 0)),
-					),
-				),
+				Schedule.tap(() => Deferred.succeed(enteredBackoff, void 0)),
 			);
 
 			const configLayer = ConnectionConfigLive({
