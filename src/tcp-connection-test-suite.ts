@@ -20,12 +20,13 @@ import {
 } from "./tcp-connection-common.js";
 
 type EchoServer = {
+	readonly port: number;
 	readonly stop: (closeActiveConnections?: boolean) => void;
 };
 
 /** Shared plaintext echo server fixture (one handler set, not ~7 copies). */
-const startEchoServer = (port: number): EchoServer =>
-	Bun.listen({
+const startEchoServer = (port = 0): EchoServer => {
+	const server = Bun.listen({
 		hostname: "127.0.0.1",
 		port,
 		socket: {
@@ -34,6 +35,26 @@ const startEchoServer = (port: number): EchoServer =>
 			},
 		},
 	});
+	return {
+		port: server.port,
+		stop: (closeActiveConnections?: boolean) =>
+			server.stop(closeActiveConnections),
+	};
+};
+
+/**
+ * Returns an unused ephemeral port by binding briefly on port 0 and releasing it.
+ */
+const getAvailablePort = (): number => {
+	const tempServer = Bun.listen({
+		hostname: "127.0.0.1",
+		port: 0,
+		socket: { data() {} },
+	});
+	const port = tempServer.port;
+	tempServer.stop(true);
+	return port;
+};
 
 export interface TcpStreamTestSuiteOptions {
 	readonly engineName: string;
@@ -41,19 +62,18 @@ export interface TcpStreamTestSuiteOptions {
 		(config: ConnectionConfigShape): Layer.Layer<TcpStream>;
 		(): Layer.Layer<TcpStream, never, ConnectionConfig>;
 	};
-	readonly basePort: number;
+	readonly basePort?: number;
 	readonly engineLayer?: Layer.Layer<TcpStreamEngine>;
 }
 
 export const defineTcpStreamTestSuite = ({
 	engineName,
 	layerFactory,
-	basePort,
 	engineLayer,
 }: TcpStreamTestSuiteOptions) => {
 	describe(`TcpStream ${engineName} operations and retry policy`, () => {
 		it("fails with TcpStreamError after exhausting configured retry attempts on unreachable port", async () => {
-			const unreachablePort = basePort + 3;
+			const unreachablePort = getAvailablePort();
 
 			const configLayer = ConnectionConfigLive({
 				host: "127.0.0.1",
@@ -86,7 +106,7 @@ export const defineTcpStreamTestSuite = ({
 		});
 
 		it("fails immediately when retry is disabled (retry: false)", async () => {
-			const unreachablePort = basePort + 4;
+			const unreachablePort = getAvailablePort();
 
 			const configLayer = ConnectionConfigLive({
 				host: "127.0.0.1",
@@ -106,7 +126,7 @@ export const defineTcpStreamTestSuite = ({
 		});
 
 		it("supports custom retrySchedule", async () => {
-			const unreachablePort = basePort + 6;
+			const unreachablePort = getAvailablePort();
 			let attempts = 0;
 
 			const customSchedule = Schedule.recurs(2).pipe(
@@ -132,7 +152,7 @@ export const defineTcpStreamTestSuite = ({
 		});
 
 		it("recovers and connects successfully when server opens during retry backoff window", async () => {
-			const port = basePort + 5;
+			const port = getAvailablePort();
 
 			// Gate server startup on the client actually entering backoff
 			// (rather than a blind `setTimeout(50)`): each failed attempt
@@ -196,8 +216,8 @@ export const defineTcpStreamTestSuite = ({
 		});
 
 		it("sends binary data and closes gracefully", async () => {
-			const port = basePort + 7;
-			const server = startEchoServer(port);
+			const server = startEchoServer();
+			const port = server.port;
 
 			const configLayer = ConnectionConfigLive({
 				host: "127.0.0.1",
@@ -232,7 +252,7 @@ export const defineTcpStreamTestSuite = ({
 		});
 
 		it("a failed connection attempt fails cleanly with no defects in the Cause", async () => {
-			const unreachablePort = basePort + 10;
+			const unreachablePort = getAvailablePort();
 
 			const configLayer = ConnectionConfigLive({
 				host: "127.0.0.1",
@@ -258,7 +278,6 @@ export const defineTcpStreamTestSuite = ({
 			// run an echo round-trip through each engine with verification
 			// disabled. This proves the TLS path connects and streams — the
 			// plaintext-mismatch test below only proves it fails cleanly.
-			const port = basePort + 15;
 			const tmpDir = await Effect.runPromise(
 				Effect.tryPromise({
 					try: () =>
@@ -318,8 +337,11 @@ export const defineTcpStreamTestSuite = ({
 				});
 			});
 			await new Promise<void>((resolve) => {
-				server.listen(port, "127.0.0.1", resolve);
+				server.listen(0, "127.0.0.1", resolve);
 			});
+			const address = server.address();
+			const port =
+				typeof address === "object" && address !== null ? address.port : 0;
 
 			const configLayer = ConnectionConfigLive({
 				host: "127.0.0.1",
@@ -357,8 +379,8 @@ export const defineTcpStreamTestSuite = ({
 			// `TcpStreamError` (no defects, bounded time) — not hang or leak
 			// the attempt's child scope into subsequent retries — because no
 			// `secureConnect` is ever emitted.
-			const port = basePort + 14;
-			const server = startEchoServer(port);
+			const server = startEchoServer();
+			const port = server.port;
 
 			const configLayer = ConnectionConfigLive({
 				host: "127.0.0.1",
@@ -393,14 +415,13 @@ export const defineTcpStreamTestSuite = ({
 		});
 
 		it("an immediate remote close ends the stream cleanly without hanging", async () => {
-			const port = basePort + 12;
 			let server:
 				| { stop: (closeActiveConnections?: boolean) => void }
 				| undefined;
 
-			server = Bun.listen({
+			const openServer = Bun.listen({
 				hostname: "127.0.0.1",
-				port,
+				port: 0,
 				socket: {
 					open(socket) {
 						socket.end();
@@ -408,6 +429,8 @@ export const defineTcpStreamTestSuite = ({
 					data() {},
 				},
 			});
+			server = openServer;
+			const port = openServer.port;
 
 			const configLayer = ConnectionConfigLive({
 				host: "127.0.0.1",
@@ -434,7 +457,7 @@ export const defineTcpStreamTestSuite = ({
 		});
 
 		it("interrupting during retry backoff, before any successful connection, does not hang", async () => {
-			const unreachablePort = basePort + 13;
+			const unreachablePort = getAvailablePort();
 
 			// Synchronize on the retry schedule itself (`enteredBackoff`
 			// opens on the first backoff decision) instead of a blind
@@ -470,13 +493,12 @@ export const defineTcpStreamTestSuite = ({
 		});
 
 		it("interrupting the program after connecting still tears down the underlying socket", async () => {
-			const port = basePort + 11;
 			const serverClosedGate = await Effect.runPromise(Deferred.make<void>());
 			let server: EchoServer | undefined;
 
-			server = Bun.listen({
+			const bunServer = Bun.listen({
 				hostname: "127.0.0.1",
-				port,
+				port: 0,
 				socket: {
 					data(socket, data) {
 						socket.write(data);
@@ -486,6 +508,12 @@ export const defineTcpStreamTestSuite = ({
 					},
 				},
 			});
+			server = {
+				port: bunServer.port,
+				stop: (closeActiveConnections?: boolean) =>
+					bunServer.stop(closeActiveConnections),
+			};
+			const port = bunServer.port;
 
 			const configLayer = ConnectionConfigLive({
 				host: "127.0.0.1",
@@ -523,8 +551,8 @@ export const defineTcpStreamTestSuite = ({
 		});
 
 		it("close is idempotent: calling it a second time does not throw", async () => {
-			const port = basePort + 9;
-			const server = startEchoServer(port);
+			const server = startEchoServer();
+			const port = server.port;
 
 			const configLayer = ConnectionConfigLive({
 				host: "127.0.0.1",
@@ -552,8 +580,8 @@ export const defineTcpStreamTestSuite = ({
 
 		if (engineLayer) {
 			it("supports composable layer composition with TcpStreamLayer and engine live layer", async () => {
-				const port = basePort + 8;
-				const server = startEchoServer(port);
+				const server = startEchoServer();
+				const port = server.port;
 
 				const configLayer = ConnectionConfigLive({
 					host: "127.0.0.1",

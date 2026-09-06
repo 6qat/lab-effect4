@@ -17,20 +17,9 @@ We extracted a shared engine adapter seam ([`TcpStreamEngine`](file:///home/guig
    - Depends on `TcpStreamEngine` and `ConnectionConfig`.
 
 2. **Engine Seam Protocol** (`TcpStreamEngine`):
-    - Defined `TcpStreamEngineShape` requiring:
-      ```typescript
-      readonly connect: (
-        config: ConnectionConfigShape,
-        callbacks: SocketCallbacks,
-      ) => Effect.Effect<RawSocketHandle, TcpStreamError, Scope.Scope>;
-      ```
-    - `RawSocketHandle` provides effectful `write(chunk): Effect<RawSocketWriteResult, TcpStreamError>` and `close(): Effect<void>`.
-      The Platform adapter always reports `flushed: true` because `@effect/platform`'s
-      `socket.writer` applies backpressure by suspending until the kernel buffer drains
-      rather than returning `flushed: false` plus an `onDrain` signal; the orchestrator's
-      drain-wait path stays for the Bun/Node adapters, which do report partial writes.
-    - `SocketCallbacks` provides `onData`, `onDrain`, `onError`, and `onClose`.
-    - `connect` may require `Scope.Scope` so an adapter's Effect-managed resources are torn down when the caller's scope closes or is interrupted, not only when `close()` is called explicitly (see [ADR 0006](0006-scope-owned-platform-engine-lifecycle.md)).
+   - Defined `TcpStreamEngineShape` requiring `connect(config, callbacks): Effect<RawSocketHandle, TcpStreamError>`.
+   - `RawSocketHandle` provides `write(chunk): RawSocketWriteResult` and `close(): void`.
+   - `SocketCallbacks` provides `onData`, `onDrain`, `onError`, and `onClose`.
 
 3. **Thin Engine Adapters**:
    - `src/tcp-connection-bun.ts`: Contains only `Bun.connect` mapping and exports `TcpStreamEngineBunLive`.

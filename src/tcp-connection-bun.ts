@@ -28,6 +28,14 @@ export const TcpStreamEngineBunLive = Layer.succeed(
 		connect: (config: ConnectionConfigShape, callbacks: SocketCallbacks) => {
 			const connectOnce = Effect.tryPromise<RawSocketHandle, TcpStreamError>({
 				try: async () => {
+					let hasClosed = false;
+					const notifyClose = () => {
+						if (!hasClosed) {
+							hasClosed = true;
+							callbacks.onClose();
+						}
+					};
+
 					const socket = await Bun.connect<undefined>({
 						hostname: config.host,
 						port: config.port,
@@ -48,10 +56,10 @@ export const TcpStreamEngineBunLive = Layer.succeed(
 								);
 							},
 							end() {
-								callbacks.onClose();
+								notifyClose();
 							},
 							close() {
-								callbacks.onClose();
+								notifyClose();
 							},
 						},
 					});

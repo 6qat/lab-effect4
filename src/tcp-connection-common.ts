@@ -302,13 +302,15 @@ export const makeTcpStream = Effect.gen(function* () {
 	// still time out or shut down while retries are backing off); once
 	// `connectWithRetry` actually produces a handle, release is registered
 	// and guaranteed to run regardless.
+	const teardown = (handle: RawSocketHandle) =>
+		Effect.gen(function* () {
+			finishIncoming();
+			yield* handle.close().pipe(Effect.catch(() => Effect.void));
+		});
+
 	const socketHandle = yield* Effect.acquireRelease(
 		connectWithRetry,
-		(handle) =>
-			Effect.gen(function* () {
-				finishIncoming();
-				yield* handle.close().pipe(Effect.catch(() => Effect.void));
-			}),
+		(handle) => teardown(handle),
 		{ interruptible: true },
 	);
 
@@ -367,10 +369,7 @@ export const makeTcpStream = Effect.gen(function* () {
 	const encoder = new TextEncoder();
 	const sendText = (data: string) => send(encoder.encode(data));
 
-	const close = Effect.gen(function* () {
-		finishIncoming();
-		yield* socketHandle.close().pipe(Effect.catch(() => Effect.void));
-	});
+	const close = teardown(socketHandle);
 
 	return TcpStream.of({
 		stream: Stream.fromQueue(incoming),

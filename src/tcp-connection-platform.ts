@@ -5,7 +5,6 @@ import * as Socket from "effect/unstable/socket/Socket";
 import {
 	type ConnectionConfigShape,
 	makeConvenienceLayer,
-	makeTcpStream,
 	type RawSocketHandle,
 	type RawSocketWriteResult,
 	type SocketCallbacks,
@@ -105,10 +104,12 @@ const createPlatformSocket = (
 							port: config.port,
 						});
 						socketInstance = conn;
-						conn.once("secureConnect", () => {
+						const onSecureConnect = () => {
+							conn.removeListener("error", onError);
 							resume(Effect.succeed(conn));
-						});
-						conn.on("error", (cause) => {
+						};
+						const onError = (cause: unknown) => {
+							conn.removeListener("secureConnect", onSecureConnect);
 							resume(
 								Effect.fail(
 									new Socket.SocketError({
@@ -119,7 +120,9 @@ const createPlatformSocket = (
 									}),
 								),
 							);
-						});
+						};
+						conn.once("secureConnect", onSecureConnect);
+						conn.once("error", onError);
 					}),
 			);
 		}),
@@ -140,7 +143,7 @@ const makeTcpStreamEnginePlatform: TcpStreamEngineShape = {
 			// always tears down this connection too, even if `close()` is
 			// never explicitly invoked.
 			const parentScope = yield* Scope.Scope;
-			const childScope = yield* Scope.fork(parentScope);
+			const childScope = yield* Scope.fork(parentScope, "sequential");
 
 			// All per-attempt resources (socket finalizers, forked `run` fiber,
 			// writer scope) are owned by `childScope`. If any step below fails,
@@ -249,11 +252,4 @@ export const TcpStreamEnginePlatformLive = Layer.succeed(
  */
 export const TcpStreamPlatformLive = makeConvenienceLayer(
 	TcpStreamEnginePlatformLive,
-);
-
-/**
- * Programmatic constructor for TcpStreamPlatform, reusing the shared orchestrator.
- */
-export const makeTcpStreamPlatform = makeTcpStream.pipe(
-	Effect.provide(TcpStreamEnginePlatformLive),
 );
