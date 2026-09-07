@@ -103,6 +103,21 @@ export const TcpStreamEngineBunLive = Layer.succeed(
 							}),
 						);
 
+					// `connectError` and the promise rejection handler can both
+					// fire for the same underlying failure; `resumeOnce` keeps
+					// the second settlement from resuming an already-completed
+					// effect instead of relying on the runtime's late-resume
+					// no-op (same `settled` guard the Node.js engine uses).
+					let settled = false;
+					const resumeOnce = (
+						effect: Effect.Effect<RawSocketHandle, TcpStreamError>,
+					) => {
+						if (!settled) {
+							settled = true;
+							resume(effect);
+						}
+					};
+
 					try {
 						void Bun.connect<undefined>({
 							hostname: config.host,
@@ -144,7 +159,7 @@ export const TcpStreamEngineBunLive = Layer.succeed(
 										terminateSocket(socket);
 										return;
 									}
-									resume(failConnect(cause));
+									resumeOnce(failConnect(cause));
 								},
 							},
 						}).then(
@@ -154,15 +169,15 @@ export const TcpStreamEngineBunLive = Layer.succeed(
 									terminateSocket(socket);
 									return;
 								}
-								resume(Effect.succeed(makeHandle(socket)));
+								resumeOnce(Effect.succeed(makeHandle(socket)));
 							},
 							(cause) => {
 								if (cancelled) return;
-								resume(failConnect(cause));
+								resumeOnce(failConnect(cause));
 							},
 						);
 					} catch (cause) {
-						resume(failConnect(cause));
+						resumeOnce(failConnect(cause));
 					}
 
 					// Interruption cleanup: mark the in-flight connect cancelled.
