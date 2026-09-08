@@ -271,20 +271,23 @@ export const makeTcpStream = Effect.gen(function* () {
 	).pipe(
 		Effect.onExit((exit) =>
 			Effect.sync(() => {
-				if (Exit.isFailure(exit)) {
-					const failure = Cause.squash(exit.cause);
-					finish(
-						failure instanceof TcpStreamError
-							? failure
-							: new TcpStreamError({
-									operation: "read",
-									message: unknownToMessage(failure),
-									cause: failure,
-								}),
-					);
-				} else {
+				if (
+					Exit.isSuccess(exit) ||
+					exit.cause.reasons.every(Cause.isInterruptReason)
+				) {
 					finish();
+					return;
 				}
+				const failure = Cause.squash(exit.cause);
+				finish(
+					failure instanceof TcpStreamError
+						? failure
+						: new TcpStreamError({
+								operation: "read",
+								message: unknownToMessage(failure),
+								cause: failure,
+							}),
+				);
 			}),
 		),
 		Effect.forkScoped,

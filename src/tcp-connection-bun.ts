@@ -35,6 +35,17 @@ const adapter = (
 				} catch {}
 			}
 		};
+		const end = (value: Bun.Socket<undefined>) => {
+			if (ended) return;
+			ended = true;
+			try {
+				value.end();
+			} catch {
+				try {
+					value.terminate();
+				} catch {}
+			}
+		};
 		const fail = (cause: unknown) => {
 			if (settled) return;
 			settled = true;
@@ -101,7 +112,7 @@ const adapter = (
 									cause,
 								}),
 						}),
-					close: () => Effect.sync(() => terminate(value)),
+					close: () => Effect.sync(() => end(value)),
 				};
 				if (emit({ _tag: "Ready" }) === "closed") {
 					terminate(value);

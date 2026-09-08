@@ -670,6 +670,57 @@ export const defineTcpStreamTestSuite = ({
 			}
 		});
 
+		it("closing the connection from the client side is a graceful close for the server", async () => {
+			let serverError: Error | undefined;
+			let serverReceived = 0;
+			const serverClosedGate = await Effect.runPromise(Deferred.make<void>());
+			const server = Bun.listen({
+				hostname: "127.0.0.1",
+				port: 0,
+				socket: {
+					data(_socket, chunk) {
+						serverReceived += chunk.byteLength;
+					},
+					end(socket) {
+						socket.end();
+					},
+					close() {
+						Effect.runFork(Deferred.succeed(serverClosedGate, void 0));
+					},
+					error(_socket, cause) {
+						serverError ??=
+							cause instanceof Error ? cause : new Error(String(cause));
+					},
+				},
+			});
+
+			const configLayer = ConnectionConfigLive({
+				host: "127.0.0.1",
+				port: server.port,
+				retry: false,
+			});
+			const tcpLayer = layerFactory().pipe(Layer.provide(configLayer));
+			const payload = "graceful client close";
+
+			const program = Effect.gen(function* () {
+				const tcp = yield* TcpStream;
+				yield* tcp.sendText(payload);
+				yield* tcp.close;
+			}).pipe(Effect.provide(tcpLayer), Effect.timeout("5 seconds"));
+
+			try {
+				const exit = await Effect.runPromiseExit(program);
+				expect(Exit.isSuccess(exit)).toBe(true);
+				await Effect.runPromise(
+					Deferred.await(serverClosedGate).pipe(Effect.timeout("5 seconds")),
+				);
+				expect(serverReceived).toBe(payload.length);
+				expect(serverError).toBeUndefined();
+			} finally {
+				server.stop(true);
+			}
+		});
+
 		it("interrupting a connect attempt that never completes exits promptly without defects", async () => {
 			// A TLS server that accepts the TCP connection but never completes
 			// the handshake leaves the engine's connect pending indefinitely,

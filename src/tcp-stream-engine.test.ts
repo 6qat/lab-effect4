@@ -1,10 +1,16 @@
 import { describe, expect, it } from "bun:test";
-import { Cause, Effect, Result, Stream } from "effect";
-import type { ConnectionConfigShape } from "./tcp-connection-common.js";
+import { Cause, Effect, Layer, Result, Stream } from "effect";
+import {
+	ConnectionConfigLive,
+	type ConnectionConfigShape,
+	TcpStream,
+} from "./tcp-connection-common.js";
 import {
 	makeTcpStreamEngine,
 	type RawSocketHandle,
+	TcpStreamEngine,
 	type TcpStreamEngineAdapterEvent,
+	TcpStreamLayer,
 } from "./tcp-stream-engine.js";
 
 const config: ConnectionConfigShape = {
@@ -177,5 +183,31 @@ describe("TcpStreamEngine seam", () => {
 
 		expect(Array.from(events)).toEqual([]);
 		expect(closed).toBe(1);
+	});
+
+	it("ends the session stream cleanly when the session is torn down without an explicit close", async () => {
+		const engine = makeTcpStreamEngine((_config, emit) =>
+			Effect.sync(() => {
+				emit({ _tag: "Ready" });
+				return handle;
+			}),
+		);
+		const layer = TcpStreamLayer.pipe(
+			Layer.provide(Layer.succeed(TcpStreamEngine, engine)),
+			Layer.provide(ConnectionConfigLive(config)),
+		);
+		const tcp = await Effect.runPromise(
+			Effect.gen(function* () {
+				const tcp = yield* TcpStream;
+				yield* Effect.sleep("10 millis");
+				return tcp;
+			}).pipe(Effect.provide(layer)),
+		);
+
+		const drainExit = await Effect.runPromiseExit(
+			Stream.runDrain(tcp.stream).pipe(Effect.timeout("2 seconds")),
+		);
+
+		expect(drainExit._tag).toBe("Success");
 	});
 });
