@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (Amends [ADR 0002](0002-unified-tcp-stream-engine-adapter-seam.md), refines [ADR 0005](0005-unified-platform-socket-engine-adapter-and-test-suite.md))
+Accepted (Amends [ADR 0002](0002-unified-tcp-stream-engine-adapter-seam.md), refines [ADR 0005](0005-unified-platform-socket-engine-adapter-and-test-suite.md), and is superseded for attempt ownership by [ADR 0008](0008-caller-first-tcp-stream-engine.md))
 
 ## Context
 

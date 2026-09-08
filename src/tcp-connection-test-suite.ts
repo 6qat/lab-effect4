@@ -15,11 +15,10 @@ import {
 	ConnectionConfigLive,
 	type ConnectionConfigShape,
 	TcpStream,
-	type TcpStreamEngine,
 	type TcpStreamError,
-	TcpStreamLayer,
 	type TcpStreamShape,
 } from "./tcp-connection-common.js";
+import { type TcpStreamEngine, TcpStreamLayer } from "./tcp-stream-engine.js";
 
 type EchoServer = {
 	readonly port: number;

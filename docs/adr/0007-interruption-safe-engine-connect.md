@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (Refines [ADR 0006](0006-scope-owned-platform-engine-lifecycle.md); corrects [ADR 0005](0005-unified-platform-socket-engine-adapter-and-test-suite.md))
+Accepted (Refines [ADR 0006](0006-scope-owned-platform-engine-lifecycle.md), corrects [ADR 0005](0005-unified-platform-socket-engine-adapter-and-test-suite.md), and is consolidated by [ADR 0008](0008-caller-first-tcp-stream-engine.md))
 
 ## Context
 

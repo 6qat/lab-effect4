@@ -4,190 +4,126 @@ import { Effect, Layer } from "effect";
 import {
 	ConnectionConfig,
 	ConnectionConfigLive,
-	type ConnectionConfigShape,
-	makeConvenienceLayer,
-	type RawSocketHandle,
-	type RawSocketWriteResult,
-	type SocketCallbacks,
-	TcpStreamEngine,
-	type TcpStreamEngineShape,
-	TcpStreamError,
 	unknownToMessage,
 } from "./tcp-connection-common.js";
-
-export * from "./tcp-connection-common.js";
-
-/**
- * Pure Node.js socket adapter for TcpStreamEngine using node:net and node:tls.
- *
- * Decisions made:
- * - Minimal raw socket adapter responsible solely for node:net / node:tls connections (Q1 -> Option A).
- * - Normalizes Node socket.write() to RawSocketWriteResult (Q4 -> Option A).
- * - Socket teardown handled via raw handle close() (Q6 -> Option B).
- */
-const makeTcpStreamEngineNodejs: TcpStreamEngineShape = {
-	connect: (
-		config: ConnectionConfigShape,
-		callbacks: SocketCallbacks,
-	): Effect.Effect<RawSocketHandle, TcpStreamError> => {
-		const connectOnce = Effect.callback<RawSocketHandle, TcpStreamError>(
-			(resume) => {
-				let settled = false;
-				let socket: net.Socket;
-
-				const cleanup = () => {
-					socket?.removeListener("connect", onConnect);
-					socket?.removeListener("secureConnect", onConnect);
-					socket?.removeListener("error", onError);
-				};
-
-				const onConnect = () => {
-					if (!settled) {
-						settled = true;
-						cleanup();
-
-						socket.on("data", (chunk: Buffer) => {
-							callbacks.onData(new Uint8Array(chunk));
-						});
-
-						socket.on("drain", () => {
-							callbacks.onDrain();
-						});
-
-						socket.on("error", (cause) => {
-							callbacks.onError(
-								cause instanceof Error ? cause : new Error(String(cause)),
-							);
-						});
-
-						socket.on("close", () => {
-							callbacks.onClose();
-						});
-
-						let hasDestroyed = false;
-						const rawHandle: RawSocketHandle = {
-							write(
-								chunk: Uint8Array,
-							): Effect.Effect<RawSocketWriteResult, TcpStreamError> {
-								return Effect.try({
-									try: () => {
-										const flushed = socket.write(chunk);
-										return {
-											bytesWritten: chunk.byteLength,
-											flushed,
-										};
-									},
-									catch: (cause) =>
-										new TcpStreamError({
-											operation: "write",
-											message: `Socket write failed: ${unknownToMessage(cause)}`,
-											cause,
-										}),
-								});
-							},
-							close(): Effect.Effect<void> {
-								return Effect.sync(() => {
-									if (!hasDestroyed) {
-										hasDestroyed = true;
-										try {
-											socket?.destroy();
-										} catch {
-											// Best-effort teardown
-										}
-									}
-								});
-							},
-						};
-
-						resume(Effect.succeed(rawHandle));
-					}
-				};
-
-				const onError = (cause: unknown) => {
-					if (!settled) {
-						settled = true;
-						cleanup();
-						socket?.destroy();
-						resume(
-							Effect.fail(
-								new TcpStreamError({
-									operation: "connect",
-									message: `Connection failed: ${unknownToMessage(cause)}`,
-									cause,
-								}),
-							),
-						);
-					}
-				};
-
-				try {
-					if (config.tls) {
-						const tlsOptions: tls.ConnectionOptions =
-							typeof config.tls === "boolean"
-								? {}
-								: (config.tls as tls.ConnectionOptions);
-						socket = tls.connect({
-							...tlsOptions,
-							host: config.host,
-							port: config.port,
-						});
-						socket.once("secureConnect", onConnect);
-					} else {
-						socket = net.createConnection({
-							host: config.host,
-							port: config.port,
-						});
-						socket.once("connect", onConnect);
-					}
-					socket.once("error", onError);
-				} catch (cause) {
-					onError(cause);
-				}
-
-				return Effect.sync(() => {
-					if (!settled) {
-						settled = true;
-						cleanup();
-						socket?.destroy();
-					}
-				});
-			},
-		).pipe(
-			Effect.timeout("3 seconds"),
-			Effect.mapError((cause) =>
-				cause instanceof TcpStreamError
-					? cause
-					: new TcpStreamError({
-							operation: "connect",
-							message: "Connection timeout",
-							cause,
-						}),
-			),
-		);
-
-		return connectOnce;
-	},
-};
-
-/**
- * Adapter layer providing Node.js implementation of TcpStreamEngine.
- */
-export const TcpStreamEngineNodejsLive = Layer.succeed(
+import {
+	makeConvenienceLayer,
+	makeTcpStreamEngine,
+	type RawSocketHandle,
+	type RawSocketWriteResult,
 	TcpStreamEngine,
-	makeTcpStreamEngineNodejs,
-);
+	type TcpStreamEngineAdapterEvent,
+	type TcpStreamEngineConfig,
+	TcpStreamError,
+} from "./tcp-stream-engine.js";
 
-/**
- * Packaged convenience layer for Node.js (standardized to Nodejs suffix).
- * Combines TcpStreamLayer with TcpStreamEngineNodejsLive and optional ConnectionConfig.
- */
+type Socket = net.Socket;
+const adapter = (
+	config: TcpStreamEngineConfig,
+	emit: (event: TcpStreamEngineAdapterEvent) => "accepted" | "closed",
+) =>
+	Effect.callback<RawSocketHandle, unknown>((resume) => {
+		let socket: Socket | undefined;
+		let settled = false;
+		let cancelled = false;
+		let destroyed = false;
+		const destroy = () => {
+			if (!destroyed) {
+				destroyed = true;
+				socket?.destroy();
+			}
+		};
+		const fail = (cause: unknown) => {
+			if (settled) return;
+			settled = true;
+			destroy();
+			emit({ _tag: "Error", cause });
+			resume(Effect.fail(cause));
+		};
+		const onReady = () => {
+			if (settled || cancelled) return;
+			const handle: RawSocketHandle = {
+				write: (
+					chunk: Uint8Array,
+				): Effect.Effect<RawSocketWriteResult, TcpStreamError> =>
+					Effect.try({
+						try: () => ({
+							bytesWritten: chunk.byteLength,
+							flushed: socket?.write(chunk) ?? false,
+						}),
+						catch: (cause) =>
+							new TcpStreamError({
+								operation: "write",
+								message: `Socket write failed: ${unknownToMessage(cause)}`,
+								cause,
+							}),
+					}),
+				close: () => Effect.sync(destroy),
+			};
+			if (emit({ _tag: "Ready" }) === "closed") {
+				destroy();
+				return;
+			}
+			settled = true;
+			resume(Effect.succeed(handle));
+		};
+		const onError = (cause: unknown) => {
+			if (!settled) fail(cause);
+			else emit({ _tag: "Error", cause });
+		};
+		try {
+			socket = config.tls
+				? tls.connect({
+						...(typeof config.tls === "boolean"
+							? {}
+							: (config.tls as tls.ConnectionOptions)),
+						host: config.host,
+						port: config.port,
+					})
+				: net.createConnection({ host: config.host, port: config.port });
+			socket.on("data", (chunk) => {
+				if (cancelled) return;
+				emit({
+					_tag: "Data",
+					chunk:
+						typeof chunk === "string"
+							? new TextEncoder().encode(chunk)
+							: new Uint8Array(chunk).slice(),
+				});
+			});
+			socket.on("drain", () => {
+				if (!cancelled) emit({ _tag: "Drain" });
+			});
+			socket.once("close", () => {
+				if (!cancelled) emit({ _tag: "Close" });
+			});
+			socket.once("error", onError);
+			socket.once(config.tls ? "secureConnect" : "connect", onReady);
+		} catch (cause) {
+			fail(cause);
+		}
+		return Effect.sync(() => {
+			cancelled = true;
+			if (!settled) {
+				settled = true;
+				destroy();
+			}
+		});
+	});
+
+const engine = makeTcpStreamEngine(adapter);
+export const TcpStreamEngineNodejsLive = Layer.succeed(TcpStreamEngine, engine);
 export const TcpStreamNodejsLive = makeConvenienceLayer(
 	TcpStreamEngineNodejsLive,
 );
-
-// Aliases for backward compatibility
 export { TcpStreamNodejsLive as TcpStreamNodeLive };
 export const ConnectionConfigNodejsLive = ConnectionConfigLive;
+export * from "./tcp-connection-common.js";
+export {
+	type ConnectionEvent,
+	TcpStreamEngine,
+	type TcpStreamEngineConfig,
+} from "./tcp-stream-engine.js";
 export {
 	ConnectionConfig as ConnectionConfigNodejs,
 	ConnectionConfig as ConnectionConfigNode,

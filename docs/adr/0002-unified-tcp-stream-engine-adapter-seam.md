@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (Amended by [ADR 0005](0005-unified-platform-socket-engine-adapter-and-test-suite.md) and [ADR 0006](0006-scope-owned-platform-engine-lifecycle.md): `RawSocketHandle.write`/`close` are now effectful, and `TcpStreamEngineShape.connect` may require `Scope.Scope`)
+Accepted (Amended by [ADR 0005](0005-unified-platform-socket-engine-adapter-and-test-suite.md), [ADR 0006](0006-scope-owned-platform-engine-lifecycle.md), and [ADR 0008](0008-caller-first-tcp-stream-engine.md): the public engine seam now returns an established connection and owns one complete attempt)
 
 ## Context
 
