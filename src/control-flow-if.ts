@@ -1,4 +1,4 @@
-import { Console, Effect, Option, pipe, Random, Result } from "effect";
+import { Console, Effect, Layer, Option, pipe, Random, Result } from "effect";
 
 // Function to validate weight and return an Option
 const _validateWeightOption = (weight: number): Option.Option<number> =>
@@ -38,3 +38,18 @@ const flipTheCoin2 = pipe(
 );
 
 Effect.runFork(flipTheCoin2);
+
+const CryptoRandomLive = Layer.succeed(Random.Random, {
+	nextIntUnsafe() {
+		const array = new Int32Array(1);
+		crypto.getRandomValues(array);
+		return array[0] ?? 0;
+	},
+	nextDoubleUnsafe() {
+		const array = new Uint32Array(1);
+		crypto.getRandomValues(array);
+		return (array[0] ?? 0) / (0xffffffff + 1);
+	},
+});
+
+Effect.runFork(flipTheCoin.pipe(Effect.provide(CryptoRandomLive)));
