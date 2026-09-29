@@ -1,0 +1,1 @@
+Effect-TS v4 as the sole runtime across all children; Node.js/Bun/Effect unstable Socket used interchangeably for TCP transport behind the platform abstraction.

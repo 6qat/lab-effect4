@@ -6,13 +6,13 @@ Accepted (Amended by [ADR 0005](0005-unified-platform-socket-engine-adapter-and-
 
 ## Context
 
-In [ADR 0001](file:///home/guiga/Devel-NT/lab-effect4/docs/adr/0001-direct-engine-socket-wrappers.md), we established direct runtime socket engine wrappers for Bun (`Bun.connect`) and Node.js (`node:net` / `node:tls`). However, maintaining parallel connection orchestrators resulted in duplicate orchestration logic (retry schedules, queue management, backpressure drain handling).
+In [ADR 0001](0001-direct-engine-socket-wrappers.md), we established direct runtime socket engine wrappers for Bun (`Bun.connect`) and Node.js (`node:net` / `node:tls`). However, maintaining parallel connection orchestrators resulted in duplicate orchestration logic (retry schedules, queue management, backpressure drain handling).
 
 ## Decision
 
-We extracted a shared engine adapter seam ([`TcpStreamEngine`](file:///home/guiga/Devel-NT/lab-effect4/src/tcp-connection-common.ts)):
+We extracted a shared engine adapter seam ([`TcpStreamEngine`](../../packages/tcp/src/tcp-connection-common.ts)):
 
-1. **Shared Orchestration Layer** ([`TcpStreamLayer`](file:///home/guiga/Devel-NT/lab-effect4/src/tcp-connection-common.ts)):
+1. **Shared Orchestration Layer** ([`TcpStreamLayer`](../../packages/tcp/src/tcp-connection-common.ts)):
    - Encapsulates `Queue`, `MutableRef`, connection retry schedules, backpressure waiters, and streaming.
    - Depends on `TcpStreamEngine` and `ConnectionConfig`.
 
@@ -22,8 +22,8 @@ We extracted a shared engine adapter seam ([`TcpStreamEngine`](file:///home/guig
    - `SocketCallbacks` provides `onData`, `onDrain`, `onError`, and `onClose`.
 
 3. **Thin Engine Adapters**:
-   - `src/tcp-connection-bun.ts`: Contains only `Bun.connect` mapping and exports `TcpStreamEngineBunLive`.
-   - `src/tcp-connection-nodejs.ts`: Contains only `node:net` / `node:tls` mapping and exports `TcpStreamEngineNodejsLive`.
+   - `packages/tcp/src/tcp-connection-bun.ts`: Contains only `Bun.connect` mapping and exports `TcpStreamEngineBunLive`.
+   - `packages/tcp/src/tcp-connection-nodejs.ts`: Contains only `node:net` / `node:tls` mapping and exports `TcpStreamEngineNodejsLive`.
 
 4. **Dual Layer Provisioning**:
    - Composable layer: `TcpStreamLayer` (requires `TcpStreamEngine` + `ConnectionConfig`).

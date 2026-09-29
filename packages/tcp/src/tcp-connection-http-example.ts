@@ -93,7 +93,7 @@ export const parseCliArgs = (
 		return Result.fail(
 			new MissingCliArgError({
 				message:
-					"Usage: bun src/tcp-connection-http-example.ts [--engine=bun|nodejs|platform] <http-or-https-url>",
+					"Usage: bun packages/tcp/src/tcp-connection-http-example.ts [--engine=bun|nodejs|platform] <http-or-https-url>",
 			}),
 		);
 	}
@@ -125,7 +125,7 @@ export const parseCliUrl = (
 		return Result.fail(
 			new MissingCliArgError({
 				message:
-					"Usage: bun src/tcp-connection-http-example.ts <http-or-https-url>",
+					"Usage: bun packages/tcp/src/tcp-connection-http-example.ts <http-or-https-url>",
 			}),
 		);
 	}

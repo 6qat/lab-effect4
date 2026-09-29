@@ -1,0 +1,1 @@
+Built on Effect TS (`Effect`, `Layer`, `Context.Service`, `Stream`, `Queue`, `Deferred`, `Semaphore`, `MutableRef`, `Scope`); platform sockets come from Bun's `Bun.connect` / `@effect/platform-bun` `BunSocket`, or Node.js `node:net` + `node:tls`; TLS options accept both `Bun.TLSOptions` and `tls.ConnectionOptions`.

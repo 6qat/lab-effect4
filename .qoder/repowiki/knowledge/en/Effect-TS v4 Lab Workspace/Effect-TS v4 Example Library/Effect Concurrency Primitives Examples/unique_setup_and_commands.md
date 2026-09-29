@@ -1,0 +1,1 @@
+Each file is intended to be executed directly (e.g. `bun src/concurrency-*.ts` or `node` with appropriate loader); execution entry points call `Effect.runPromise` / `Effect.runPromiseExit` at the bottom of each script.

@@ -1,0 +1,1 @@
+Effect-based TCP stream abstraction that wires a platform-specific socket adapter (Bun, Node.js, or Effect's unstable Socket) behind a retrying, timeout-guarded engine exposing a uniform TcpStream service.

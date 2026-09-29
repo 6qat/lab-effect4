@@ -1,0 +1,2 @@
+- Editor state in `.kilo/` is kept as JSONC/JSON files managed by Kilo rather than hand-edited, with generated worktrees and sessions excluded via `.gitignore`.
+- CI jobs are structured as a single workflow with one job whose steps are ordered sequentially: checkout → toolchain setup → install → typecheck → test → lint → format.

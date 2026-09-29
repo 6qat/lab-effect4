@@ -1,0 +1,1 @@
+Effect-TS (`effect`) library using `Effect.gen` generators, `pipe` combinator, `Layer.succeed` for live providers, and `Data.TaggedError` for typed errors.

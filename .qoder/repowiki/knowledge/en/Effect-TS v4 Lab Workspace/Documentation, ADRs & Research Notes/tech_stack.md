@@ -1,0 +1,1 @@
+Node.js ESM scripts (`node:fs`, `node:path`, `node:url`); Markdown-based ADRs in ADRC style; Zed workspace integration via `.zed/prompts` and `.zed/skills` directories.

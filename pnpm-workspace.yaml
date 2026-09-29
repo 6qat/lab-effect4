@@ -1,6 +1,0 @@
-allowBuilds:
-  '@parcel/watcher': true
-  msgpackr-extract: true
-
-overrides:
-  '@effect/platform-node-shared': 4.0.0-rc.112

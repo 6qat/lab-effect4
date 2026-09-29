@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: src_library/line_framing
+title: Cedro Protocol Line Framing & Client
+scope:
+    - src/line-framing.ts
+    - src/cedro-protocol.ts
+    - src/cedro-protocol.test.ts
+source_files: []
+depends_on: []
+related_to:
+    - path: docs_and_research
+    - path: src_library/tcp_stream_engine

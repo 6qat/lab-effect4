@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la .qoder/ 2>/dev/null && echo \"---TEMP.SQL---\" && head -40 temp.sql)",
+      "Bash(find .qoder -type f -newermt '-3 days' 2>/dev/null | head -30)",
+      "Bash(cat .qoder/settings.local.json; echo \"---\"; ls -la; echo \"--- recent files ---\"; find . -maxdepth 2 -type f -newermt '-24 hours' -not -path './node_modules/*' -not -path './.git/*' 2>/dev/null | head -20)"
+    ]
+  }
+}

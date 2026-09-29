@@ -1,0 +1,1 @@
+Pure Markdown skills consumed by the agent platform; Bash templates (`template.sh`, `hitl-loop.template.sh`) use POSIX sh helpers (`tput`, `gh`, `xdg-open`, `wslview`) for cross-platform wizard UX.

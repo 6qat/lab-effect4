@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: src_library/concurrency_primitives
+title: Effect Concurrency Primitives Examples
+scope:
+    - src/concurrency-deferred.ts
+    - src/concurrency-pubsub.ts
+    - src/concurrency-queue.ts
+source_files: []
+depends_on: []
+related_to: []

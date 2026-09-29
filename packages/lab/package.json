@@ -1,0 +1,20 @@
+{
+	"name": "lab",
+	"version": "1.0.0",
+	"private": true,
+	"description": "Standalone Effect v4 learning examples",
+	"type": "module",
+	"license": "ISC",
+	"scripts": {
+		"test": "bun test --pass-with-no-tests ./src",
+		"typecheck": "tsc --noEmit -p tsconfig.json",
+		"format": "biome format --write ./src && biome check --write ./src",
+		"format:check": "biome format ./src",
+		"lint": "biome lint ."
+	},
+	"dependencies": {
+		"@effect/platform-bun": "4.0.0-rc.111",
+		"effect": "4.0.0-rc.109",
+		"effect-mq": "^0.7.0"
+	}
+}

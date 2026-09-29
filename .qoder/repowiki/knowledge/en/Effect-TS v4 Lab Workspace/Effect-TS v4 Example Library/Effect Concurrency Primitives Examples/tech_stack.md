@@ -1,0 +1,1 @@
+Effect TS (`effect` package) — uses `Effect.gen`, `Fiber`, `Deferred`, `PubSub`, `Queue`, and `Stream` for structured concurrency and resource-scoped async primitives.

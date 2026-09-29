@@ -1,0 +1,1 @@
+Demonstrates Effect v4 error modeling with tagged errors and Result, plus examples of creating effects (callback/tryPromise/suspend), running them via multiple runners, default services, and a typed message-queue job.

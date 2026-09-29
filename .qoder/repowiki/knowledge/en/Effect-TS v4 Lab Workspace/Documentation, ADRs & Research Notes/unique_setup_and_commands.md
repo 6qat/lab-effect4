@@ -1,0 +1,1 @@
+Run `node scripts/sync-zed-prompts.mjs` from the repo root to mirror any `SKILL.md` found under `.agents/skills/` or `.agent/skills/` into `.zed/prompts/` and `.zed/skills/` so Zed can trigger them as `/prompt <skill>` and native slash commands.

@@ -1,0 +1,3 @@
+- Each example is a standalone Effect program executed synchronously via Effect.runSync at module load or inside a test.
+- Platform-specific implementations are split into separate files (e.g., tcp-connection-bun.ts, tcp-connection-nodejs.ts) and selected through a common interface.
+- Error modeling uses Effect's tagged errors and Result type rather than throwing plain exceptions.

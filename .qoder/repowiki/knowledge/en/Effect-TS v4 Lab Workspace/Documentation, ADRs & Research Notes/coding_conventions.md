@@ -1,0 +1,2 @@
+- ADR filenames are zero-padded sequential numbers (`0001-...`, `0002-...`) and follow the ADRC template with Status, Considered Options, and Rationale sections.
+- Agent-facing docs live under `docs/agents/` and describe how LLM skills should read repo context rather than embedding instructions in source code.

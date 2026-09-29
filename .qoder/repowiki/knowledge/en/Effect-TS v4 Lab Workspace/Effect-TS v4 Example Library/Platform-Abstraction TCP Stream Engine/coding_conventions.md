@@ -1,0 +1,5 @@
+- Each platform adapter implements the same `ColdAdapter` signature `(config, emit) => Effect<RawSocketHandle>` and then constructs the public engine via `makeTcpStreamEngine(adapter)` before exporting a `Layer.succeed(TcpStreamEngine, engine)`.
+- Adapters wrap raw socket callbacks in `Effect.callback` / `Effect.try` and translate any thrown or emitted cause into a `TcpStreamError` tagged with the failing operation (`connect`, `read`, or `write`) plus `unknownToMessage(cause)` for the message.
+- The adapter state machine uses local booleans (`settled`, `cancelled`, `ended`/`destroyed`) to ensure idempotent cleanup and to guard against emitting events after the connection has been rejected or torn down.
+- Public APIs are exposed as Effect `Context.Service` classes (`TcpStream`, `TcpStreamEngine`, `ConnectionConfig`) constructed via `Context.Service<T, Shape>()("Name")()` and supplied via `Layer.succeed` / `Layer.effect`.
+- Convenience layers are produced by composing `makeConvenienceLayer(engineLayer)` so callers can provide either a full `ConnectionConfigShape` or rely on a `ConnectionConfig` context.

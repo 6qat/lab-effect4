@@ -6,7 +6,7 @@ Accepted (Supersedes [ADR 0003](0003-effect-platform-push-socket-implementation.
 
 ## Context
 
-In [ADR 0002](0002-unified-tcp-stream-engine-adapter-seam.md), we extracted a shared engine adapter seam ([`TcpStreamEngine`](../../src/tcp-connection-common.ts)) for Bun (`Bun.connect`) and Node.js (`node:net` / `node:tls`). In [ADR 0003](0003-effect-platform-push-socket-implementation.md), we introduced a parallel implementation for `@effect/platform` push-based sockets ([`src/tcp-connection-platform.ts`](../../src/tcp-connection-platform.ts)) to avoid shoehorning its effectful writer into the then-synchronous `RawSocketHandle.write` signature.
+In [ADR 0002](0002-unified-tcp-stream-engine-adapter-seam.md), we extracted a shared engine adapter seam ([`TcpStreamEngine`](../../packages/tcp/src/tcp-connection-common.ts)) for Bun (`Bun.connect`) and Node.js (`node:net` / `node:tls`). In [ADR 0003](0003-effect-platform-push-socket-implementation.md), we introduced a parallel implementation for `@effect/platform` push-based sockets ([`packages/tcp/src/tcp-connection-platform.ts`](../../packages/tcp/src/tcp-connection-platform.ts)) to avoid shoehorning its effectful writer into the then-synchronous `RawSocketHandle.write` signature.
 
 However, maintaining `tcp-connection-platform.ts` as a separate orchestrator resulted in:
 
@@ -17,14 +17,14 @@ However, maintaining `tcp-connection-platform.ts` as a separate orchestrator res
 5. Repeated function overload boilerplate (`TcpStream*Live()`) across Bun, Node.js, and Platform.
 6. Near-identical test suites (~190 lines each across Bun, Node.js, and Platform test files).
 
-Furthermore, [`RawSocketHandle`](../../src/tcp-connection-common.ts) previously modeled `write` and `close` as synchronous void functions, preventing Effect-native socket abstractions from cleanly satisfying the adapter seam.
+Furthermore, [`RawSocketHandle`](../../packages/tcp/src/tcp-connection-common.ts) previously modeled `write` and `close` as synchronous void functions, preventing Effect-native socket abstractions from cleanly satisfying the adapter seam.
 
 ## Decision
 
 We modernized and unified the engine seam across all three runtime targets, superseding ADR 0003:
 
 1. **Effectful `RawSocketHandle` Contract**:
-   Updated [`RawSocketHandle`](../../src/tcp-connection-common.ts) so both `write` and `close` return effects:
+   Updated [`RawSocketHandle`](../../packages/tcp/src/tcp-connection-common.ts) so both `write` and `close` return effects:
    ```typescript
    export interface RawSocketHandle {
      readonly write: (
@@ -36,22 +36,22 @@ We modernized and unified the engine seam across all three runtime targets, supe
    This accommodates synchronous kernel socket operations (Bun `socket.write()` / Node.js `net.Socket.write()`, wrapped in `Effect.try`) and asynchronous effectful writers (Platform `socket.writer`, wrapped via `Effect.mapBoth`).
 
 2. **Platform Engine Adapter (`TcpStreamEnginePlatformLive`)**:
-   Refactored [`src/tcp-connection-platform.ts`](../../src/tcp-connection-platform.ts) from a duplicate orchestrator into a thin engine adapter satisfying `TcpStreamEngineShape`:
+   Refactored [`packages/tcp/src/tcp-connection-platform.ts`](../../packages/tcp/src/tcp-connection-platform.ts) from a duplicate orchestrator into a thin engine adapter satisfying `TcpStreamEngineShape`:
    - Wraps `@effect/platform-bun` / `effect/unstable/socket/Socket` in `RawSocketHandle`.
    - Bridges socket reading to `SocketCallbacks` and handles scoped teardown.
    - Deletes ~190 lines of duplicate queue, state machine, and retry logic.
 
 3. **Generic Convenience Layer Factory (`makeConvenienceLayer`)**:
-   Extracted [`makeConvenienceLayer`](../../src/tcp-connection-common.ts) in common to eliminate repeated function overload boilerplate across `TcpStreamBunLive`, `TcpStreamNodejsLive`, and `TcpStreamPlatformLive`.
+   Extracted [`makeConvenienceLayer`](../../packages/tcp/src/tcp-connection-common.ts) in common to eliminate repeated function overload boilerplate across `TcpStreamBunLive`, `TcpStreamNodejsLive`, and `TcpStreamPlatformLive`.
 
 4. **Parameterized HTTP Example Request Programs (`makeRequestProgram`)**:
-    Deduplicated the request execution pipelines in [`src/tcp-connection-http-example.ts`](../../src/tcp-connection-http-example.ts) using a shared program factory.
+    Deduplicated the request execution pipelines in [`packages/tcp/src/tcp-connection-http-example.ts`](../../packages/tcp/src/tcp-connection-http-example.ts) using a shared program factory.
     `makeRequestProgram(layerFactory, url)` takes the target URL explicitly so it stays
     pure and testable; the CLI-wired `requestProgram*` constants delegate to
     `makeCliRequestProgram(layerFactory)`, which reads the URL from argv.
 
 5. **Deduplicated Parameterized Test Runner (`defineTcpStreamTestSuite`)**:
-   Extracted a parameterized test suite in [`src/tcp-connection-test-suite.ts`](../../src/tcp-connection-test-suite.ts) verifying all 6 key operational scenarios:
+   Extracted a parameterized test suite in [`packages/tcp/src/tcp-connection-test-suite.ts`](../../packages/tcp/src/tcp-connection-test-suite.ts) verifying all 6 key operational scenarios:
    - Exhausting configured retry attempts on unreachable ports.
    - Immediate failure when `retry: false`.
    - Custom `Schedule` policies.

@@ -1,0 +1,5 @@
+- Every skill declares YAML frontmatter with at least `name` and `description` at the top of `SKILL.md`, and optionally `disable-model-invocation: true` when it should only be reached by explicit pointer.
+- Skills expose their agent-facing metadata through a sibling `agents/openai.yaml` with `interface.display_name`, `short_description`, and `policy.allow_implicit_invocation` rather than relying on the Markdown frontmatter alone.
+- Cross-skill references use the `/skill-name` path form inside prose, making the router's index the single source of truth for invocation names.
+- Procedural content is split into a primary `SKILL.md` plus referenced companion documents (e.g. `LOGIC.md`, `UI.md`, `PHASE-BOUNDARIES.md`, `DESIGN-IT-TWICE.md`) reached by relative links, keeping the entry point focused on steps while reference material is progressively disclosed.
+- Generated Bash artifacts follow a two-part layout: a shared library section above a marker comment and an author-editable STAGES section below, with `TOTAL_STAGES` set to match the number of `stage()` calls.

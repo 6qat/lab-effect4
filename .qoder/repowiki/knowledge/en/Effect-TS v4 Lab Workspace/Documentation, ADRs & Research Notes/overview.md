@@ -1,0 +1,1 @@
+Holds architectural decision records, agent-facing domain docs, research notes on Effect/Bun networking APIs, and a helper script that syncs skills into Zed's .zed workspace.

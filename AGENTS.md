@@ -2,6 +2,8 @@
 
 Welcome! This repository (`lab-effect4`) is built using **TypeScript**, **Effect version 4** (`effect@4.0.0-rc.*`, `@effect/platform-bun@4.0.0-rc.*`), and **Bun** as the primary runtime and package runner.
 
+The private Bun workspaces are `lab` (general Effect examples under `packages/lab/src`) and `tcp` (TCP implementations, clients, demonstrations, and tests under `packages/tcp/src`). Install dependencies from the repository root with `bun install`; CI uses the root `bun.lock` with `bun install --frozen-lockfile`.
+
 All AI agents and contributors working in this codebase **must strictly adhere** to the conventions and guidelines described below.
 
 ---
@@ -84,7 +86,7 @@ This project targets **Effect v4**. Do not use deprecated Effect v3 patterns or 
 
 Code formatting and linting are strictly enforced via **Biome**:
 
-- **Format Command**: `bun run format` (formats `./src` via `biome format --write ./src`)
+- **Format Command**: `bun run format` (formats and applies Biome fixes to both workspaces)
 - **Lint Command**: `bun run lint` (lints the repository via `biome lint .`)
 - **Do not use Prettier or ESLint.**
 
@@ -97,10 +99,10 @@ Always check [`package.json`](./package.json) for the exact scripts and execute 
 TypeScript types must compile cleanly with zero errors:
 
 ```bash
-bun x tsc --noEmit
-# or
-pnpm exec tsc --noEmit
+bun run typecheck
 ```
+
+This checks both workspace TypeScript configurations. For a focused check, use `bun run --cwd packages/lab typecheck` or `bun run --cwd packages/tcp typecheck`.
 
 ---
 
@@ -137,4 +139,4 @@ Use the default canonical triage labels: `needs-triage`, `needs-info`, `ready-fo
 
 ### Domain docs
 
-This is a single-context repository using root-level `CONTEXT.md` and `docs/adr/`. See `docs/agents/domain.md`.
+The TCP domain uses root-level `CONTEXT.md` and `docs/adr/`; the `lab` workspace contains learning examples without a separate business context. Read `docs/agents/domain.md` when exploring domain terminology or architectural decisions.

@@ -6,19 +6,19 @@ Superseded by [ADR 0005](0005-unified-platform-socket-engine-adapter-and-test-su
 
 ## Context
 
-In [ADR 0001](file:///home/guiga/Devel-NT/lab-effect4/docs/adr/0001-direct-engine-socket-wrappers.md) and [ADR 0002](file:///home/guiga/Devel-NT/lab-effect4/docs/adr/0002-unified-tcp-stream-engine-adapter-seam.md), we established direct runtime socket engine adapters (`Bun.connect` and `node:net`/`node:tls`) unified under a shared `TcpStream` orchestrator.
+In [ADR 0001](0001-direct-engine-socket-wrappers.md) and [ADR 0002](0002-unified-tcp-stream-engine-adapter-seam.md), we established direct runtime socket engine adapters (`Bun.connect` and `node:net`/`node:tls`) unified under a shared `TcpStream` orchestrator.
 
 To provide a comprehensive benchmark and evaluate Effect's native ecosystem abstractions, we wanted to create a third TCP implementation powered directly by `@effect/platform`'s push-based `Socket.Socket` (`BunSocket.makeNet` / `BunSocket.fromDuplex`).
 
 ## Decision
 
-We implemented `TcpStreamPlatformLive` under the `-platform` suffix in [`src/tcp-connection-platform.ts`](file:///home/guiga/Devel-NT/lab-effect4/src/tcp-connection-platform.ts):
+We implemented `TcpStreamPlatformLive` under the `-platform` suffix in [`packages/tcp/src/tcp-connection-platform.ts`](../../packages/tcp/src/tcp-connection-platform.ts):
 
 1. **Suffix Selection**:
-   - Chose `-platform` (`src/tcp-connection-platform.ts` and `src/tcp-connection-platform.test.ts`) to align with `@effect/platform` terminology (_Q1 -> Option A_).
+   - Chose `-platform` (`packages/tcp/src/tcp-connection-platform.ts` and `packages/tcp/src/tcp-connection-platform.test.ts`) to align with `@effect/platform` terminology (_Q1 -> Option A_).
 
 2. **Parallel `TcpStream` Layer**:
-   - Built a direct parallel layer (`TcpStreamPlatformLive`) implementing [`TcpStreamShape`](file:///home/guiga/Devel-NT/lab-effect4/src/tcp-connection-common.ts) (_Q2 -> Option A_).
+   - Built a direct parallel layer (`TcpStreamPlatformLive`) implementing [`TcpStreamShape`](../../packages/tcp/src/tcp-connection-common.ts) (_Q2 -> Option A_).
    - Avoided shoehorning `@effect/platform`'s effectful `socket.writer` into the synchronous `RawSocketHandle.write` signature of `TcpStreamEngine`.
 
 3. **Push-to-Pull Queue Bridge**:

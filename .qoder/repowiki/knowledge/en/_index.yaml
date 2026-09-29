@@ -1,0 +1,149 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: en-US
+branch: master
+nodes_managed: true
+exported_at: "2026-09-25T14:03:49Z"
+modules:
+    "":
+        dir_name: Effect-TS v4 Lab Workspace
+        title: Effect-TS v4 Lab Workspace
+        scope:
+            - AGENTS.md
+            - CONTEXT.md
+            - .gitignore
+            - package.json
+            - bun.lock
+            - pnpm-lock.yaml
+            - pnpm-workspace.yaml
+            - skills-lock.json
+            - tsconfig.json
+            - docker-compose.yml
+            - temp.sql
+        source_files: []
+        children:
+            - agent_skills
+            - docs_and_research
+            - editor_and_tooling_config
+            - src_library
+        depends_on: []
+        related_to: []
+    agent_skills:
+        dir_name: Agent Skills Library
+        title: Agent Skills Library
+        scope:
+            - .agents/skills/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: docs_and_research
+    docs_and_research:
+        dir_name: Documentation, ADRs & Research Notes
+        title: Documentation, ADRs & Research Notes
+        scope:
+            - docs/
+            - scripts/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: agent_skills
+            - path: src_library/line_framing
+            - path: src_library/tcp_stream_engine
+    editor_and_tooling_config:
+        dir_name: Editor & Tooling Configuration
+        title: Editor & Tooling Configuration
+        scope:
+            - .kilo/
+            - .github/workflows/ci.yml
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    src_library:
+        dir_name: Effect-TS v4 Example Library
+        title: Effect-TS v4 Example Library
+        scope:
+            - src/
+        source_files: []
+        children:
+            - src_library/concurrency_primitives
+            - src_library/control_flow_operators
+            - src_library/error_result_utilities
+            - src_library/line_framing
+            - src_library/tcp_stream_engine
+        depends_on: []
+        related_to: []
+    src_library/concurrency_primitives:
+        dir_name: Effect Concurrency Primitives Examples
+        title: Effect Concurrency Primitives Examples
+        scope:
+            - src/concurrency-deferred.ts
+            - src/concurrency-pubsub.ts
+            - src/concurrency-queue.ts
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    src_library/control_flow_operators:
+        dir_name: Effect Control Flow Operators Examples
+        title: Effect Control Flow Operators Examples
+        scope:
+            - src/control-flow-foreach.ts
+            - src/control-flow-if.ts
+            - src/control-flow-iterate.ts
+            - src/control-flow-loop.ts
+            - src/control-flow-operators.ts
+            - src/control-flow-when.ts
+            - src/control-flow-zip.ts
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    src_library/error_result_utilities:
+        dir_name: Effect Error Handling, Result Utilities & Task Builders
+        title: Effect Error Handling, Result Utilities & Task Builders
+        scope:
+            - src/result.ts
+            - src/error-channel-operations.ts
+            - src/default-services.ts
+            - src/creating-effects.ts
+            - src/running-effects.ts
+            - src/mq/index.ts
+            - src/index.ts
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    src_library/line_framing:
+        dir_name: Cedro Protocol Line Framing & Client
+        title: Cedro Protocol Line Framing & Client
+        scope:
+            - src/line-framing.ts
+            - src/cedro-protocol.ts
+            - src/cedro-protocol.test.ts
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: docs_and_research
+            - path: src_library/tcp_stream_engine
+    src_library/tcp_stream_engine:
+        dir_name: Platform-Abstraction TCP Stream Engine
+        title: Platform-Abstraction TCP Stream Engine
+        scope:
+            - src/tcp-connection.ts
+            - src/tcp-stream-engine.ts
+            - src/tcp-connection-platform.ts
+            - src/tcp-connection-common.ts
+            - src/tcp-connection-bun.ts
+            - src/tcp-connection-nodejs.ts
+            - src/tcp-connection-http-example.ts
+            - src/tcp-connection-test-suite.ts
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: docs_and_research
+            - path: src_library/line_framing

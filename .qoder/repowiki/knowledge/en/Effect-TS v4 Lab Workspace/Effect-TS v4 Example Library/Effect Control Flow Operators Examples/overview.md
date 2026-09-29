@@ -1,0 +1,1 @@
+Example scripts demonstrating Effect-TS control-flow combinators: conditional branching, when/unless, forEach, zip/zipWith, and generator-based loops.

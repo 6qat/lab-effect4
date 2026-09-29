@@ -1,0 +1,1 @@
+CI runs on `ubuntu-24.04` with pinned versions: pnpm 11.21.0 and Bun 1.4.1; the lockfile must be frozen (`--frozen-lockfile`) and formatting is enforced against `./src` via Biome.

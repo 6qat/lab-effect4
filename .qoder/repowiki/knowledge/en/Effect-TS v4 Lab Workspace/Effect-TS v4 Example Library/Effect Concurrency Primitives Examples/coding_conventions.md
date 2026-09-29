@@ -1,0 +1,4 @@
+- Concurrency examples are written as top-level `_programN` constants built with `Effect.gen(function* () => { ... })` and executed via `Effect.runPromise` or `Effect.runPromiseExit` at the end of the file.
+- Resources that need cleanup (PubSub subscriptions, Queues) are wrapped in `Effect.scoped(...)` so effects run within a managed scope.
+- Concurrent tasks are launched with `Effect.forkChild` and coordinated with `Fiber.join` / `Fiber.joinAll` rather than raw promises.
+- Queues and PubSubs are created via factory constructors (`Queue.bounded`, `PubSub.unbounded`, etc.) parameterized by capacity and element type, then used through typed `offer`/`take`/`publish`/`subscribe` operations.

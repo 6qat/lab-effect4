@@ -1,0 +1,14 @@
+schema_version: 1
+module_path: src_library/control_flow_operators
+title: Effect Control Flow Operators Examples
+scope:
+    - src/control-flow-foreach.ts
+    - src/control-flow-if.ts
+    - src/control-flow-iterate.ts
+    - src/control-flow-loop.ts
+    - src/control-flow-operators.ts
+    - src/control-flow-when.ts
+    - src/control-flow-zip.ts
+source_files: []
+depends_on: []
+related_to: []

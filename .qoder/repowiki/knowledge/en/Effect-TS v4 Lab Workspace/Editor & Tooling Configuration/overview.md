@@ -1,0 +1,1 @@
+Configures the Kilo AI editor integration and defines the GitHub Actions CI pipeline that runs typechecking, tests, linting, and formatting on push and pull requests.

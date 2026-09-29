@@ -1,0 +1,3 @@
+- All TypeScript files use ES modules with nodenext module resolution and strict compiler options enforced from the root tsconfig.json.
+- Code style and linting are centralized via Biome commands at the workspace root rather than per-package configs.
+- Effect-TS programs are organized as standalone example modules under src_library, each demonstrating a specific concurrency or streaming pattern.

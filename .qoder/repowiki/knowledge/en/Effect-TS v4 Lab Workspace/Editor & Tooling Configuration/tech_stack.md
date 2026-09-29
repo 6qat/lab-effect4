@@ -1,0 +1,1 @@
+Kilo AI editor config (schema from app.kilo.ai) plus a GitHub Actions CI pipeline using pnpm 11.21.0, Bun 1.4.1, TypeScript (`tsc`), and Biome for lint/format checks.

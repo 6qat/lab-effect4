@@ -6,11 +6,11 @@ Accepted (Amends [ADR 0002](0002-unified-tcp-stream-engine-adapter-seam.md), ref
 
 ## Context
 
-A review of [ADR 0005](0005-unified-platform-socket-engine-adapter-and-test-suite.md)'s implementation found that [`TcpStreamEnginePlatformLive`](../../src/tcp-connection-platform.ts) had two related lifecycle problems, both stemming from tracking "has this connection closed" with a single mutable flag:
+A review of [ADR 0005](0005-unified-platform-socket-engine-adapter-and-test-suite.md)'s implementation found that [`TcpStreamEnginePlatformLive`](../../packages/tcp/src/tcp-connection-platform.ts) had two related lifecycle problems, both stemming from tracking "has this connection closed" with a single mutable flag:
 
 1. **An unlinked child scope.** `connect` created its per-connection `Scope` via `Scope.make()`, which is never registered with any parent. Nothing guarantees it is ever closed except an explicit call to `RawSocketHandle.close()`.
 2. **A single flag conflating two different events.** `hasClosed` was set both when the background read loop (`socket.run`) finished on its own (the *remote* side closing or erroring) and when `close()` was called *explicitly*. Once the read loop finished, `hasClosed` was already `true`, so a later explicit `close()` call skipped `Scope.close` entirely — the writer's release action and the "destroy the socket if not already closed" finalizer never ran.
-3. In [`makeTcpStream`](../../src/tcp-connection-common.ts), a successful `connect` and the `Effect.addFinalizer` call that guards it were two separate steps, leaving a window in which an interruption between them would skip registering the socket's teardown altogether.
+3. In [`makeTcpStream`](../../packages/tcp/src/tcp-connection-common.ts), a successful `connect` and the `Effect.addFinalizer` call that guards it were two separate steps, leaving a window in which an interruption between them would skip registering the socket's teardown altogether.
 
 ### What investigation confirmed, and what it didn't
 
@@ -23,7 +23,7 @@ The fix is adopted anyway, because the correct behavior (idempotent, uncondition
 
 ## Decision
 
-1. **`TcpStreamEngineShape.connect` may require `Scope.Scope`** ([`tcp-connection-common.ts`](../../src/tcp-connection-common.ts)):
+1. **`TcpStreamEngineShape.connect` may require `Scope.Scope`** ([`tcp-connection-common.ts`](../../packages/tcp/src/tcp-connection-common.ts)):
    ```typescript
    readonly connect: (
      config: ConnectionConfigShape,
@@ -61,7 +61,7 @@ The fix is adopted anyway, because the correct behavior (idempotent, uncondition
 
    **`interruptible: true` is required, not optional.** `Effect.acquireRelease`'s `acquire` step is uninterruptible by default. `connectWithRetry` is not a single atomic step — it is the *entire* connect-and-retry sequence, including every backoff sleep. An initial version of this change omitted the option, and the added "interrupting during retry backoff" test (below) caught it immediately: interrupting a fiber stuck in backoff no longer returned in well under one retry delay, it blocked until the whole retry schedule exhausted (multiple seconds), because the uninterruptible region silently swallowed every interrupt signal until `connectWithRetry` finished on its own. This would have been a real, severe regression — a connection attempt becoming uncancellable — shipped in the name of fixing a latent, currently-unobservable one. It was only caught because the test suite was extended per point 5 below *before* moving on, and that test failed loudly (real timings around 2000ms against an expected bound of 150ms) rather than silently.
 
-5. **Regression coverage for this contract was added to the shared, parameterized suite** ([`defineTcpStreamTestSuite`](../../src/tcp-connection-test-suite.ts)), run against all three engines:
+5. **Regression coverage for this contract was added to the shared, parameterized suite** ([`defineTcpStreamTestSuite`](../../packages/tcp/src/tcp-connection-test-suite.ts)), run against all three engines:
    - `close()` called twice does not throw.
    - A failed connection attempt (`retry: false`, unreachable port) fails with a `TcpStreamError` and no defects (`Cause.hasDies` is `false`), and exhausting a bounded retry schedule against an unreachable port completes within a bounded time (each attempt cleans up and moves on rather than hanging).
    - An immediate remote close (before any data is exchanged) ends the incoming stream and lets `close()` resolve without hanging.

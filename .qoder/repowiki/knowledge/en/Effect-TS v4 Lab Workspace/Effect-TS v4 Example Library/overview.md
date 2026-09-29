@@ -1,0 +1,1 @@
+A collection of Effect-TS v4 example programs covering concurrency primitives, control-flow operators, TCP streaming with Cedro protocol framing, and error/result utilities.

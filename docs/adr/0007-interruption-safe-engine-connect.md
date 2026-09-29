@@ -27,7 +27,7 @@ A follow-up review of the lifecycle work in ADRs 0005–0006 found remaining gap
 3. **The immediate-remote-close test now asserts the drain's own `Exit`** (deliberately not caught), so a regression turning clean closes into stream failures fails the test instead of hiding behind the catch.
 4. **ADR 0005's compatibility claim is corrected** via a Status-line pointer to this ADR; the historical text stays untouched.
 5. **Hygiene**: gated-schedule taps complete the gate `Deferred` directly; unreachable-port tests reserve a port on `127.0.0.1` while targeting `127.0.0.2` to avoid release-then-connect races; the TLS fixture uses `os.tmpdir()` with bounded startup and awaited cleanup; the retry-recovery test is bounded by an explicit `Effect.timeout("5 seconds")`; the dead `basePort` option is removed from the suite and its callers.
-6. **A GitHub Actions CI workflow** (`pnpm install --frozen-lockfile`, `tsc --noEmit`, `bun test`, Biome lint and format check) backs the "N tests pass" claims in commit messages, which until now were author-assertions on a repo with no CI.
+6. **A GitHub Actions CI workflow** (dependency installation with a frozen lockfile, TypeScript checks, `bun test`, Biome lint and format check) backs the "N tests pass" claims in commit messages, which until now were author-assertions on a repo with no CI.
 
 ## Consequences
 

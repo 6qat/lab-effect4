@@ -421,11 +421,11 @@ export const layer: (
 
 ## 4. In-Depth Comparison: `@effect/platform` vs Custom Bun TCP
 
-A common pattern in Bun applications is writing a custom wrapper around `Bun.connect` and `Bun.listen` (such as the repository's `src/tcp-connection.ts`). Below is an architectural and operational comparison.
+A common pattern in Bun applications is writing a custom wrapper around `Bun.connect` and `Bun.listen` (such as the repository's `packages/tcp/src/tcp-connection.ts`). Below is an architectural and operational comparison.
 
 ### 4.1 Feature & Architecture Matrix
 
-| Dimension | `@effect/platform-bun` (`BunSocket` / `NodeSocket`) | Custom `Bun.connect` Wrapper (`src/tcp-connection.ts`) |
+| Dimension | `@effect/platform-bun` (`BunSocket` / `NodeSocket`) | Custom `Bun.connect` Wrapper (`packages/tcp/src/tcp-connection.ts`) |
 | :--- | :--- | :--- |
 | **Underlying Engine** | `node:net` (`net.createConnection`, `net.createServer`) | Native Bun Zig engine (`Bun.connect`, `Bun.listen`) |
 | **API Paradigm** | **Push Loop** (`socket.run(handler)`) + **Channels** (`toChannel`) | **Pull Stream** (`Stream.fromQueue`) + `send()` methods |
@@ -445,7 +445,7 @@ A common pattern in Bun applications is writing a custom wrapper around `Bun.con
 - **`@effect/platform-bun`**:
   Node streams handle write queuing in JavaScript memory if the OS kernel buffer fills up, invoking the `write(chunk, cb)` callback once the kernel accepts the bytes or the buffer drains.
 - **Custom Bun (`Bun.connect`)**:
-  Bun's native `socket.write()` performs non-blocking kernel writes without transparent JS queuing. If a partial write occurs (e.g. 4096 out of 8192 bytes written), the caller must track the slice offset and wait for the `drain(socket)` event callback. `src/tcp-connection.ts` manages this using a `Deferred.Deferred<void, TcpStreamError>` and a `Semaphore(1)`.
+  Bun's native `socket.write()` performs non-blocking kernel writes without transparent JS queuing. If a partial write occurs (e.g. 4096 out of 8192 bytes written), the caller must track the slice offset and wait for the `drain(socket)` event callback. `packages/tcp/src/tcp-connection.ts` manages this using a `Deferred.Deferred<void, TcpStreamError>` and a `Semaphore(1)`.
 
 #### 2. Push-Based Event Loop vs Pull-Based Stream Queue
 - **`@effect/platform`**:
@@ -652,4 +652,4 @@ Effect.runPromise(resilientClient.pipe(Effect.provide(SocketLayer)))
 | `NodeSocket.NetSocket` | `@effect/platform-node-shared/src/NodeSocket.ts:35` | Context service exposing underlying Node/Bun `net.Socket` |
 | `NodeSocketServer.make` | `@effect/platform-node-shared/src/NodeSocketServer.ts:46` | Scoped constructor for TCP `net.Server` with connection buffering |
 | `NodeSocketServer.layer` | `@effect/platform-node-shared/src/NodeSocketServer.ts:175` | `Layer.Layer` constructor for `SocketServer` |
-| `Custom TcpStream` | `src/tcp-connection.ts:80` | Existing custom Bun-native `Bun.connect` reference implementation |
+| `Custom TcpStream` | `packages/tcp/src/tcp-connection.ts:80` | Existing custom Bun-native `Bun.connect` reference implementation |
