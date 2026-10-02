@@ -2,15 +2,22 @@
 
 <cite>
 **Referenced Files in This Document**
-- [tcp-connection-http-example.ts](file://src/tcp-connection-http-example.ts)
-- [tcp-stream-engine.ts](file://src/tcp-stream-engine.ts)
-- [tcp-connection-common.ts](file://src/tcp-connection-common.ts)
-- [tcp-connection-bun.ts](file://src/tcp-connection-bun.ts)
-- [tcp-connection-nodejs.ts](file://src/tcp-connection-nodejs.ts)
-- [tcp-connection-platform.ts](file://src/tcp-connection-platform.ts)
+- [tcp-connection-http-example.ts](file://packages/tcp/src/tcp-connection-http-example.ts)
+- [tcp-stream-engine.ts](file://packages/tcp/src/tcp-stream-engine.ts)
+- [tcp-connection-common.ts](file://packages/tcp/src/tcp-connection-common.ts)
+- [tcp-connection-bun.ts](file://packages/tcp/src/tcp-connection-bun.ts)
+- [tcp-connection-nodejs.ts](file://packages/tcp/src/tcp-connection-nodejs.ts)
+- [tcp-connection-platform.ts](file://packages/tcp/src/tcp-connection-platform.ts)
 - [0004-multi-engine-http-example-programs.md](file://docs/adr/0004-multi-engine-http-example-programs.md)
-- [tcp-connection-http-example.test.ts](file://src/tcp-connection-http-example.test.ts)
+- [tcp-connection-http-example.test.ts](file://packages/tcp/src/tcp-connection-http-example.test.ts)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated all file references to reflect the new workspace path structure
+- Changed from `src/tcp-connection-http-example.ts` to `packages/tcp/src/tcp-connection-http-example.ts`
+- Updated all import paths and file references throughout the document
+- Maintained all existing content structure and functionality descriptions
 
 ## Table of Contents
 1. Introduction
@@ -28,7 +35,7 @@
 This document explains the HTTP client example that demonstrates a complete, multi-engine HTTP/1.1 client built on top of a unified TCP stream abstraction. It covers CLI argument parsing, HTTP request construction, response handling, and how the same logic runs across Bun, Node.js, and Effect Platform via layered configuration. It also details error handling strategies, logging, debugging techniques, and best practices for building network clients. Finally, it provides guidance for adapting the example to custom protocols.
 
 ## Project Structure
-The HTTP client example is implemented as a single executable module that:
+The HTTP client example is implemented as a single executable module located at `packages/tcp/src/tcp-connection-http-example.ts` that:
 - Parses CLI arguments to select an engine and target URL
 - Builds a connection configuration from the URL (including TLS for HTTPS)
 - Executes a shared HTTP GET request over a TcpStream service
@@ -51,13 +58,13 @@ H --> I["Console.log(response)"]
 ```
 
 **Diagram sources**
-- [tcp-connection-http-example.ts:49-116](file://src/tcp-connection-http-example.ts#L49-L116)
-- [tcp-connection-http-example.ts:152-170](file://src/tcp-connection-http-example.ts#L152-L170)
-- [tcp-connection-http-example.ts:176-205](file://src/tcp-connection-http-example.ts#L176-L205)
-- [tcp-connection-http-example.ts:242-254](file://src/tcp-connection-http-example.ts#L242-L254)
+- [tcp-connection-http-example.ts:49-116](file://packages/tcp/src/tcp-connection-http-example.ts#L49-L116)
+- [tcp-connection-http-example.ts:152-170](file://packages/tcp/src/tcp-connection-http-example.ts#L152-L170)
+- [tcp-connection-http-example.ts:176-205](file://packages/tcp/src/tcp-connection-http-example.ts#L176-L205)
+- [tcp-connection-http-example.ts:242-254](file://packages/tcp/src/tcp-connection-http-example.ts#L242-L254)
 
 **Section sources**
-- [tcp-connection-http-example.ts:49-116](file://src/tcp-connection-http-example.ts#L49-L116)
+- [tcp-connection-http-example.ts:49-116](file://packages/tcp/src/tcp-connection-http-example.ts#L49-L116)
 - [0004-multi-engine-http-example-programs.md:17-58](file://docs/adr/0004-multi-engine-http-example-programs.md#L17-L58)
 
 ## Core Components
@@ -69,12 +76,12 @@ H --> I["Console.log(response)"]
 - Error handling and logging: main uses catchTag for TCP-level errors and tapError for CLI-related errors, printing user-friendly messages while preserving non-zero exit behavior.
 
 **Section sources**
-- [tcp-connection-http-example.ts:12-36](file://src/tcp-connection-http-example.ts#L12-L36)
-- [tcp-connection-http-example.ts:49-116](file://src/tcp-connection-http-example.ts#L49-L116)
-- [tcp-connection-http-example.ts:152-170](file://src/tcp-connection-http-example.ts#L152-L170)
-- [tcp-connection-http-example.ts:176-205](file://src/tcp-connection-http-example.ts#L176-L205)
-- [tcp-connection-http-example.ts:214-269](file://src/tcp-connection-http-example.ts#L214-L269)
-- [tcp-connection-http-example.ts:271-296](file://src/tcp-connection-http-example.ts#L271-L296)
+- [tcp-connection-http-example.ts:12-36](file://packages/tcp/src/tcp-connection-http-example.ts#L12-L36)
+- [tcp-connection-http-example.ts:49-116](file://packages/tcp/src/tcp-connection-http-example.ts#L49-L116)
+- [tcp-connection-http-example.ts:152-170](file://packages/tcp/src/tcp-connection-http-example.ts#L152-L170)
+- [tcp-connection-http-example.ts:176-205](file://packages/tcp/src/tcp-connection-http-example.ts#L176-L205)
+- [tcp-connection-http-example.ts:214-269](file://packages/tcp/src/tcp-connection-http-example.ts#L214-L269)
+- [tcp-connection-http-example.ts:271-296](file://packages/tcp/src/tcp-connection-http-example.ts#L271-L296)
 
 ## Architecture Overview
 The system separates concerns into three layers:
@@ -101,10 +108,10 @@ HTTP-->>LOG : Response text
 ```
 
 **Diagram sources**
-- [tcp-connection-http-example.ts:49-116](file://src/tcp-connection-http-example.ts#L49-L116)
-- [tcp-connection-http-example.ts:152-170](file://src/tcp-connection-http-example.ts#L152-L170)
-- [tcp-connection-http-example.ts:176-205](file://src/tcp-connection-http-example.ts#L176-L205)
-- [tcp-connection-http-example.ts:242-254](file://src/tcp-connection-http-example.ts#L242-L254)
+- [tcp-connection-http-example.ts:49-116](file://packages/tcp/src/tcp-connection-http-example.ts#L49-L116)
+- [tcp-connection-http-example.ts:152-170](file://packages/tcp/src/tcp-connection-http-example.ts#L152-L170)
+- [tcp-connection-http-example.ts:176-205](file://packages/tcp/src/tcp-connection-http-example.ts#L176-L205)
+- [tcp-connection-http-example.ts:242-254](file://packages/tcp/src/tcp-connection-http-example.ts#L242-L254)
 
 ## Detailed Component Analysis
 
@@ -140,11 +147,11 @@ Scheme --> |Yes| Return["Return ParsedCliArgs"]
 ```
 
 **Diagram sources**
-- [tcp-connection-http-example.ts:49-116](file://src/tcp-connection-http-example.ts#L49-L116)
+- [tcp-connection-http-example.ts:49-116](file://packages/tcp/src/tcp-connection-http-example.ts#L49-L116)
 
 **Section sources**
-- [tcp-connection-http-example.ts:49-116](file://src/tcp-connection-http-example.ts#L49-L116)
-- [tcp-connection-http-example.test.ts:13-121](file://src/tcp-connection-http-example.test.ts#L13-L121)
+- [tcp-connection-http-example.ts:49-116](file://packages/tcp/src/tcp-connection-http-example.ts#L49-L116)
+- [tcp-connection-http-example.test.ts:13-121](file://packages/tcp/src/tcp-connection-http-example.test.ts#L13-L121)
 
 ### HTTP Request Construction and Execution
 - Constructs a minimal HTTP/1.1 GET request including Host, Connection: close, User-Agent, and Accept headers.
@@ -171,10 +178,10 @@ App-->>App : return concatenated string
 ```
 
 **Diagram sources**
-- [tcp-connection-http-example.ts:176-205](file://src/tcp-connection-http-example.ts#L176-L205)
+- [tcp-connection-http-example.ts:176-205](file://packages/tcp/src/tcp-connection-http-example.ts#L176-L205)
 
 **Section sources**
-- [tcp-connection-http-example.ts:176-205](file://src/tcp-connection-http-example.ts#L176-L205)
+- [tcp-connection-http-example.ts:176-205](file://packages/tcp/src/tcp-connection-http-example.ts#L176-L205)
 
 ### Multi-Engine Execution Capability
 - The same HTTP logic runs on three engines by swapping the TcpStream layer:
@@ -208,14 +215,14 @@ HttpExample --> PlatformLayer : "provides"
 ```
 
 **Diagram sources**
-- [tcp-connection-http-example.ts:152-170](file://src/tcp-connection-http-example.ts#L152-L170)
-- [tcp-connection-http-example.ts:214-254](file://src/tcp-connection-http-example.ts#L214-L254)
-- [tcp-connection-bun.ts:133-136](file://src/tcp-connection-bun.ts#L133-L136)
-- [tcp-connection-nodejs.ts:114-119](file://src/tcp-connection-nodejs.ts#L114-L119)
-- [tcp-connection-platform.ts:121-128](file://src/tcp-connection-platform.ts#L121-L128)
+- [tcp-connection-http-example.ts:152-170](file://packages/tcp/src/tcp-connection-http-example.ts#L152-L170)
+- [tcp-connection-http-example.ts:214-254](file://packages/tcp/src/tcp-connection-http-example.ts#L214-L254)
+- [tcp-connection-bun.ts:133-136](file://packages/tcp/src/tcp-connection-bun.ts#L133-L136)
+- [tcp-connection-nodejs.ts:114-119](file://packages/tcp/src/tcp-connection-nodejs.ts#L114-L119)
+- [tcp-connection-platform.ts:121-128](file://packages/tcp/src/tcp-connection-platform.ts#L121-L128)
 
 **Section sources**
-- [tcp-connection-http-example.ts:214-269](file://src/tcp-connection-http-example.ts#L214-L269)
+- [tcp-connection-http-example.ts:214-269](file://packages/tcp/src/tcp-connection-http-example.ts#L214-L269)
 - [0004-multi-engine-http-example-programs.md:17-58](file://docs/adr/0004-multi-engine-http-example-programs.md#L17-L58)
 
 ### Error Handling Strategies
@@ -237,20 +244,20 @@ LogCLI --> ExitNonZero
 ```
 
 **Diagram sources**
-- [tcp-connection-http-example.ts:271-296](file://src/tcp-connection-http-example.ts#L271-L296)
-- [tcp-connection-common.ts:20-24](file://src/tcp-connection-common.ts#L20-L24)
+- [tcp-connection-http-example.ts:271-296](file://packages/tcp/src/tcp-connection-http-example.ts#L271-L296)
+- [tcp-connection-common.ts:20-24](file://packages/tcp/src/tcp-connection-common.ts#L20-L24)
 
 **Section sources**
-- [tcp-connection-http-example.ts:271-296](file://src/tcp-connection-http-example.ts#L271-L296)
-- [tcp-connection-common.ts:20-24](file://src/tcp-connection-common.ts#L20-L24)
+- [tcp-connection-http-example.ts:271-296](file://packages/tcp/src/tcp-connection-http-example.ts#L271-L296)
+- [tcp-connection-common.ts:20-24](file://packages/tcp/src/tcp-connection-common.ts#L20-L24)
 
 ### Logging Implementation
 - Successful responses are logged via Console.log within the request program.
 - Errors are logged through Effect.tapError and catchTag handlers, including TCP operation details and causes.
 
 **Section sources**
-- [tcp-connection-http-example.ts:214-225](file://src/tcp-connection-http-example.ts#L214-L225)
-- [tcp-connection-http-example.ts:271-296](file://src/tcp-connection-http-example.ts#L271-L296)
+- [tcp-connection-http-example.ts:214-225](file://packages/tcp/src/tcp-connection-http-example.ts#L214-L225)
+- [tcp-connection-http-example.ts:271-296](file://packages/tcp/src/tcp-connection-http-example.ts#L271-L296)
 
 ### Debugging Techniques
 - Use the test suite to validate CLI parsing and cross-engine behavior with a local echo server.
@@ -259,8 +266,8 @@ LogCLI --> ExitNonZero
 - Add temporary logging around key steps (e.g., request framing, stream collection) by wrapping executeHttpRequest with additional effects.
 
 **Section sources**
-- [tcp-connection-http-example.test.ts:13-121](file://src/tcp-connection-http-example.test.ts#L13-L121)
-- [tcp-connection-http-example.test.ts:123-205](file://src/tcp-connection-http-example.test.ts#L123-L205)
+- [tcp-connection-http-example.test.ts:13-121](file://packages/tcp/src/tcp-connection-http-example.test.ts#L13-L121)
+- [tcp-connection-http-example.test.ts:123-205](file://packages/tcp/src/tcp-connection-http-example.test.ts#L123-L205)
 
 ## Dependency Analysis
 The HTTP example depends on:
@@ -281,16 +288,16 @@ F --> C
 ```
 
 **Diagram sources**
-- [tcp-connection-http-example.ts:1-11](file://src/tcp-connection-http-example.ts#L1-L11)
-- [tcp-connection-bun.ts:1-16](file://src/tcp-connection-bun.ts#L1-L16)
-- [tcp-connection-nodejs.ts:1-18](file://src/tcp-connection-nodejs.ts#L1-L18)
-- [tcp-connection-platform.ts:1-15](file://src/tcp-connection-platform.ts#L1-L15)
+- [tcp-connection-http-example.ts:1-11](file://packages/tcp/src/tcp-connection-http-example.ts#L1-L11)
+- [tcp-connection-bun.ts:1-16](file://packages/tcp/src/tcp-connection-bun.ts#L1-L16)
+- [tcp-connection-nodejs.ts:1-18](file://packages/tcp/src/tcp-connection-nodejs.ts#L1-L18)
+- [tcp-connection-platform.ts:1-15](file://packages/tcp/src/tcp-connection-platform.ts#L1-L15)
 
 **Section sources**
-- [tcp-connection-http-example.ts:1-11](file://src/tcp-connection-http-example.ts#L1-L11)
-- [tcp-connection-bun.ts:1-16](file://src/tcp-connection-bun.ts#L1-L16)
-- [tcp-connection-nodejs.ts:1-18](file://src/tcp-connection-nodejs.ts#L1-L18)
-- [tcp-connection-platform.ts:1-15](file://src/tcp-connection-platform.ts#L1-L15)
+- [tcp-connection-http-example.ts:1-11](file://packages/tcp/src/tcp-connection-http-example.ts#L1-L11)
+- [tcp-connection-bun.ts:1-16](file://packages/tcp/src/tcp-connection-bun.ts#L1-L16)
+- [tcp-connection-nodejs.ts:1-18](file://packages/tcp/src/tcp-connection-nodejs.ts#L1-L18)
+- [tcp-connection-platform.ts:1-15](file://packages/tcp/src/tcp-connection-platform.ts#L1-L15)
 
 ## Performance Considerations
 - Streaming response decoding: Using TextDecoder with streaming mode avoids buffering large payloads and correctly reconstructs multi-byte characters across chunks.
@@ -309,8 +316,8 @@ Common issues and remedies:
 - Cross-engine differences: Test with all three engines to isolate runtime-specific behaviors.
 
 **Section sources**
-- [tcp-connection-http-example.ts:271-296](file://src/tcp-connection-http-example.ts#L271-L296)
-- [tcp-connection-common.ts:20-24](file://src/tcp-connection-common.ts#L20-L24)
+- [tcp-connection-http-example.ts:271-296](file://packages/tcp/src/tcp-connection-http-example.ts#L271-L296)
+- [tcp-connection-common.ts:20-24](file://packages/tcp/src/tcp-connection-common.ts#L20-L24)
 
 ## Conclusion
 The HTTP client example demonstrates a clean separation between application logic and engine-specific networking, enabling the same code to run across Bun, Node.js, and Effect Platform. It showcases robust CLI parsing, safe HTTP request construction, streaming response handling, and comprehensive error management. By following its patterns, you can adapt the example to implement custom protocols with similar reliability and portability.
@@ -328,18 +335,18 @@ The HTTP client example demonstrates a clean separation between application logi
 6. Handle errors gracefully with informative messages and non-zero exits.
 
 **Section sources**
-- [tcp-connection-http-example.ts:49-116](file://src/tcp-connection-http-example.ts#L49-L116)
-- [tcp-connection-http-example.ts:152-170](file://src/tcp-connection-http-example.ts#L152-L170)
-- [tcp-connection-http-example.ts:176-205](file://src/tcp-connection-http-example.ts#L176-L205)
-- [tcp-connection-http-example.ts:214-269](file://src/tcp-connection-http-example.ts#L214-L269)
-- [tcp-connection-http-example.ts:271-296](file://src/tcp-connection-http-example.ts#L271-L296)
+- [tcp-connection-http-example.ts:49-116](file://packages/tcp/src/tcp-connection-http-example.ts#L49-L116)
+- [tcp-connection-http-example.ts:152-170](file://packages/tcp/src/tcp-connection-http-example.ts#L152-L170)
+- [tcp-connection-http-example.ts:176-205](file://packages/tcp/src/tcp-connection-http-example.ts#L176-L205)
+- [tcp-connection-http-example.ts:214-269](file://packages/tcp/src/tcp-connection-http-example.ts#L214-L269)
+- [tcp-connection-http-example.ts:271-296](file://packages/tcp/src/tcp-connection-http-example.ts#L271-L296)
 
 ### Adapting for Custom Protocols
 - Replace executeHttpRequest with your protocol framing logic while reusing TcpStream.sendText and tcp.stream.
 - Use the same engine layer strategy to keep your protocol portable across runtimes.
 - Extend error handling to include protocol-specific failures alongside TcpStreamError.
-- Add tests mirroring the example’s approach: spin up a simple echo server and assert on responses for each engine.
+- Add tests mirroring the example's approach: spin up a simple echo server and assert on responses for each engine.
 
 **Section sources**
-- [tcp-connection-http-example.ts:176-205](file://src/tcp-connection-http-example.ts#L176-L205)
-- [tcp-connection-http-example.test.ts:123-205](file://src/tcp-connection-http-example.test.ts#L123-L205)
+- [tcp-connection-http-example.ts:176-205](file://packages/tcp/src/tcp-connection-http-example.ts#L176-L205)
+- [tcp-connection-http-example.test.ts:123-205](file://packages/tcp/src/tcp-connection-http-example.test.ts#L123-L205)

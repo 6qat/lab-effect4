@@ -1,0 +1,2 @@
+- Each package under `packages/` exposes its own `test`, `typecheck`, and `format` scripts so the root can invoke them uniformly.
+- TypeScript source files in code packages are included through the root `tsconfig.json` rather than per-package tsconfigs, keeping compiler settings centralized in `tsconfig.base.json`.

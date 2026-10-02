@@ -2,16 +2,22 @@
 
 <cite>
 **Referenced Files in This Document**
-- [tcp-stream-engine.ts](file://src/tcp-stream-engine.ts)
-- [tcp-connection-common.ts](file://src/tcp-connection-common.ts)
-- [tcp-connection-bun.ts](file://src/tcp-connection-bun.ts)
-- [tcp-connection-nodejs.ts](file://src/tcp-connection-nodejs.ts)
-- [tcp-connection-platform.ts](file://src/tcp-connection-platform.ts)
+- [tcp-stream-engine.ts](file://packages/tcp/src/tcp-stream-engine.ts)
+- [tcp-connection-common.ts](file://packages/tcp/src/tcp-connection-common.ts)
+- [tcp-connection-bun.ts](file://packages/tcp/src/tcp-connection-bun.ts)
+- [tcp-connection-nodejs.ts](file://packages/tcp/src/tcp-connection-nodejs.ts)
+- [tcp-connection-platform.ts](file://packages/tcp/src/tcp-connection-platform.ts)
+- [tcp-stream-engine.test.ts](file://packages/tcp/src/tcp-stream-engine.test.ts)
 - [0002-unified-tcp-stream-engine-adapter-seam.md](file://docs/adr/0002-unified-tcp-stream-engine-adapter-seam.md)
 - [0001-direct-engine-socket-wrappers.md](file://docs/adr/0001-direct-engine-socket-wrappers.md)
 - [0008-caller-first-tcp-stream-engine.md](file://docs/adr/0008-caller-first-tcp-stream-engine.md)
-- [tcp-stream-engine.test.ts](file://src/tcp-stream-engine.test.ts)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated all file path references from `src/` to `packages/tcp/src/` to reflect the successful migration of TCP stream engine files
+- Maintained identical functionality and architecture while updating location references
+- Verified all component relationships and dependencies remain unchanged
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -28,7 +34,7 @@
 This document explains the TCP Stream Engine architecture with a focus on design patterns, system boundaries, and cross-platform compatibility. The engine uses a cold adapter protocol to abstract platform-specific socket implementations behind a unified interface. It follows a service-oriented architecture built on Effect Context and Layer, separating orchestration from runtime-specific adapters. The adapter seam defines a small, stable contract that enables dependency injection, testability, and portability across Bun, Node.js, and other platforms.
 
 ## Project Structure
-The TCP stream subsystem is organized around three layers:
+The TCP stream subsystem is organized around three layers within the `packages/tcp/src/` directory:
 - Shared orchestration and public API: `TcpStream` service, configuration, retry policies, and error types.
 - Engine core: caller-first connection lifecycle, event queueing, backpressure handling, timeouts, and retry composition.
 - Platform adapters: thin implementations for Bun, Node.js, and an Effect Platform-based socket path.
@@ -55,16 +61,16 @@ Engine --> Platform
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:64-67](file://src/tcp-stream-engine.ts#L64-L67)
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-connection-common.ts:18-35](file://src/tcp-connection-common.ts#L18-L35)
-- [tcp-connection-bun.ts:18-135](file://src/tcp-connection-bun.ts#L18-L135)
-- [tcp-connection-nodejs.ts:21-118](file://src/tcp-connection-nodejs.ts#L21-L118)
-- [tcp-connection-platform.ts:17-128](file://src/tcp-connection-platform.ts#L17-L128)
+- [tcp-stream-engine.ts:64-67](file://packages/tcp/src/tcp-stream-engine.ts#L64-L67)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-connection-common.ts:18-35](file://packages/tcp/src/tcp-connection-common.ts#L18-L35)
+- [tcp-connection-bun.ts:18-135](file://packages/tcp/src/tcp-connection-bun.ts#L18-L135)
+- [tcp-connection-nodejs.ts:21-118](file://packages/tcp/src/tcp-connection-nodejs.ts#L21-L118)
+- [tcp-connection-platform.ts:17-128](file://packages/tcp/src/tcp-connection-platform.ts#L17-L128)
 
 **Section sources**
-- [tcp-stream-engine.ts:64-67](file://src/tcp-stream-engine.ts#L64-L67)
-- [tcp-connection-common.ts:18-35](file://src/tcp-connection-common.ts#L18-L35)
+- [tcp-stream-engine.ts:64-67](file://packages/tcp/src/tcp-stream-engine.ts#L64-L67)
+- [tcp-connection-common.ts:18-35](file://packages/tcp/src/tcp-connection-common.ts#L18-L35)
 - [0002-unified-tcp-stream-engine-adapter-seam.md:12-30](file://docs/adr/0002-unified-tcp-stream-engine-adapter-seam.md#L12-L30)
 
 ## Core Components
@@ -79,16 +85,16 @@ Key responsibilities:
 - Composition: Uses Effect Context and Layer for dependency injection and environment setup.
 
 **Section sources**
-- [tcp-connection-common.ts:18-35](file://src/tcp-connection-common.ts#L18-L35)
-- [tcp-connection-common.ts:45-60](file://src/tcp-connection-common.ts#L45-L60)
-- [tcp-stream-engine.ts:40-67](file://src/tcp-stream-engine.ts#L40-L67)
-- [tcp-stream-engine.ts:69-79](file://src/tcp-stream-engine.ts#L69-L79)
+- [tcp-connection-common.ts:18-35](file://packages/tcp/src/tcp-connection-common.ts#L18-L35)
+- [tcp-connection-common.ts:45-60](file://packages/tcp/src/tcp-connection-common.ts#L45-L60)
+- [tcp-stream-engine.ts:40-67](file://packages/tcp/src/tcp-stream-engine.ts#L40-L67)
+- [tcp-stream-engine.ts:69-79](file://packages/tcp/src/tcp-stream-engine.ts#L69-L79)
 
 ## Architecture Overview
 The system separates concerns into clear boundaries:
 - Application code depends only on TcpStream and ConnectionConfig services.
 - The engine owns the caller-first connect attempt, event queue, and session lifecycle.
-- Platform adapters implement the cold adapter protocol and map native socket events to the engine’s event model.
+- Platform adapters implement the cold adapter protocol and map native socket events to the engine's event model.
 - Layers provide concrete dependencies (engine implementation and configuration) at runtime.
 
 ```mermaid
@@ -114,10 +120,10 @@ Engine-->>App : Stream events and write results
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-connection-bun.ts:18-135](file://src/tcp-connection-bun.ts#L18-L135)
-- [tcp-connection-nodejs.ts:21-118](file://src/tcp-connection-nodejs.ts#L21-L118)
-- [tcp-connection-platform.ts:17-128](file://src/tcp-connection-platform.ts#L17-L128)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-connection-bun.ts:18-135](file://packages/tcp/src/tcp-connection-bun.ts#L18-L135)
+- [tcp-connection-nodejs.ts:21-118](file://packages/tcp/src/tcp-connection-nodejs.ts#L21-L118)
+- [tcp-connection-platform.ts:17-128](file://packages/tcp/src/tcp-connection-platform.ts#L17-L128)
 
 ## Detailed Component Analysis
 
@@ -150,15 +156,15 @@ Events --> Err["Emit Error(cause)"]
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:69-79](file://src/tcp-stream-engine.ts#L69-L79)
-- [tcp-stream-engine.ts:106-138](file://src/tcp-stream-engine.ts#L106-L138)
-- [tcp-connection-bun.ts:18-135](file://src/tcp-connection-bun.ts#L18-L135)
-- [tcp-connection-nodejs.ts:21-118](file://src/tcp-connection-nodejs.ts#L21-L118)
-- [tcp-connection-platform.ts:51-119](file://src/tcp-connection-platform.ts#L51-L119)
+- [tcp-stream-engine.ts:69-79](file://packages/tcp/src/tcp-stream-engine.ts#L69-L79)
+- [tcp-stream-engine.ts:106-138](file://packages/tcp/src/tcp-stream-engine.ts#L106-L138)
+- [tcp-connection-bun.ts:18-135](file://packages/tcp/src/tcp-connection-bun.ts#L18-L135)
+- [tcp-connection-nodejs.ts:21-118](file://packages/tcp/src/tcp-connection-nodejs.ts#L21-L118)
+- [tcp-connection-platform.ts:51-119](file://packages/tcp/src/tcp-connection-platform.ts#L51-L119)
 
 **Section sources**
-- [tcp-stream-engine.ts:69-79](file://src/tcp-stream-engine.ts#L69-L79)
-- [tcp-stream-engine.ts:106-138](file://src/tcp-stream-engine.ts#L106-L138)
+- [tcp-stream-engine.ts:69-79](file://packages/tcp/src/tcp-stream-engine.ts#L69-L79)
+- [tcp-stream-engine.ts:106-138](file://packages/tcp/src/tcp-stream-engine.ts#L106-L138)
 - [0008-caller-first-tcp-stream-engine.md:8-13](file://docs/adr/0008-caller-first-tcp-stream-engine.md#L8-L13)
 
 ### Service-Oriented Architecture Using Effect Context
@@ -203,14 +209,14 @@ TcpStream --> TcpStreamEngine : "consumes"
 ```
 
 **Diagram sources**
-- [tcp-connection-common.ts:18-35](file://src/tcp-connection-common.ts#L18-L35)
-- [tcp-connection-common.ts:45-60](file://src/tcp-connection-common.ts#L45-L60)
-- [tcp-stream-engine.ts:40-67](file://src/tcp-stream-engine.ts#L40-L67)
+- [tcp-connection-common.ts:18-35](file://packages/tcp/src/tcp-connection-common.ts#L18-L35)
+- [tcp-connection-common.ts:45-60](file://packages/tcp/src/tcp-connection-common.ts#L45-L60)
+- [tcp-stream-engine.ts:40-67](file://packages/tcp/src/tcp-stream-engine.ts#L40-L67)
 
 **Section sources**
-- [tcp-connection-common.ts:18-35](file://src/tcp-connection-common.ts#L18-L35)
-- [tcp-connection-common.ts:45-60](file://src/tcp-connection-common.ts#L45-L60)
-- [tcp-stream-engine.ts:64-67](file://src/tcp-stream-engine.ts#L64-L67)
+- [tcp-connection-common.ts:18-35](file://packages/tcp/src/tcp-connection-common.ts#L18-L35)
+- [tcp-connection-common.ts:45-60](file://packages/tcp/src/tcp-connection-common.ts#L45-L60)
+- [tcp-stream-engine.ts:64-67](file://packages/tcp/src/tcp-stream-engine.ts#L64-L67)
 
 ### Engine Orchestration vs Platform-Specific Implementations
 - Engine orchestration:
@@ -218,7 +224,7 @@ TcpStream --> TcpStreamEngine : "consumes"
   - Provides retry composition outside the adapter.
   - Ensures one established connection per call and cleans up resources.
 - Platform adapters:
-  - Map native socket events to the engine’s event model.
+  - Map native socket events to the engine's event model.
   - Provide RawSocketHandle write and close semantics.
   - Own platform-specific resource management (e.g., Bun socket termination, Node socket destruction, Platform scope teardown).
 
@@ -232,15 +238,15 @@ Connection --> |write| Adapter
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-stream-engine.ts:201-339](file://src/tcp-stream-engine.ts#L201-L339)
-- [tcp-connection-bun.ts:18-135](file://src/tcp-connection-bun.ts#L18-L135)
-- [tcp-connection-nodejs.ts:21-118](file://src/tcp-connection-nodejs.ts#L21-L118)
-- [tcp-connection-platform.ts:17-128](file://src/tcp-connection-platform.ts#L17-L128)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-stream-engine.ts:201-339](file://packages/tcp/src/tcp-stream-engine.ts#L201-L339)
+- [tcp-connection-bun.ts:18-135](file://packages/tcp/src/tcp-connection-bun.ts#L18-L135)
+- [tcp-connection-nodejs.ts:21-118](file://packages/tcp/src/tcp-connection-nodejs.ts#L21-L118)
+- [tcp-connection-platform.ts:17-128](file://packages/tcp/src/tcp-connection-platform.ts#L17-L128)
 
 **Section sources**
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-stream-engine.ts:201-339](file://src/tcp-stream-engine.ts#L201-L339)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-stream-engine.ts:201-339](file://packages/tcp/src/tcp-stream-engine.ts#L201-L339)
 - [0002-unified-tcp-stream-engine-adapter-seam.md:24-30](file://docs/adr/0002-unified-tcp-stream-engine-adapter-seam.md#L24-L30)
 
 ### Adapter Seam Interface and Dependency Injection
@@ -265,12 +271,12 @@ Engine-->>Test : EstablishedConnection
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-stream-engine.test.ts:26-47](file://src/tcp-stream-engine.test.ts#L26-L47)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-stream-engine.test.ts:26-47](file://packages/tcp/src/tcp-stream-engine.test.ts#L26-L47)
 
 **Section sources**
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-stream-engine.test.ts:26-47](file://src/tcp-stream-engine.test.ts#L26-L47)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-stream-engine.test.ts:26-47](file://packages/tcp/src/tcp-stream-engine.test.ts#L26-L47)
 
 ### How the Engine Abstracts Platform Differences
 - Unified event model: All platforms emit Ready, Data, Drain, Close, and Error through the same interface.
@@ -289,21 +295,21 @@ NativeWrite --> Result["RawSocketWriteResult"]
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:106-138](file://src/tcp-stream-engine.ts#L106-L138)
-- [tcp-stream-engine.ts:300-332](file://src/tcp-stream-engine.ts#L300-L332)
-- [tcp-connection-bun.ts:63-87](file://src/tcp-connection-bun.ts#L63-L87)
-- [tcp-connection-nodejs.ts:84-101](file://src/tcp-connection-nodejs.ts#L84-L101)
-- [tcp-connection-platform.ts:61-80](file://src/tcp-connection-platform.ts#L61-L80)
+- [tcp-stream-engine.ts:106-138](file://packages/tcp/src/tcp-stream-engine.ts#L106-L138)
+- [tcp-stream-engine.ts:300-332](file://packages/tcp/src/tcp-stream-engine.ts#L300-L332)
+- [tcp-connection-bun.ts:63-87](file://packages/tcp/src/tcp-connection-bun.ts#L63-L87)
+- [tcp-connection-nodejs.ts:84-101](file://packages/tcp/src/tcp-connection-nodejs.ts#L84-L101)
+- [tcp-connection-platform.ts:61-80](file://packages/tcp/src/tcp-connection-platform.ts#L61-L80)
 
 **Section sources**
-- [tcp-stream-engine.ts:106-138](file://src/tcp-stream-engine.ts#L106-L138)
-- [tcp-stream-engine.ts:300-332](file://src/tcp-stream-engine.ts#L300-L332)
-- [tcp-connection-bun.ts:63-87](file://src/tcp-connection-bun.ts#L63-L87)
-- [tcp-connection-nodejs.ts:84-101](file://src/tcp-connection-nodejs.ts#L84-L101)
-- [tcp-connection-platform.ts:61-80](file://src/tcp-connection-platform.ts#L61-L80)
+- [tcp-stream-engine.ts:106-138](file://packages/tcp/src/tcp-stream-engine.ts#L106-L138)
+- [tcp-stream-engine.ts:300-332](file://packages/tcp/src/tcp-stream-engine.ts#L300-L332)
+- [tcp-connection-bun.ts:63-87](file://packages/tcp/src/tcp-connection-bun.ts#L63-L87)
+- [tcp-connection-nodejs.ts:84-101](file://packages/tcp/src/tcp-connection-nodejs.ts#L84-L101)
+- [tcp-connection-platform.ts:61-80](file://packages/tcp/src/tcp-connection-platform.ts#L61-L80)
 
 ## Dependency Analysis
-The engine depends on shared configuration and error types, while platform adapters depend on the engine’s cold adapter protocol. Consumers depend on TcpStream and ConnectionConfig services.
+The engine depends on shared configuration and error types, while platform adapters depend on the engine's cold adapter protocol. Consumers depend on TcpStream and ConnectionConfig services.
 
 ```mermaid
 graph TB
@@ -316,18 +322,18 @@ App --> Engine
 ```
 
 **Diagram sources**
-- [tcp-connection-common.ts:18-35](file://src/tcp-connection-common.ts#L18-L35)
-- [tcp-stream-engine.ts:64-67](file://src/tcp-stream-engine.ts#L64-L67)
-- [tcp-connection-bun.ts:1-16](file://src/tcp-connection-bun.ts#L1-L16)
-- [tcp-connection-nodejs.ts:1-18](file://src/tcp-connection-nodejs.ts#L1-L18)
-- [tcp-connection-platform.ts:1-15](file://src/tcp-connection-platform.ts#L1-L15)
+- [tcp-connection-common.ts:18-35](file://packages/tcp/src/tcp-connection-common.ts#L18-L35)
+- [tcp-stream-engine.ts:64-67](file://packages/tcp/src/tcp-stream-engine.ts#L64-L67)
+- [tcp-connection-bun.ts:1-16](file://packages/tcp/src/tcp-connection-bun.ts#L1-L16)
+- [tcp-connection-nodejs.ts:1-18](file://packages/tcp/src/tcp-connection-nodejs.ts#L1-L18)
+- [tcp-connection-platform.ts:1-15](file://packages/tcp/src/tcp-connection-platform.ts#L1-L15)
 
 **Section sources**
-- [tcp-connection-common.ts:18-35](file://src/tcp-connection-common.ts#L18-L35)
-- [tcp-stream-engine.ts:64-67](file://src/tcp-stream-engine.ts#L64-L67)
-- [tcp-connection-bun.ts:1-16](file://src/tcp-connection-bun.ts#L1-L16)
-- [tcp-connection-nodejs.ts:1-18](file://src/tcp-connection-nodejs.ts#L1-L18)
-- [tcp-connection-platform.ts:1-15](file://src/tcp-connection-platform.ts#L1-L15)
+- [tcp-connection-common.ts:18-35](file://packages/tcp/src/tcp-connection-common.ts#L18-L35)
+- [tcp-stream-engine.ts:64-67](file://packages/tcp/src/tcp-stream-engine.ts#L64-L67)
+- [tcp-connection-bun.ts:1-16](file://packages/tcp/src/tcp-connection-bun.ts#L1-L16)
+- [tcp-connection-nodejs.ts:1-18](file://packages/tcp/src/tcp-connection-nodejs.ts#L1-L18)
+- [tcp-connection-platform.ts:1-15](file://packages/tcp/src/tcp-connection-platform.ts#L1-L15)
 
 ## Performance Considerations
 - Pull-based streaming: Reduces memory pressure and aligns with backpressure semantics.
@@ -351,11 +357,11 @@ Validation points:
 - Timeouts interrupt pending connections cleanly.
 
 **Section sources**
-- [tcp-stream-engine.test.ts:26-47](file://src/tcp-stream-engine.test.ts#L26-L47)
-- [tcp-stream-engine.test.ts:49-73](file://src/tcp-stream-engine.test.ts#L49-L73)
-- [tcp-stream-engine.test.ts:75-98](file://src/tcp-stream-engine.test.ts#L75-L98)
-- [tcp-stream-engine.test.ts:126-149](file://src/tcp-stream-engine.test.ts#L126-L149)
-- [tcp-stream-engine.test.ts:151-186](file://src/tcp-stream-engine.test.ts#L151-L186)
+- [tcp-stream-engine.test.ts:26-47](file://packages/tcp/src/tcp-stream-engine.test.ts#L26-L47)
+- [tcp-stream-engine.test.ts:49-73](file://packages/tcp/src/tcp-stream-engine.test.ts#L49-L73)
+- [tcp-stream-engine.test.ts:75-98](file://packages/tcp/src/tcp-stream-engine.test.ts#L75-L98)
+- [tcp-stream-engine.test.ts:126-149](file://packages/tcp/src/tcp-stream-engine.test.ts#L126-L149)
+- [tcp-stream-engine.test.ts:151-186](file://packages/tcp/src/tcp-stream-engine.test.ts#L151-L186)
 
 ## Conclusion
 The TCP Stream Engine achieves cross-platform compatibility through a cold adapter protocol that isolates platform-specific socket logic behind a stable seam. Its service-oriented design leverages Effect Context and Layer for clean dependency injection and composable environments. The engine orchestrates connection lifecycle, event ordering, backpressure, retries, and timeouts, while adapters remain thin and focused. This separation yields maintainable, testable, and portable networking code suitable for diverse runtimes.

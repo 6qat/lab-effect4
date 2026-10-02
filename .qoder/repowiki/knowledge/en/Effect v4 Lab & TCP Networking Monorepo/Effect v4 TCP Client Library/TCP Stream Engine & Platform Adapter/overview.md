@@ -1,0 +1,1 @@
+Effect-based TCP client layer that wires a platform-agnostic stream engine to Bun's socket implementation, exposing a typed TcpStream service with retry and timeout support.

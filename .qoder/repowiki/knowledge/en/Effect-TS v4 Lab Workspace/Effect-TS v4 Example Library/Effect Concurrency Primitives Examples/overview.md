@@ -1,1 +1,0 @@
-Example programs demonstrating Effect's concurrency primitives — Deferred, PubSub, and Queue — for inter-fiber communication, message passing, and backpressured work queues.

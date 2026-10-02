@@ -1,0 +1,5 @@
+- Errors are modeled as `Data.TaggedError` subclasses carrying contextual fields (e.g. `filename`, `cause`) rather than plain `Error` instances.
+- Async Node/Bun APIs are wrapped into Effects using `Effect.callback` (for callbacks/promises without AbortSignal) or `Effect.tryPromise` (when an `AbortSignal` is available for cancellation).
+- Cleanup on interruption is expressed through `Effect.onInterrupt` / `Effect.ensuring` / returning a cleanup effect from `Effect.callback`, paired with `Fiber.interrupt` in demo programs.
+- Conditional branching between `Effect.fail` and `Effect.succeed` is wrapped in `Effect.suspend` to unify the inferred return type instead of producing a union of two Effect types.
+- Typed jobs are declared by subclassing `Job.make(...)` with `Schema`-typed payload, success result, idempotency key, metadata, queue name, and retry/backoff defaults, then exposed via `toLayer`.

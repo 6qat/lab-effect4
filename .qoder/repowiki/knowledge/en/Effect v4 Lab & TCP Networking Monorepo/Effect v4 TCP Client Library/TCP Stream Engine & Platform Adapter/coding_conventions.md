@@ -1,0 +1,5 @@
+- Errors are modeled as `Data.TaggedError` subclasses (`TcpStreamError`, `ConnectionConfigError`) carrying an `operation` discriminator and a string `message`, with raw causes preserved in an optional `cause` field.
+- External services are exposed as `Context.Service` subclasses (`TcpStream`, `TcpStreamEngine`, `ConnectionConfig`) so they can be provided via `Layer.succeed` / `Layer.provide` rather than instantiated directly.
+- Configuration flows through `Result.Result` validation (`validateHostAndPort`, `validateConnectionConfig`) before being passed downstream, separating pure validation from runtime effects.
+- Asynchronous readiness and backpressure are coordinated with `Deferred` values stored in `MutableRef`s (e.g., drain waiter, connect-ready gate) instead of boolean flags alone.
+- The engine abstracts platform specifics behind a `ColdAdapter` callback pair `(config, emit) => RawSocketHandle`, letting the platform file supply only the socket wiring while the engine owns state transitions.

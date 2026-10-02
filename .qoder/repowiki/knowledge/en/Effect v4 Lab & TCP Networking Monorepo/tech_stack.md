@@ -1,0 +1,1 @@
+Bun (workspace runner + package manager), TypeScript 7, Biome for linting/formatting, Effect v4 (with a workspace-wide override pinning `@effect/platform-node-shared` to rc.112), Docker Compose for a local Redis instance used by the lab's job queue.

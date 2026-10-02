@@ -1,0 +1,3 @@
+- Platform-specific implementations live in sibling files (`*-bun.ts`, `*-nodejs.ts`) sharing a common contract file (`*-common.ts`).
+- Tests are colocated with their source as `*.test.ts` files and executed through bun's built-in test runner.
+- Public APIs are Effect Effects typed against the shared `TcpStream` service rather than raw sockets.

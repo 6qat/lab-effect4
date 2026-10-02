@@ -1,1 +1,0 @@
-Effect v4 (`effect` package) with `Data.TaggedError` for typed failure channels, `Result` for synchronous error handling, `@effect/platform-bun` (`BunRuntime`) as the process runner in some demos, `bun` for filesystem helpers, and `effect-mq` for typed background jobs with `Schema` validation.

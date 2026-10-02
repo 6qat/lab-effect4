@@ -1,8 +1,0 @@
-schema_version: 1
-module_path: src_library
-title: Effect-TS v4 Example Library
-scope:
-    - src/
-source_files: []
-depends_on: []
-related_to: []

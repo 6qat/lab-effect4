@@ -1,9 +1,0 @@
-Each file is an independent demo script under `src/` that imports from `effect` (and occasionally `@effect/platform-bun`, `bun`, or `effect-mq`) and executes its own program; there is no shared runtime — the module is a collection of self-contained examples rather than a library.
-
-- `error-channel-operations.ts` defines domain-specific `Data.TaggedError` classes (`MessageError`, `UnauthorizedError`, `NegativeRandomError`, `InvalidUserPayloadError`) and shows mapping/mutating errors through `Effect.mapError`, `Effect.mapBoth`, `Effect.filterOrFail`, and `Effect.filterOrElse`, plus bridging `Result` into effects via `Effect.fromResult`.
-- `result.ts` contrasts synchronous `Result.Result` (zero fiber/runtime overhead) with `Effect` for async composition, using `Result.match` and `Result.gen`.
-- `creating-effects.ts` is the largest example: it wraps Node.js callbacks via `Effect.callback`, Promises via `Effect.tryPromise` / `Effect.promise`, demonstrates interruption with `Fiber.interrupt` + `Effect.onInterrupt` / `Effect.ensuring`, and explains why `Effect.suspend` is needed to unify conditional return types versus `Result`'s single type.
-- `running-effects.ts` walks every runner (`runSync`, `runSyncExit`, `runPromise`, `runPromiseExit`, `runFork`, `runCallback`, `BunRuntime.runMain`) against the same effect shapes.
-- `default-services.ts` shows reading built-in services (`Clock.currentTimeMillis`, `Random.next`) and overriding `Random` with a seed via `Random.withSeed`.
-- `mq/index.ts` defines a typed `Job` (`SendEmail`) backed by `effect-mq` with `Schema`-validated payload, idempotency key, metadata, retry/backoff defaults, and exposes a `RunnerLive` layer composed from `Worker.layer()` and `MemoryJobStore.layer`.
-- `index.ts` is a minimal hello-world entry point importing only `Console` and `Effect`.

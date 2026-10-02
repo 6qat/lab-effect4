@@ -2,10 +2,18 @@
 
 <cite>
 **Referenced Files in This Document**
-- [src/mq/index.ts](file://src/mq/index.ts)
+- [packages/lab/src/mq/index.ts](file://packages/lab/src/mq/index.ts)
+- [packages/lab/package.json](file://packages/lab/package.json)
 - [package.json](file://package.json)
 - [docker-compose.yml](file://docker-compose.yml)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated file paths to reflect migration from root `src/mq/index.ts` to `packages/lab/src/mq/index.ts`
+- Updated project structure section to reflect monorepo workspace organization
+- Maintained all existing functionality descriptions and examples
+- Updated dependency references to point to correct package locations
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -20,15 +28,18 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document explains how the project integrates background job processing using the effect-mq library with Effect’s layered services. It covers publishing and consuming messages asynchronously, queue configuration options, message serialization via Effect Schema, error handling strategies, lifecycle management for connections, and resource cleanup. Practical examples include email processing, data transformation pipelines, and scheduled tasks. Scaling considerations, monitoring approaches, and troubleshooting techniques for distributed scenarios are also provided.
+This document explains how the project integrates background job processing using the effect-mq library with Effect's layered services. It covers publishing and consuming messages asynchronously, queue configuration options, message serialization via Effect Schema, error handling strategies, lifecycle management for connections, and resource cleanup. Practical examples include email processing, data transformation pipelines, and scheduled tasks. Scaling considerations, monitoring approaches, and troubleshooting techniques for distributed scenarios are also provided.
 
 ## Project Structure
-The message queue integration is implemented under src/mq/index.ts and depends on the effect-mq package declared in package.json. A Redis service is provisioned via docker-compose.yml to support persistent job storage in production-like environments.
+The message queue integration is implemented under `packages/lab/src/mq/index.ts` as part of the lab workspace within the monorepo structure. The implementation depends on the effect-mq package declared in `packages/lab/package.json`. A Redis service is provisioned via `docker-compose.yml` to support persistent job storage in production-like environments.
 
 ```mermaid
 graph TB
+subgraph "Monorepo Workspace"
+Lab["Lab Package<br/>packages/lab/"]
+end
 subgraph "Application"
-MQ["Message Queue Module<br/>src/mq/index.ts"]
+MQ["Message Queue Module<br/>packages/lab/src/mq/index.ts"]
 end
 subgraph "Runtime Dependencies"
 Effect["Effect Core & Layers"]
@@ -38,6 +49,7 @@ subgraph "Storage"
 Memory["MemoryJobStore (in-memory)"]
 Redis["Redis (via JobStore)"]
 end
+Lab --> MQ
 MQ --> EffectMQ
 MQ --> Effect
 MQ --> Memory
@@ -45,13 +57,13 @@ MQ --> Redis
 ```
 
 **Diagram sources**
-- [src/mq/index.ts:1-39](file://src/mq/index.ts#L1-L39)
-- [package.json:23-28](file://package.json#L23-L28)
+- [packages/lab/src/mq/index.ts:1-39](file://packages/lab/src/mq/index.ts#L1-L39)
+- [packages/lab/package.json:15-19](file://packages/lab/package.json#L15-L19)
 - [docker-compose.yml:1-21](file://docker-compose.yml#L1-L21)
 
 **Section sources**
-- [src/mq/index.ts:1-39](file://src/mq/index.ts#L1-L39)
-- [package.json:23-28](file://package.json#L23-L28)
+- [packages/lab/src/mq/index.ts:1-39](file://packages/lab/src/mq/index.ts#L1-L39)
+- [packages/lab/package.json:15-19](file://packages/lab/package.json#L15-L19)
 - [docker-compose.yml:1-21](file://docker-compose.yml#L1-L21)
 
 ## Core Components
@@ -68,12 +80,12 @@ Key implementation references:
 - RunnerLive layer wiring Worker and JobStore with concurrency settings.
 
 **Section sources**
-- [src/mq/index.ts:6-16](file://src/mq/index.ts#L6-L16)
-- [src/mq/index.ts:18-30](file://src/mq/index.ts#L18-L30)
-- [src/mq/index.ts:32-39](file://src/mq/index.ts#L32-L39)
+- [packages/lab/src/mq/index.ts:6-16](file://packages/lab/src/mq/index.ts#L6-L16)
+- [packages/lab/src/mq/index.ts:18-30](file://packages/lab/src/mq/index.ts#L18-L30)
+- [packages/lab/src/mq/index.ts:32-39](file://packages/lab/src/mq/index.ts#L32-L39)
 
 ## Architecture Overview
-The system uses Effect’s Layer abstraction to compose services:
+The system uses Effect's Layer abstraction to compose services:
 - Producer code enqueues jobs without blocking.
 - Consumer workers pull jobs from a named queue and process them concurrently.
 - Job persistence is abstracted behind a JobStore interface; memory-backed for development, Redis-backed for production.
@@ -97,8 +109,8 @@ MQ-->>App : return jobId or typed result
 ```
 
 **Diagram sources**
-- [src/mq/index.ts:18-30](file://src/mq/index.ts#L18-L30)
-- [src/mq/index.ts:32-39](file://src/mq/index.ts#L32-L39)
+- [packages/lab/src/mq/index.ts:18-30](file://packages/lab/src/mq/index.ts#L18-L30)
+- [packages/lab/src/mq/index.ts:32-39](file://packages/lab/src/mq/index.ts#L32-L39)
 
 ## Detailed Component Analysis
 
@@ -123,10 +135,10 @@ class SendEmail {
 ```
 
 **Diagram sources**
-- [src/mq/index.ts:6-16](file://src/mq/index.ts#L6-L16)
+- [packages/lab/src/mq/index.ts:6-16](file://packages/lab/src/mq/index.ts#L6-L16)
 
 **Section sources**
-- [src/mq/index.ts:6-16](file://src/mq/index.ts#L6-L16)
+- [packages/lab/src/mq/index.ts:6-16](file://packages/lab/src/mq/index.ts#L6-L16)
 
 ### Publishing Messages Asynchronously
 - Fire-and-forget: Enqueue returns a job identifier immediately, suitable for non-blocking operations like sending notifications.
@@ -144,10 +156,10 @@ Wait --> Result["Return typed result"]
 ```
 
 **Diagram sources**
-- [src/mq/index.ts:18-30](file://src/mq/index.ts#L18-L30)
+- [packages/lab/src/mq/index.ts:18-30](file://packages/lab/src/mq/index.ts#L18-L30)
 
 **Section sources**
-- [src/mq/index.ts:18-30](file://src/mq/index.ts#L18-L30)
+- [packages/lab/src/mq/index.ts:18-30](file://packages/lab/src/mq/index.ts#L18-L30)
 
 ### Consuming Jobs and Lifecycle Management
 - Worker layer runs job handlers with a configured concurrency limit to control throughput and resource usage.
@@ -171,10 +183,10 @@ end
 ```
 
 **Diagram sources**
-- [src/mq/index.ts:32-39](file://src/mq/index.ts#L32-L39)
+- [packages/lab/src/mq/index.ts:32-39](file://packages/lab/src/mq/index.ts#L32-L39)
 
 **Section sources**
-- [src/mq/index.ts:32-39](file://src/mq/index.ts#L32-L39)
+- [packages/lab/src/mq/index.ts:32-39](file://packages/lab/src/mq/index.ts#L32-L39)
 
 ### Queue Configuration Options
 - Queue name: Partitions jobs into distinct queues for isolation and routing.
@@ -186,9 +198,9 @@ end
 These options are demonstrated in the job definition and enqueue/execute calls.
 
 **Section sources**
-- [src/mq/index.ts:6-16](file://src/mq/index.ts#L6-L16)
-- [src/mq/index.ts:18-30](file://src/mq/index.ts#L18-L30)
-- [src/mq/index.ts:32-39](file://src/mq/index.ts#L32-L39)
+- [packages/lab/src/mq/index.ts:6-16](file://packages/lab/src/mq/index.ts#L6-L16)
+- [packages/lab/src/mq/index.ts:18-30](file://packages/lab/src/mq/index.ts#L18-L30)
+- [packages/lab/src/mq/index.ts:32-39](file://packages/lab/src/mq/index.ts#L32-L39)
 
 ### Error Handling Strategies
 - Retry with backoff: Configured at the job level to handle transient failures gracefully.
@@ -197,8 +209,8 @@ These options are demonstrated in the job definition and enqueue/execute calls.
 - Observability: Metadata and job identifiers support logging and tracing across producer/consumer boundaries.
 
 **Section sources**
-- [src/mq/index.ts:6-16](file://src/mq/index.ts#L6-L16)
-- [src/mq/index.ts:18-30](file://src/mq/index.ts#L18-L30)
+- [packages/lab/src/mq/index.ts:6-16](file://packages/lab/src/mq/index.ts#L6-L16)
+- [packages/lab/src/mq/index.ts:18-30](file://packages/lab/src/mq/index.ts#L18-L30)
 
 ### Resource Cleanup and Connection Lifecycle
 - Worker and JobStore are provided as Effect Layers, ensuring proper acquisition and release of resources within scopes.
@@ -206,7 +218,7 @@ These options are demonstrated in the job definition and enqueue/execute calls.
 - Concurrency limits prevent resource exhaustion under load.
 
 **Section sources**
-- [src/mq/index.ts:32-39](file://src/mq/index.ts#L32-L39)
+- [packages/lab/src/mq/index.ts:32-39](file://packages/lab/src/mq/index.ts#L32-L39)
 - [docker-compose.yml:1-21](file://docker-compose.yml#L1-L21)
 
 ### Practical Use Cases
@@ -217,7 +229,7 @@ These options are demonstrated in the job definition and enqueue/execute calls.
 [No sources needed since this section provides conceptual guidance]
 
 ## Dependency Analysis
-The integration relies on Effect and effect-mq, with optional persistent storage via Redis.
+The integration relies on Effect and effect-mq, with optional persistent storage via Redis. The dependencies are managed within the lab package workspace.
 
 ```mermaid
 graph LR
@@ -233,13 +245,13 @@ MQ --> StoreRedis
 ```
 
 **Diagram sources**
-- [package.json:23-28](file://package.json#L23-L28)
-- [src/mq/index.ts:1-3](file://src/mq/index.ts#L1-L3)
+- [packages/lab/package.json:15-19](file://packages/lab/package.json#L15-L19)
+- [packages/lab/src/mq/index.ts:1-3](file://packages/lab/src/mq/index.ts#L1-L3)
 - [docker-compose.yml:1-21](file://docker-compose.yml#L1-L21)
 
 **Section sources**
-- [package.json:23-28](file://package.json#L23-L28)
-- [src/mq/index.ts:1-3](file://src/mq/index.ts#L1-L3)
+- [packages/lab/package.json:15-19](file://packages/lab/package.json#L15-L19)
+- [packages/lab/src/mq/index.ts:1-3](file://packages/lab/src/mq/index.ts#L1-L3)
 - [docker-compose.yml:1-21](file://docker-compose.yml#L1-L21)
 
 ## Performance Considerations
@@ -261,7 +273,7 @@ MQ --> StoreRedis
 [No sources needed since this section provides general guidance]
 
 ## Conclusion
-The project demonstrates a robust, type-safe approach to background job processing using effect-mq and Effect’s layered architecture. By defining jobs with schemas, configuring retries and backoff, and composing Worker and JobStore layers, teams can build scalable, observable, and resilient message-driven workflows. Switching between in-memory and persistent stores enables smooth transitions from development to production.
+The project demonstrates a robust, type-safe approach to background job processing using effect-mq and Effect's layered architecture within the lab workspace. By defining jobs with schemas, configuring retries and backoff, and composing Worker and JobStore layers, teams can build scalable, observable, and resilient message-driven workflows. Switching between in-memory and persistent stores enables smooth transitions from development to production.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
@@ -274,8 +286,8 @@ The project demonstrates a robust, type-safe approach to background job processi
 - Provide metadata for tracking and logging.
 
 **Section sources**
-- [src/mq/index.ts:6-16](file://src/mq/index.ts#L6-L16)
-- [src/mq/index.ts:18-30](file://src/mq/index.ts#L18-L30)
+- [packages/lab/src/mq/index.ts:6-16](file://packages/lab/src/mq/index.ts#L6-L16)
+- [packages/lab/src/mq/index.ts:18-30](file://packages/lab/src/mq/index.ts#L18-L30)
 
 ### Example: Data Transformation Pipeline
 - Create sequential jobs with priority and delay to orchestrate stages.

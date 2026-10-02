@@ -1,1 +1,0 @@
-Effect TS (`Effect`, `Stream`, `Context.Service`, `Layer`, `Data.TaggedError`, `Result`) with `Stream.decodeText`/`Stream.splitLines` for UTF-8 line framing; depends on the sibling `tcp-connection` module for the underlying `TcpStream` service.

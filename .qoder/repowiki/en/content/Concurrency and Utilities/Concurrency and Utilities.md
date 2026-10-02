@@ -2,16 +2,24 @@
 
 <cite>
 **Referenced Files in This Document**
-- [concurrency-deferred.ts](file://src/concurrency-deferred.ts)
-- [concurrency-pubsub.ts](file://src/concurrency-pubsub.ts)
-- [concurrency-queue.ts](file://src/concurrency-queue.ts)
-- [control-flow-foreach.ts](file://src/control-flow-foreach.ts)
-- [control-flow-iterate.ts](file://src/control-flow-iterate.ts)
-- [control-flow-loop.ts](file://src/control-flow-loop.ts)
-- [control-flow-zip.ts](file://src/control-flow-zip.ts)
-- [control-flow-operators.ts](file://src/control-flow-operators.ts)
-- [mq/index.ts](file://src/mq/index.ts)
+- [concurrency-queue.ts](file://packages/lab/src/concurrency-queue.ts)
+- [concurrency-pubsub.ts](file://packages/lab/src/concurrency-pubsub.ts)
+- [concurrency-deferred.ts](file://packages/lab/src/concurrency-deferred.ts)
+- [control-flow-foreach.ts](file://packages/lab/src/control-flow-foreach.ts)
+- [control-flow-iterate.ts](file://packages/lab/src/control-flow-iterate.ts)
+- [control-flow-loop.ts](file://packages/lab/src/control-flow-loop.ts)
+- [control-flow-zip.ts](file://packages/lab/src/control-flow-zip.ts)
+- [control-flow-operators.ts](file://packages/lab/src/control-flow-operators.ts)
+- [mq/index.ts](file://packages/lab/src/mq/index.ts)
+- [package.json](file://packages/lab/package.json)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated all file references from `src/` to `packages/lab/src/` to reflect the new workspace structure
+- Updated package.json reference to point to the new location
+- Maintained all concurrency patterns and control flow examples as they remain unchanged
+- Updated diagram sources to reflect the new file paths
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -35,7 +43,7 @@ This document explains the concurrency primitives, control flow operators, and b
 The goal is to provide practical guidance on when and how to use each utility, along with performance considerations and best practices.
 
 ## Project Structure
-The concurrency and utilities are organized into focused modules:
+The concurrency and utilities are organized into focused modules within the packages/lab workspace:
 - Concurrency primitives: queues, pub/sub, deferred
 - Control flow operators: foreach, iterate, loop, zip, and general operators
 - Background jobs: effect-mq integration
@@ -65,26 +73,26 @@ O --> MQ
 ```
 
 **Diagram sources**
-- [concurrency-queue.ts:1-92](file://src/concurrency-queue.ts#L1-L92)
-- [concurrency-pubsub.ts:1-98](file://src/concurrency-pubsub.ts#L1-L98)
-- [concurrency-deferred.ts:1-65](file://src/concurrency-deferred.ts#L1-L65)
-- [control-flow-foreach.ts:1-20](file://src/control-flow-foreach.ts#L1-L20)
-- [control-flow-iterate.ts:1-17](file://src/control-flow-iterate.ts#L1-L17)
-- [control-flow-loop.ts:1-31](file://src/control-flow-loop.ts#L1-L31)
-- [control-flow-zip.ts:1-24](file://src/control-flow-zip.ts#L1-L24)
-- [control-flow-operators.ts:1-62](file://src/control-flow-operators.ts#L1-L62)
-- [mq/index.ts:1-40](file://src/mq/index.ts#L1-L40)
+- [concurrency-queue.ts:1-92](file://packages/lab/src/concurrency-queue.ts#L1-L92)
+- [concurrency-pubsub.ts:1-98](file://packages/lab/src/concurrency-pubsub.ts#L1-L98)
+- [concurrency-deferred.ts:1-65](file://packages/lab/src/concurrency-deferred.ts#L1-L65)
+- [control-flow-foreach.ts:1-20](file://packages/lab/src/control-flow-foreach.ts#L1-L20)
+- [control-flow-iterate.ts:1-17](file://packages/lab/src/control-flow-iterate.ts#L1-L17)
+- [control-flow-loop.ts:1-31](file://packages/lab/src/control-flow-loop.ts#L1-L31)
+- [control-flow-zip.ts:1-24](file://packages/lab/src/control-flow-zip.ts#L1-L24)
+- [control-flow-operators.ts:1-62](file://packages/lab/src/control-flow-operators.ts#L1-L62)
+- [mq/index.ts:1-40](file://packages/lab/src/mq/index.ts#L1-L40)
 
 **Section sources**
-- [concurrency-queue.ts:1-92](file://src/concurrency-queue.ts#L1-L92)
-- [concurrency-pubsub.ts:1-98](file://src/concurrency-pubsub.ts#L1-L98)
-- [concurrency-deferred.ts:1-65](file://src/concurrency-deferred.ts#L1-L65)
-- [control-flow-foreach.ts:1-20](file://src/control-flow-foreach.ts#L1-L20)
-- [control-flow-iterate.ts:1-17](file://src/control-flow-iterate.ts#L1-L17)
-- [control-flow-loop.ts:1-31](file://src/control-flow-loop.ts#L1-L31)
-- [control-flow-zip.ts:1-24](file://src/control-flow-zip.ts#L1-L24)
-- [control-flow-operators.ts:1-62](file://src/control-flow-operators.ts#L1-L62)
-- [mq/index.ts:1-40](file://src/mq/index.ts#L1-L40)
+- [concurrency-queue.ts:1-92](file://packages/lab/src/concurrency-queue.ts#L1-L92)
+- [concurrency-pubsub.ts:1-98](file://packages/lab/src/concurrency-pubsub.ts#L1-L98)
+- [concurrency-deferred.ts:1-65](file://packages/lab/src/concurrency-deferred.ts#L1-L65)
+- [control-flow-foreach.ts:1-20](file://packages/lab/src/control-flow-foreach.ts#L1-L20)
+- [control-flow-iterate.ts:1-17](file://packages/lab/src/control-flow-iterate.ts#L1-L17)
+- [control-flow-loop.ts:1-31](file://packages/lab/src/control-flow-loop.ts#L1-L31)
+- [control-flow-zip.ts:1-24](file://packages/lab/src/control-flow-zip.ts#L1-L24)
+- [control-flow-operators.ts:1-62](file://packages/lab/src/control-flow-operators.ts#L1-L62)
+- [mq/index.ts:1-40](file://packages/lab/src/mq/index.ts#L1-L40)
 
 ## Core Components
 This section summarizes the primary concurrency utilities and their intended usage patterns.
@@ -115,15 +123,15 @@ This section summarizes the primary concurrency utilities and their intended usa
   - Provide persistence via JobStore layers (e.g., MemoryJobStore)
 
 **Section sources**
-- [concurrency-queue.ts:1-92](file://src/concurrency-queue.ts#L1-L92)
-- [concurrency-pubsub.ts:1-98](file://src/concurrency-pubsub.ts#L1-L98)
-- [concurrency-deferred.ts:1-65](file://src/concurrency-deferred.ts#L1-L65)
-- [control-flow-foreach.ts:1-20](file://src/control-flow-foreach.ts#L1-L20)
-- [control-flow-iterate.ts:1-17](file://src/control-flow-iterate.ts#L1-L17)
-- [control-flow-loop.ts:1-31](file://src/control-flow-loop.ts#L1-L31)
-- [control-flow-zip.ts:1-24](file://src/control-flow-zip.ts#L1-L24)
-- [control-flow-operators.ts:1-62](file://src/control-flow-operators.ts#L1-L62)
-- [mq/index.ts:1-40](file://src/mq/index.ts#L1-L40)
+- [concurrency-queue.ts:1-92](file://packages/lab/src/concurrency-queue.ts#L1-L92)
+- [concurrency-pubsub.ts:1-98](file://packages/lab/src/concurrency-pubsub.ts#L1-L98)
+- [concurrency-deferred.ts:1-65](file://packages/lab/src/concurrency-deferred.ts#L1-L65)
+- [control-flow-foreach.ts:1-20](file://packages/lab/src/control-flow-foreach.ts#L1-L20)
+- [control-flow-iterate.ts:1-17](file://packages/lab/src/control-flow-iterate.ts#L1-L17)
+- [control-flow-loop.ts:1-31](file://packages/lab/src/control-flow-loop.ts#L1-L31)
+- [control-flow-zip.ts:1-24](file://packages/lab/src/control-flow-zip.ts#L1-L24)
+- [control-flow-operators.ts:1-62](file://packages/lab/src/control-flow-operators.ts#L1-L62)
+- [mq/index.ts:1-40](file://packages/lab/src/mq/index.ts#L1-L40)
 
 ## Architecture Overview
 The system composes concurrent primitives with control flow operators to build scalable workflows and integrates with effect-mq for durable background processing.
@@ -154,10 +162,10 @@ Worker-->>Producer : typed result
 ```
 
 **Diagram sources**
-- [concurrency-queue.ts:28-87](file://src/concurrency-queue.ts#L28-L87)
-- [concurrency-pubsub.ts:3-97](file://src/concurrency-pubsub.ts#L3-L97)
-- [concurrency-deferred.ts:3-64](file://src/concurrency-deferred.ts#L3-L64)
-- [mq/index.ts:18-39](file://src/mq/index.ts#L18-L39)
+- [concurrency-queue.ts:28-87](file://packages/lab/src/concurrency-queue.ts#L28-L87)
+- [concurrency-pubsub.ts:3-97](file://packages/lab/src/concurrency-pubsub.ts#L3-L97)
+- [concurrency-deferred.ts:3-64](file://packages/lab/src/concurrency-deferred.ts#L3-L64)
+- [mq/index.ts:18-39](file://packages/lab/src/mq/index.ts#L18-L39)
 
 ## Detailed Component Analysis
 
@@ -191,7 +199,7 @@ Await --> End
 ```
 
 **Diagram sources**
-- [concurrency-queue.ts:28-87](file://src/concurrency-queue.ts#L28-L87)
+- [concurrency-queue.ts:28-87](file://packages/lab/src/concurrency-queue.ts#L28-L87)
 
 Best practices:
 - Prefer bounded queues to apply backpressure
@@ -199,7 +207,7 @@ Best practices:
 - Use await to detect shutdown and perform cleanup
 
 **Section sources**
-- [concurrency-queue.ts:1-92](file://src/concurrency-queue.ts#L1-L92)
+- [concurrency-queue.ts:1-92](file://packages/lab/src/concurrency-queue.ts#L1-L92)
 
 ### Pub/Sub Messaging
 Pub/Sub enables fan-out communication between producers and subscribers.
@@ -226,7 +234,7 @@ PubSub-->>Sub2 : message
 ```
 
 **Diagram sources**
-- [concurrency-pubsub.ts:3-27](file://src/concurrency-pubsub.ts#L3-L27)
+- [concurrency-pubsub.ts:3-27](file://packages/lab/src/concurrency-pubsub.ts#L3-L27)
 
 Best practices:
 - Choose capacity based on expected throughput and memory constraints
@@ -234,7 +242,7 @@ Best practices:
 - For streaming scenarios, prefer Stream.fromPubSub for automatic resource management
 
 **Section sources**
-- [concurrency-pubsub.ts:1-98](file://src/concurrency-pubsub.ts#L1-L98)
+- [concurrency-pubsub.ts:1-98](file://packages/lab/src/concurrency-pubsub.ts#L1-L98)
 
 ### Deferred Values
 Deferred values allow fibers to coordinate by sharing a future result.
@@ -260,7 +268,7 @@ D-->>B : value
 ```
 
 **Diagram sources**
-- [concurrency-deferred.ts:3-64](file://src/concurrency-deferred.ts#L3-L64)
+- [concurrency-deferred.ts:3-64](file://packages/lab/src/concurrency-deferred.ts#L3-L64)
 
 Best practices:
 - Ensure exactly one completion path (succeed or fail)
@@ -268,7 +276,7 @@ Best practices:
 - Use poll sparingly; prefer await for clean composition
 
 **Section sources**
-- [concurrency-deferred.ts:1-65](file://src/concurrency-deferred.ts#L1-L65)
+- [concurrency-deferred.ts:1-65](file://packages/lab/src/concurrency-deferred.ts#L1-L65)
 
 ### Control Flow Operators
 
@@ -283,8 +291,8 @@ When to use:
 - When you need ordered results and predictable error propagation
 
 **Section sources**
-- [control-flow-foreach.ts:1-20](file://src/control-flow-foreach.ts#L1-L20)
-- [control-flow-operators.ts:1-62](file://src/control-flow-operators.ts#L1-L62)
+- [control-flow-foreach.ts:1-20](file://packages/lab/src/control-flow-foreach.ts#L1-L20)
+- [control-flow-operators.ts:1-62](file://packages/lab/src/control-flow-operators.ts#L1-L62)
 
 #### iterate
 Use native while loops inside Effect.gen for efficient iteration.
@@ -297,7 +305,7 @@ When to use:
 - Breaking early based on conditions
 
 **Section sources**
-- [control-flow-iterate.ts:1-17](file://src/control-flow-iterate.ts#L1-L17)
+- [control-flow-iterate.ts:1-17](file://packages/lab/src/control-flow-iterate.ts#L1-L17)
 
 #### loop
 Use iterative accumulation patterns with explicit counters or accumulators.
@@ -310,7 +318,7 @@ When to use:
 - Replacing manual recursion with clear iteration
 
 **Section sources**
-- [control-flow-loop.ts:1-31](file://src/control-flow-loop.ts#L1-L31)
+- [control-flow-loop.ts:1-31](file://packages/lab/src/control-flow-loop.ts#L1-L31)
 
 #### zip and zipWith
 Combine multiple Effects into a single composite Effect.
@@ -333,10 +341,10 @@ Zip-->>Client : [result1, result2]
 ```
 
 **Diagram sources**
-- [control-flow-zip.ts:1-24](file://src/control-flow-zip.ts#L1-L24)
+- [control-flow-zip.ts:1-24](file://packages/lab/src/control-flow-zip.ts#L1-L24)
 
 **Section sources**
-- [control-flow-zip.ts:1-24](file://src/control-flow-zip.ts#L1-L24)
+- [control-flow-zip.ts:1-24](file://packages/lab/src/control-flow-zip.ts#L1-L24)
 
 ### Background Jobs with effect-mq
 Define typed jobs and run them asynchronously with workers.
@@ -359,7 +367,7 @@ Process --> Result["Return typed result"]
 ```
 
 **Diagram sources**
-- [mq/index.ts:6-39](file://src/mq/index.ts#L6-L39)
+- [mq/index.ts:6-39](file://packages/lab/src/mq/index.ts#L6-L39)
 
 Best practices:
 - Set appropriate concurrency per job type to balance throughput and resource usage
@@ -368,13 +376,13 @@ Best practices:
 - Leverage backoff strategies to handle transient failures gracefully
 
 **Section sources**
-- [mq/index.ts:1-40](file://src/mq/index.ts#L1-L40)
+- [mq/index.ts:1-40](file://packages/lab/src/mq/index.ts#L1-L40)
 
 ## Dependency Analysis
 The components have clear separation of concerns and minimal coupling:
 - Concurrency primitives operate independently and are composed by higher-level logic
 - Control flow operators compose Effects without direct dependency on queues/pubsub
-- effect-mq integrates with Effect’s Layer system for dependency injection
+- effect-mq integrates with Effect's Layer system for dependency injection
 
 ```mermaid
 graph LR
@@ -386,20 +394,20 @@ Zip --> MQ
 ```
 
 **Diagram sources**
-- [concurrency-queue.ts:1-92](file://src/concurrency-queue.ts#L1-L92)
-- [concurrency-pubsub.ts:1-98](file://src/concurrency-pubsub.ts#L1-L98)
-- [concurrency-deferred.ts:1-65](file://src/concurrency-deferred.ts#L1-L65)
-- [control-flow-foreach.ts:1-20](file://src/control-flow-foreach.ts#L1-L20)
-- [control-flow-zip.ts:1-24](file://src/control-flow-zip.ts#L1-L24)
-- [mq/index.ts:1-40](file://src/mq/index.ts#L1-L40)
+- [concurrency-queue.ts:1-92](file://packages/lab/src/concurrency-queue.ts#L1-L92)
+- [concurrency-pubsub.ts:1-98](file://packages/lab/src/concurrency-pubsub.ts#L1-L98)
+- [concurrency-deferred.ts:1-65](file://packages/lab/src/concurrency-deferred.ts#L1-L65)
+- [control-flow-foreach.ts:1-20](file://packages/lab/src/control-flow-foreach.ts#L1-L20)
+- [control-flow-zip.ts:1-24](file://packages/lab/src/control-flow-zip.ts#L1-L24)
+- [mq/index.ts:1-40](file://packages/lab/src/mq/index.ts#L1-L40)
 
 **Section sources**
-- [concurrency-queue.ts:1-92](file://src/concurrency-queue.ts#L1-L92)
-- [concurrency-pubsub.ts:1-98](file://src/concurrency-pubsub.ts#L1-L98)
-- [concurrency-deferred.ts:1-65](file://src/concurrency-deferred.ts#L1-L65)
-- [control-flow-foreach.ts:1-20](file://src/control-flow-foreach.ts#L1-L20)
-- [control-flow-zip.ts:1-24](file://src/control-flow-zip.ts#L1-L24)
-- [mq/index.ts:1-40](file://src/mq/index.ts#L1-L40)
+- [concurrency-queue.ts:1-92](file://packages/lab/src/concurrency-queue.ts#L1-L92)
+- [concurrency-pubsub.ts:1-98](file://packages/lab/src/concurrency-pubsub.ts#L1-L98)
+- [concurrency-deferred.ts:1-65](file://packages/lab/src/concurrency-deferred.ts#L1-L65)
+- [control-flow-foreach.ts:1-20](file://packages/lab/src/control-flow-foreach.ts#L1-L20)
+- [control-flow-zip.ts:1-24](file://packages/lab/src/control-flow-zip.ts#L1-L24)
+- [mq/index.ts:1-40](file://packages/lab/src/mq/index.ts#L1-L40)
 
 ## Performance Considerations
 - Queues
@@ -451,12 +459,12 @@ Common issues and resolutions:
   - Resolution: Provide Worker.layer and set appropriate concurrency; check JobStore configuration
 
 **Section sources**
-- [concurrency-queue.ts:28-87](file://src/concurrency-queue.ts#L28-L87)
-- [concurrency-pubsub.ts:3-97](file://src/concurrency-pubsub.ts#L3-L97)
-- [concurrency-deferred.ts:3-64](file://src/concurrency-deferred.ts#L3-L64)
-- [control-flow-foreach.ts:1-20](file://src/control-flow-foreach.ts#L1-L20)
-- [control-flow-zip.ts:1-24](file://src/control-flow-zip.ts#L1-L24)
-- [mq/index.ts:18-39](file://src/mq/index.ts#L18-L39)
+- [concurrency-queue.ts:28-87](file://packages/lab/src/concurrency-queue.ts#L28-L87)
+- [concurrency-pubsub.ts:3-97](file://packages/lab/src/concurrency-pubsub.ts#L3-L97)
+- [concurrency-deferred.ts:3-64](file://packages/lab/src/concurrency-deferred.ts#L3-L64)
+- [control-flow-foreach.ts:1-20](file://packages/lab/src/control-flow-foreach.ts#L1-L20)
+- [control-flow-zip.ts:1-24](file://packages/lab/src/control-flow-zip.ts#L1-L24)
+- [mq/index.ts:18-39](file://packages/lab/src/mq/index.ts#L18-L39)
 
 ## Conclusion
 By combining queues, pub/sub, deferred values, and control flow operators, you can build resilient concurrent applications with clear coordination and predictable resource usage. Integrating effect-mq adds durable, typed background job processing with strong guarantees around idempotency and retries. Apply the best practices outlined here to achieve high performance, maintainability, and reliability in your concurrent workflows.

@@ -3,19 +3,30 @@
 <cite>
 **Referenced Files in This Document**
 - [package.json](file://package.json)
-- [AGENTS.md](file://AGENTS.md)
-- [CONTEXT.md](file://CONTEXT.md)
-- [src/tcp-stream-engine.ts](file://src/tcp-stream-engine.ts)
-- [src/tcp-connection-common.ts](file://src/tcp-connection-common.ts)
-- [src/tcp-connection-bun.ts](file://src/tcp-connection-bun.ts)
-- [src/tcp-connection-nodejs.ts](file://src/tcp-connection-nodejs.ts)
-- [src/tcp-connection-platform.ts](file://src/tcp-connection-platform.ts)
+- [packages/tcp/package.json](file://packages/tcp/package.json)
+- [packages/lab/package.json](file://packages/lab/package.json)
+- [packages/tcp/README.md](file://packages/tcp/README.md)
+- [packages/lab/README.md](file://packages/lab/README.md)
+- [docs/adr/0009-private-lab-and-tcp-workspaces.md](file://docs/adr/0009-private-lab-and-tcp-workspaces.md)
+- [packages/tcp/src/tcp-stream-engine.ts](file://packages/tcp/src/tcp-stream-engine.ts)
+- [packages/tcp/src/tcp-connection-common.ts](file://packages/tcp/src/tcp-connection-common.ts)
+- [packages/tcp/src/tcp-connection-bun.ts](file://packages/tcp/src/tcp-connection-bun.ts)
+- [packages/tcp/src/tcp-connection-nodejs.ts](file://packages/tcp/src/tcp-connection-nodejs.ts)
+- [packages/tcp/src/tcp-connection-platform.ts](file://packages/tcp/src/tcp-connection-platform.ts)
 - [docs/research/effect-v4-platform-tcp-connection.md](file://docs/research/effect-v4-platform-tcp-connection.md)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Updated project structure section to reflect migration from single-package to Bun monorepo workspace
+- Added new workspace architecture overview showing packages/lab and packages/tcp separation
+- Updated file references throughout to use new package paths
+- Enhanced dependency analysis to show workspace relationships
+- Added workspace-specific configuration and tooling details
+
 ## Table of Contents
 1. [Introduction](#introduction)
-2. [Project Structure](#project-structure)
+2. [Workspace Architecture](#workspace-architecture)
 3. [Core Components](#core-components)
 4. [Architecture Overview](#architecture-overview)
 5. [Detailed Component Analysis](#detailed-component-analysis)
@@ -27,65 +38,68 @@
 ## Introduction
 This project is an Effect-based TCP stream library that provides a cross-platform, unified API for TCP socket connectivity across Bun, Node.js, and the Effect Platform runtime. Built on TypeScript and Effect v4, it abstracts platform-specific networking details behind a consistent interface while delivering production-grade features such as advanced connection management, retry logic with configurable schedules, connect timeouts, backpressure-aware writes, and robust lifecycle management via Effect Scopes and Layers.
 
+The project has been restructured into a Bun monorepo workspace containing two distinct packages:
+- **packages/tcp**: The core TCP stream library with platform adapters and demonstrations
+- **packages/lab**: Standalone Effect v4 learning examples and experiments
+
 The library targets:
 - Beginners learning functional programming patterns through a practical, well-structured codebase.
 - Experienced developers building resilient network applications that must run consistently across multiple JavaScript runtimes.
 
-It serves both as a usable networking layer and as an educational resource demonstrating modern asynchronous I/O patterns using Effect’s composable primitives (Streams, Queues, Semaphores, Deferred, Schedules, and Layered dependency injection).
+It serves both as a usable networking layer and as an educational resource demonstrating modern asynchronous I/O patterns using Effect's composable primitives (Streams, Queues, Semaphores, Deferred, Schedules, and Layered dependency injection).
 
 **Section sources**
-- [package.json:23-28](file://package.json#L23-L28)
-- [AGENTS.md:1-10](file://AGENTS.md#L1-L10)
-- [CONTEXT.md:1-26](file://CONTEXT.md#L1-L26)
+- [package.json:2-6](file://package.json#L2-L6)
+- [docs/adr/0009-private-lab-and-tcp-workspaces.md:1-8](file://docs/adr/0009-private-lab-and-tcp-workspaces.md#L1-L8)
+- [packages/tcp/README.md:1-27](file://packages/tcp/README.md#L1-L27)
+- [packages/lab/README.md:1-31](file://packages/lab/README.md#L1-L31)
 
-## Project Structure
-At a high level, the repository separates concerns into:
-- A shared engine and common types that define the public contract and error model.
-- Platform-specific adapters for Bun, Node.js, and the Effect Platform.
-- A comprehensive test suite that validates behavior across all engines.
-- Research and design documents explaining architectural decisions and platform differences.
+## Workspace Architecture
+The repository now uses a Bun monorepo workspace structure with two private packages under `packages/`:
 
 ```mermaid
 graph TB
-subgraph "Shared Core"
-C["tcp-connection-common.ts"]
-E["tcp-stream-engine.ts"]
+Root["lab-effect4 (Root Workspace)"]
+Lab["packages/lab<br/>Effect Learning Examples"]
+Tcp["packages/tcp<br/>TCP Stream Library"]
+Root --> Lab
+Root --> Tcp
+subgraph "Lab Package"
+L1["concurrency examples"]
+L2["control flow examples"]
+L3["mq worker example"]
 end
-subgraph "Adapters"
-B["tcp-connection-bun.ts"]
-N["tcp-connection-nodejs.ts"]
-P["tcp-connection-platform.ts"]
+subgraph "TCP Package"
+T1["tcp-stream-engine.ts"]
+T2["platform adapters"]
+T3["protocol implementations"]
+T4["tests & demos"]
 end
-subgraph "Docs & Context"
-R["effect-v4-platform-tcp-connection.md"]
-CTX["CONTEXT.md"]
-end
-C --> E
-B --> E
-N --> E
-P --> E
-E --> C
-R --> P
-CTX --> C
+Lab -.->|Independent| Tcp
 ```
 
+**Updated** Major architectural migration from single-package to Bun monorepo workspace structure with packages/lab and packages/tcp directories replacing the flat src/ layout.
+
+### Package Responsibilities
+- **packages/tcp**: Contains the complete TCP stream implementation including the engine, platform adapters (Bun, Node.js, Effect Platform), protocol implementations (line framing, Cedro protocol), and HTTP demonstration client.
+- **packages/lab**: Contains standalone Effect v4 learning examples covering concurrency, control flow, error handling, and messaging patterns without dependencies on the TCP package.
+
+### Workspace Configuration
+The root `package.json` defines Bun workspaces and shared scripts:
+- Workspaces pattern: `"packages/*"`
+- Shared commands: test, typecheck, format, lint
+- Single `bun.lock` file for dependency management
+- Biome for formatting and linting across all packages
+
 **Diagram sources**
-- [src/tcp-connection-common.ts:12-101](file://src/tcp-connection-common.ts#L12-L101)
-- [src/tcp-stream-engine.ts:64-178](file://src/tcp-stream-engine.ts#L64-L178)
-- [src/tcp-connection-bun.ts:18-136](file://src/tcp-connection-bun.ts#L18-L136)
-- [src/tcp-connection-nodejs.ts:21-119](file://src/tcp-connection-nodejs.ts#L21-L119)
-- [src/tcp-connection-platform.ts:17-128](file://src/tcp-connection-platform.ts#L17-L128)
-- [docs/research/effect-v4-platform-tcp-connection.md:1-13](file://docs/research/effect-v4-platform-tcp-connection.md#L1-L13)
-- [CONTEXT.md:1-26](file://CONTEXT.md#L1-L26)
+- [package.json:7-16](file://package.json#L7-L16)
+- [docs/adr/0009-private-lab-and-tcp-workspaces.md:1-8](file://docs/adr/0009-private-lab-and-tcp-workspaces.md#L1-L8)
 
 **Section sources**
-- [src/tcp-connection-common.ts:12-101](file://src/tcp-connection-common.ts#L12-L101)
-- [src/tcp-stream-engine.ts:64-178](file://src/tcp-stream-engine.ts#L64-L178)
-- [src/tcp-connection-bun.ts:18-136](file://src/tcp-connection-bun.ts#L18-L136)
-- [src/tcp-connection-nodejs.ts:21-119](file://src/tcp-connection-nodejs.ts#L21-L119)
-- [src/tcp-connection-platform.ts:17-128](file://src/tcp-connection-platform.ts#L17-L128)
-- [docs/research/effect-v4-platform-tcp-connection.md:1-13](file://docs/research/effect-v4-platform-tcp-connection.md#L1-L13)
-- [CONTEXT.md:1-26](file://CONTEXT.md#L1-L26)
+- [package.json:7-16](file://package.json#L7-L16)
+- [docs/adr/0009-private-lab-and-tcp-workspaces.md:1-8](file://docs/adr/0009-private-lab-and-tcp-workspaces.md#L1-L8)
+- [packages/tcp/package.json:1-21](file://packages/tcp/package.json#L1-L21)
+- [packages/lab/package.json:1-21](file://packages/lab/package.json#L1-L21)
 
 ## Core Components
 - TcpStream: The primary service exposing a bidirectional communication channel with an incoming Stream of bytes and backpressure-aware send methods. It encapsulates connection lifecycle, retries, timeouts, and graceful close semantics.
@@ -101,9 +115,9 @@ Key capabilities:
 - Lifecycle: Scope-owned resources ensure cleanup on interruption or scope completion.
 
 **Section sources**
-- [src/tcp-connection-common.ts:12-101](file://src/tcp-connection-common.ts#L12-L101)
-- [src/tcp-stream-engine.ts:64-178](file://src/tcp-stream-engine.ts#L64-L178)
-- [src/tcp-stream-engine.ts:201-341](file://src/tcp-stream-engine.ts#L201-L341)
+- [packages/tcp/src/tcp-connection-common.ts:12-101](file://packages/tcp/src/tcp-connection-common.ts#L12-L101)
+- [packages/tcp/src/tcp-stream-engine.ts:64-178](file://packages/tcp/src/tcp-stream-engine.ts#L64-L178)
+- [packages/tcp/src/tcp-stream-engine.ts:201-341](file://packages/tcp/src/tcp-stream-engine.ts#L201-L341)
 
 ## Architecture Overview
 The architecture follows a caller-first engine pattern:
@@ -130,10 +144,10 @@ TS-->>App : "TcpStream {stream, send, sendText, close}"
 ```
 
 **Diagram sources**
-- [src/tcp-stream-engine.ts:89-178](file://src/tcp-stream-engine.ts#L89-L178)
-- [src/tcp-connection-bun.ts:18-136](file://src/tcp-connection-bun.ts#L18-L136)
-- [src/tcp-connection-nodejs.ts:21-119](file://src/tcp-connection-nodejs.ts#L21-L119)
-- [src/tcp-connection-platform.ts:17-128](file://src/tcp-connection-platform.ts#L17-L128)
+- [packages/tcp/src/tcp-stream-engine.ts:89-178](file://packages/tcp/src/tcp-stream-engine.ts#L89-L178)
+- [packages/tcp/src/tcp-connection-bun.ts:18-136](file://packages/tcp/src/tcp-connection-bun.ts#L18-L136)
+- [packages/tcp/src/tcp-connection-nodejs.ts:21-119](file://packages/tcp/src/tcp-connection-nodejs.ts#L21-L119)
+- [packages/tcp/src/tcp-connection-platform.ts:17-128](file://packages/tcp/src/tcp-connection-platform.ts#L17-L128)
 
 ## Detailed Component Analysis
 
@@ -152,11 +166,11 @@ CheckHost --> |Yes| Success["Return validated config"]
 ```
 
 **Diagram sources**
-- [src/tcp-connection-common.ts:65-88](file://src/tcp-connection-common.ts#L65-L88)
-- [src/tcp-connection-common.ts:90-101](file://src/tcp-connection-common.ts#L90-L101)
+- [packages/tcp/src/tcp-connection-common.ts:65-88](file://packages/tcp/src/tcp-connection-common.ts#L65-L88)
+- [packages/tcp/src/tcp-connection-common.ts:90-101](file://packages/tcp/src/tcp-connection-common.ts#L90-L101)
 
 **Section sources**
-- [src/tcp-connection-common.ts:12-101](file://src/tcp-connection-common.ts#L12-L101)
+- [packages/tcp/src/tcp-connection-common.ts:12-101](file://packages/tcp/src/tcp-connection-common.ts#L12-L101)
 
 ### Engine Orchestration and Lifecycle
 - makeTcpStreamEngine wraps a cold adapter, manages phases (connecting/ready/closed), and exposes an EstablishedConnection with a RawSocketHandle and an ordered Stream of events.
@@ -183,18 +197,18 @@ TcpStreamEngine --> RawSocketHandle : "returns"
 ```
 
 **Diagram sources**
-- [src/tcp-stream-engine.ts:64-67](file://src/tcp-stream-engine.ts#L64-L67)
-- [src/tcp-stream-engine.ts:89-178](file://src/tcp-stream-engine.ts#L89-L178)
-- [src/tcp-stream-engine.ts:201-341](file://src/tcp-stream-engine.ts#L201-L341)
+- [packages/tcp/src/tcp-stream-engine.ts:64-67](file://packages/tcp/src/tcp-stream-engine.ts#L64-L67)
+- [packages/tcp/src/tcp-stream-engine.ts:89-178](file://packages/tcp/src/tcp-stream-engine.ts#L89-L178)
+- [packages/tcp/src/tcp-stream-engine.ts:201-341](file://packages/tcp/src/tcp-stream-engine.ts#L201-L341)
 
 **Section sources**
-- [src/tcp-stream-engine.ts:89-178](file://src/tcp-stream-engine.ts#L89-L178)
-- [src/tcp-stream-engine.ts:201-341](file://src/tcp-stream-engine.ts#L201-L341)
+- [packages/tcp/src/tcp-stream-engine.ts:89-178](file://packages/tcp/src/tcp-stream-engine.ts#L89-L178)
+- [packages/tcp/src/tcp-stream-engine.ts:201-341](file://packages/tcp/src/tcp-stream-engine.ts#L201-L341)
 
 ### Platform Adapters
 - Bun Adapter: Uses native Bun.connect with binaryType set to Uint8Array; maps data/drain/end/close/error events; write uses direct socket.write and flush; close terminates or ends the socket.
 - Node.js Adapter: Uses node:net/node:tls; handles data/drain/close/error events; write uses socket.write and reports flushed status; destroy on close.
-- Platform Adapter: Uses @effect/platform’s Socket.Socket; creates sockets via BunSocket.makeNet or fromDuplex for TLS; integrates writer and run loop; closes via scoped owner.
+- Platform Adapter: Uses @effect/platform's Socket.Socket; creates sockets via BunSocket.makeNet or fromDuplex for TLS; integrates writer and run loop; closes via scoped owner.
 
 ```mermaid
 graph LR
@@ -205,14 +219,14 @@ E --> D["TcpStream"]
 ```
 
 **Diagram sources**
-- [src/tcp-connection-bun.ts:18-136](file://src/tcp-connection-bun.ts#L18-L136)
-- [src/tcp-connection-nodejs.ts:21-119](file://src/tcp-connection-nodejs.ts#L21-L119)
-- [src/tcp-connection-platform.ts:17-128](file://src/tcp-connection-platform.ts#L17-L128)
+- [packages/tcp/src/tcp-connection-bun.ts:18-136](file://packages/tcp/src/tcp-connection-bun.ts#L18-L136)
+- [packages/tcp/src/tcp-connection-nodejs.ts:21-119](file://packages/tcp/src/tcp-connection-nodejs.ts#L21-L119)
+- [packages/tcp/src/tcp-connection-platform.ts:17-128](file://packages/tcp/src/tcp-connection-platform.ts#L17-L128)
 
 **Section sources**
-- [src/tcp-connection-bun.ts:18-136](file://src/tcp-connection-bun.ts#L18-L136)
-- [src/tcp-connection-nodejs.ts:21-119](file://src/tcp-connection-nodejs.ts#L21-L119)
-- [src/tcp-connection-platform.ts:17-128](file://src/tcp-connection-platform.ts#L17-L128)
+- [packages/tcp/src/tcp-connection-bun.ts:18-136](file://packages/tcp/src/tcp-connection-bun.ts#L18-L136)
+- [packages/tcp/src/tcp-connection-nodejs.ts:21-119](file://packages/tcp/src/tcp-connection-nodejs.ts#L21-L119)
+- [packages/tcp/src/tcp-connection-platform.ts:17-128](file://packages/tcp/src/tcp-connection-platform.ts#L17-L128)
 
 ### Backpressure and Write Serialization
 - Writes are serialized with a Semaphore(1) to prevent concurrent writes.
@@ -237,10 +251,10 @@ Flush --> |No| WaitDrain
 ```
 
 **Diagram sources**
-- [src/tcp-stream-engine.ts:300-332](file://src/tcp-stream-engine.ts#L300-L332)
+- [packages/tcp/src/tcp-stream-engine.ts:300-332](file://packages/tcp/src/tcp-stream-engine.ts#L300-L332)
 
 **Section sources**
-- [src/tcp-stream-engine.ts:300-332](file://src/tcp-stream-engine.ts#L300-L332)
+- [packages/tcp/src/tcp-stream-engine.ts:300-332](file://packages/tcp/src/tcp-stream-engine.ts#L300-L332)
 
 ### Retry and Timeouts
 - Retry can be disabled, configured via RetryPolicyConfig, or provided as a custom Schedule.
@@ -264,56 +278,65 @@ Result --> |No| Handle["Map to TcpStreamError"]
 ```
 
 **Diagram sources**
-- [src/tcp-stream-engine.ts:238-259](file://src/tcp-stream-engine.ts#L238-L259)
-- [src/tcp-stream-engine.ts:180-195](file://src/tcp-stream-engine.ts#L180-L195)
-- [src/tcp-connection-common.ts:90-101](file://src/tcp-connection-common.ts#L90-L101)
+- [packages/tcp/src/tcp-stream-engine.ts:238-259](file://packages/tcp/src/tcp-stream-engine.ts#L238-L259)
+- [packages/tcp/src/tcp-stream-engine.ts:180-195](file://packages/tcp/src/tcp-stream-engine.ts#L180-L195)
+- [packages/tcp/src/tcp-connection-common.ts:90-101](file://packages/tcp/src/tcp-connection-common.ts#L90-L101)
 
 **Section sources**
-- [src/tcp-stream-engine.ts:238-259](file://src/tcp-stream-engine.ts#L238-L259)
-- [src/tcp-stream-engine.ts:180-195](file://src/tcp-stream-engine.ts#L180-L195)
-- [src/tcp-connection-common.ts:90-101](file://src/tcp-connection-common.ts#L90-L101)
+- [packages/tcp/src/tcp-stream-engine.ts:238-259](file://packages/tcp/src/tcp-stream-engine.ts#L238-L259)
+- [packages/tcp/src/tcp-stream-engine.ts:180-195](file://packages/tcp/src/tcp-stream-engine.ts#L180-L195)
+- [packages/tcp/src/tcp-connection-common.ts:90-101](file://packages/tcp/src/tcp-connection-common.ts#L90-L101)
 
 ## Dependency Analysis
-The library depends on Effect v4 primitives and platform-specific packages:
+The workspace structure separates dependencies between packages:
+
+### Root Workspace Dependencies
+- Development tooling: Biome, TypeScript, Effect language service
+- Type definitions: @types/bun, @types/node
+
+### TCP Package Dependencies
 - effect: core runtime primitives (Effect, Stream, Queue, Semaphore, Deferred, Schedule, Layer, etc.).
 - @effect/platform-bun and @effect/platform-node: platform abstractions used by the Platform adapter.
 - Native modules: Bun APIs for Bun adapter; node:net and node:tls for Node.js adapter.
 
+### Lab Package Dependencies
+- effect: core Effect v4 primitives for learning examples
+- @effect/platform-bun: platform integration for examples
+- effect-mq: message queue utilities for worker examples
+
 ```mermaid
 graph TB
-Lib["lab-effect4 (this library)"]
-Eff["effect (v4)"]
-PlatB["@effect/platform-bun"]
-PlatN["@effect/platform-node"]
-BunAPI["Bun APIs"]
-Net["node:net / node:tls"]
-Lib --> Eff
-Lib --> PlatB
-Lib --> PlatN
-PlatB --> Eff
-PlatN --> Eff
-Lib --> BunAPI
-Lib --> Net
+Root["lab-effect4 (Root)"]
+Tcp["tcp (packages/tcp)"]
+Lab["lab (packages/lab)"]
+Root --> Tcp
+Root --> Lab
+Tcp --> Eff["effect (v4)"]
+Tcp --> PlatB["@effect/platform-bun"]
+Tcp --> PlatN["@effect/platform-node"]
+Tcp --> BunAPI["Bun APIs"]
+Tcp --> Net["node:net / node:tls"]
+Lab --> Eff
+Lab --> PlatB
+Lab --> MQ["effect-mq"]
 ```
 
 **Diagram sources**
-- [package.json:23-28](file://package.json#L23-L28)
-- [src/tcp-connection-platform.ts:1-5](file://src/tcp-connection-platform.ts#L1-L5)
-- [src/tcp-connection-nodejs.ts:1-3](file://src/tcp-connection-nodejs.ts#L1-L3)
-- [src/tcp-connection-bun.ts:1-6](file://src/tcp-connection-bun.ts#L1-L6)
+- [package.json:22-28](file://package.json#L22-L28)
+- [packages/tcp/package.json:15-19](file://packages/tcp/package.json#L15-L19)
+- [packages/lab/package.json:15-19](file://packages/lab/package.json#L15-L19)
 
 **Section sources**
-- [package.json:23-28](file://package.json#L23-L28)
-- [src/tcp-connection-platform.ts:1-5](file://src/tcp-connection-platform.ts#L1-L5)
-- [src/tcp-connection-nodejs.ts:1-3](file://src/tcp-connection-nodejs.ts#L1-L3)
-- [src/tcp-connection-bun.ts:1-6](file://src/tcp-connection-bun.ts#L1-L6)
+- [package.json:22-28](file://package.json#L22-L28)
+- [packages/tcp/package.json:15-19](file://packages/tcp/package.json#L15-L19)
+- [packages/lab/package.json:15-19](file://packages/lab/package.json#L15-L19)
 
 ## Performance Considerations
 - Backpressure-aware writes minimize memory pressure by honoring drain signals and avoiding unbounded queues for outgoing data.
 - Scoped lifecycles ensure timely release of OS resources and prevent leaks during interruptions or failures.
 - Centralized connect timeout prevents long-running hangs during network issues.
 - Retry with jitter reduces thundering herds when reconnecting after transient failures.
-- Platform differences: Bun’s native socket path avoids extra buffering; Node.js path leverages stream callbacks; Platform path integrates with Effect’s push-based Socket model.
+- Platform differences: Bun's native socket path avoids extra buffering; Node.js path leverages stream callbacks; Platform path integrates with Effect's push-based Socket model.
 
 [No sources needed since this section provides general guidance]
 
@@ -326,12 +349,12 @@ Common issues and how they are handled:
 - TLS handshake failures: Errors surface at connect or first write depending on adapter; tests assert clean failures without hanging.
 
 **Section sources**
-- [src/tcp-connection-common.ts:65-88](file://src/tcp-connection-common.ts#L65-L88)
-- [src/tcp-stream-engine.ts:180-195](file://src/tcp-stream-engine.ts#L180-L195)
-- [src/tcp-stream-engine.ts:216-237](file://src/tcp-stream-engine.ts#L216-L237)
+- [packages/tcp/src/tcp-connection-common.ts:65-88](file://packages/tcp/src/tcp-connection-common.ts#L65-L88)
+- [packages/tcp/src/tcp-stream-engine.ts:180-195](file://packages/tcp/src/tcp-stream-engine.ts#L180-L195)
+- [packages/tcp/src/tcp-stream-engine.ts:216-237](file://packages/tcp/src/tcp-stream-engine.ts#L216-L237)
 - [docs/research/effect-v4-platform-tcp-connection.md:422-461](file://docs/research/effect-v4-platform-tcp-connection.md#L422-L461)
 
 ## Conclusion
-This Effect-based TCP stream library delivers a robust, cross-platform networking solution built on modern functional programming principles. By unifying Bun, Node.js, and Effect Platform under a single API, it enables developers to build resilient clients and services with predictable lifecycle management, backpressure-aware I/O, and composable retry and timeout strategies. Its layered architecture and comprehensive test coverage also make it an excellent learning resource for understanding contemporary asynchronous I/O patterns in TypeScript with Effect v4.
+This Effect-based TCP stream library delivers a robust, cross-platform networking solution built on modern functional programming principles. The migration to a Bun monorepo workspace structure provides better organization, independent package management, and clearer separation between the core TCP library and learning examples. By unifying Bun, Node.js, and Effect Platform under a single API within the tcp package, it enables developers to build resilient clients and services with predictable lifecycle management, backpressure-aware I/O, and composable retry and timeout strategies. Its layered architecture and comprehensive test coverage also make it an excellent learning resource for understanding contemporary asynchronous I/O patterns in TypeScript with Effect v4.
 
 [No sources needed since this section summarizes without analyzing specific files]

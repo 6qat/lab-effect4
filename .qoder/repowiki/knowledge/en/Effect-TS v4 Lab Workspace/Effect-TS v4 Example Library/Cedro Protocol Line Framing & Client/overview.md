@@ -1,1 +1,0 @@
-Framing raw TCP bytes into UTF-8 text lines and a small Effect-based client that authenticates and subscribes to Cedro ticker streams over TCP.

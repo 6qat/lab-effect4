@@ -1,0 +1,1 @@
+The example is intended to be run directly with Bun: `bun packages/tcp/src/tcp-connection-http-example.ts [--engine=bun|nodejs|platform] <http-or-https-url>` — passing `--engine=nodejs` exercises the Node.js net/tls path even when executed under Bun.

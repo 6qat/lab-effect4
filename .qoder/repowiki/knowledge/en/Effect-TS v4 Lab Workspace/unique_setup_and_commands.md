@@ -1,1 +1,0 @@
-`bun test` runs all tests across the workspace; `bun run format` and `bun run lint` apply Biome to ./src; `bun run sync-prompts` executes scripts/sync-zed-prompts.mjs to mirror agent skills into Zed; `docker compose up redis` starts the Redis dependency for networking examples.

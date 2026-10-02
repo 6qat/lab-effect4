@@ -1,0 +1,18 @@
+schema_version: 1
+module_path: ""
+title: Effect v4 Lab & TCP Networking Monorepo
+scope:
+    - AGENTS.md
+    - CONTEXT.md
+    - .gitignore
+    - package.json
+    - bun.lock
+    - pnpm-lock.yaml
+    - pnpm-workspace.yaml
+    - skills-lock.json
+    - tsconfig.json
+    - docker-compose.yml
+    - temp.sql
+source_files: []
+depends_on: []
+related_to: []

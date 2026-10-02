@@ -11,7 +11,7 @@ export interface CedroConfigShape {
 	readonly magicToken: string;
 	readonly username: string;
 	readonly password: string;
-	readonly tickers: ReadonlyArray<string>;
+	readonly tickers?: ReadonlyArray<string>;
 }
 
 export class CedroConfig extends Context.Service<
@@ -20,6 +20,7 @@ export class CedroConfig extends Context.Service<
 >()("CedroConfig") {}
 
 export interface CedroClientShape {
+	/** Sends login fields in order; completion does not confirm server acceptance. */
 	readonly authenticate: () => Effect.Effect<
 		void,
 		TcpStreamError | CedroProtocolError
@@ -41,7 +42,6 @@ export const makeCedroClient = Effect.gen(function* () {
 	const tcp = yield* TcpStream;
 	const config = yield* CedroConfig;
 
-	// 1. Função pura usando Result
 	const formatAuthCommand = (
 		config: CedroConfigShape,
 	): Result.Result<string, CedroProtocolError> => {
@@ -52,12 +52,22 @@ export const makeCedroClient = Effect.gen(function* () {
 				}),
 			);
 		}
+		if (
+			[config.magicToken, config.username, config.password].some((value) =>
+				/[\r\n]/.test(value),
+			)
+		) {
+			return Result.fail(
+				new CedroProtocolError({
+					message: "Cedro login fields must not contain line breaks",
+				}),
+			);
+		}
 		return Result.succeed(
-			`AUTH|${config.magicToken}|${config.username}|${config.password}\n`,
+			`${config.magicToken}\n${config.username}\n${config.password}\n`,
 		);
 	};
 
-	// 2. No CedroClient (I/O com Effect):
 	const authenticate = () =>
 		Effect.gen(function* () {
 			const payload = yield* Effect.fromResult(formatAuthCommand(config));

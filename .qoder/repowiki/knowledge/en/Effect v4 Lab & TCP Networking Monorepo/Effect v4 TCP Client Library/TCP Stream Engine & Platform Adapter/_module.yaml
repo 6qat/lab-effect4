@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: packages_tcp/stream_engine
+title: TCP Stream Engine & Platform Adapter
+scope:
+    - packages/tcp/src/tcp-stream-engine.ts
+    - packages/tcp/src/tcp-connection-common.ts
+    - packages/tcp/src/tcp-connection-platform.ts
+source_files: []
+depends_on: []
+related_to:
+    - path: packages_tcp/platform_adapters
+    - path: packages_tcp/protocol_layer

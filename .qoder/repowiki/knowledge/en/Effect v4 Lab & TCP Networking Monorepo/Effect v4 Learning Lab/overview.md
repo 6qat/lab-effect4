@@ -1,0 +1,1 @@
+Private, standalone Effect v4 examples covering effect creation/running, control flow, concurrency primitives, typed errors, Result, and a typed job queue backed by effect-mq.

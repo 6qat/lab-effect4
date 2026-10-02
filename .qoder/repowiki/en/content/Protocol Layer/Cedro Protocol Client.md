@@ -2,14 +2,20 @@
 
 <cite>
 **Referenced Files in This Document**
-- [cedro-protocol.ts](file://src/cedro-protocol.ts)
-- [cedro-protocol.test.ts](file://src/cedro-protocol.test.ts)
-- [tcp-stream-engine.ts](file://src/tcp-stream-engine.ts)
-- [tcp-connection-bun.ts](file://src/tcp-connection-bun.ts)
-- [tcp-connection-common.ts](file://src/tcp-connection-common.ts)
-- [line-framing.ts](file://src/line-framing.ts)
-- [line-framing.test.ts](file://src/line-framing.test.ts)
+- [cedro-protocol.ts](file://packages/tcp/src/cedro-protocol.ts)
+- [cedro-protocol.test.ts](file://packages/tcp/src/cedro-protocol.test.ts)
+- [tcp-stream-engine.ts](file://packages/tcp/src/tcp-stream-engine.ts)
+- [tcp-connection-bun.ts](file://packages/tcp/src/tcp-connection-bun.ts)
+- [tcp-connection-common.ts](file://packages/tcp/src/tcp-connection-common.ts)
+- [line-framing.ts](file://packages/tcp/src/line-framing.ts)
+- [line-framing.test.ts](file://packages/tcp/src/line-framing.test.ts)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated file paths to reflect the move of protocol client files to `packages/tcp/src/` directory
+- Maintained all existing functionality and architectural descriptions
+- Updated all file references and import paths throughout the documentation
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -24,10 +30,10 @@
 10. [Appendices](#appendices)
 
 ## Introduction
-This document explains the Cedro protocol client implementation in this repository. It covers authentication, session management, subscription to market data streams, message formatting and parsing, connection establishment, error handling, retry logic, lifecycle/state management, and practical usage patterns for real-time streaming and order management. The client is built on Effect’s layered architecture with a pluggable TCP stream engine and line-framed text transport.
+This document explains the Cedro protocol client implementation located in the `packages/tcp/src/` directory. It covers authentication, session management, subscription to market data streams, message formatting and parsing, connection establishment, error handling, retry logic, lifecycle/state management, and practical usage patterns for real-time streaming and order management. The client is built on Effect's layered architecture with a pluggable TCP stream engine and line-framed text transport.
 
 ## Project Structure
-The Cedro client sits on top of a reusable TCP stream abstraction and a line-framing utility:
+The Cedro client sits on top of a reusable TCP stream abstraction and a line-framing utility within the `packages/tcp/src/` directory:
 - Protocol layer: defines configuration, client service, and message formatting for AUTH and SUB commands.
 - Transport layer: provides a platform-specific TCP stream (Bun), a shared engine that manages connection lifecycle, retries, timeouts, and backpressure, and common types/errors.
 - Framing layer: decodes raw bytes into UTF-8 lines and splits them by newline variants.
@@ -54,18 +60,18 @@ D --> F
 ```
 
 **Diagram sources**
-- [cedro-protocol.ts:10-38](file://src/cedro-protocol.ts#L10-L38)
-- [tcp-stream-engine.ts:49-67](file://src/tcp-stream-engine.ts#L49-L67)
-- [tcp-connection-bun.ts:18-136](file://src/tcp-connection-bun.ts#L18-L136)
-- [tcp-connection-common.ts:45-57](file://src/tcp-connection-common.ts#L45-L57)
-- [line-framing.ts:15-17](file://src/line-framing.ts#L15-L17)
+- [cedro-protocol.ts:10-38](file://packages/tcp/src/cedro-protocol.ts#L10-L38)
+- [tcp-stream-engine.ts:49-67](file://packages/tcp/src/tcp-stream-engine.ts#L49-L67)
+- [tcp-connection-bun.ts:18-136](file://packages/tcp/src/tcp-connection-bun.ts#L18-L136)
+- [tcp-connection-common.ts:45-57](file://packages/tcp/src/tcp-connection-common.ts#L45-L57)
+- [line-framing.ts:15-17](file://packages/tcp/src/line-framing.ts#L15-L17)
 
 **Section sources**
-- [cedro-protocol.ts:1-96](file://src/cedro-protocol.ts#L1-L96)
-- [tcp-stream-engine.ts:1-359](file://src/tcp-stream-engine.ts#L1-L359)
-- [tcp-connection-bun.ts:1-145](file://src/tcp-connection-bun.ts#L1-L145)
-- [tcp-connection-common.ts:1-101](file://src/tcp-connection-common.ts#L1-L101)
-- [line-framing.ts:1-18](file://src/line-framing.ts#L1-L18)
+- [cedro-protocol.ts:1-96](file://packages/tcp/src/cedro-protocol.ts#L1-L96)
+- [tcp-stream-engine.ts:1-359](file://packages/tcp/src/tcp-stream-engine.ts#L1-L359)
+- [tcp-connection-bun.ts:1-145](file://packages/tcp/src/tcp-connection-bun.ts#L1-L145)
+- [tcp-connection-common.ts:1-101](file://packages/tcp/src/tcp-connection-common.ts#L1-L101)
+- [line-framing.ts:1-18](file://packages/tcp/src/line-framing.ts#L1-L18)
 
 ## Core Components
 - CedroConfig: Holds credentials and initial ticker list used to format messages.
@@ -81,10 +87,10 @@ Key responsibilities:
 - Error handling: Propagate structured errors from transport and protocol layers.
 
 **Section sources**
-- [cedro-protocol.ts:10-38](file://src/cedro-protocol.ts#L10-L38)
-- [tcp-connection-common.ts:26-35](file://src/tcp-connection-common.ts#L26-L35)
-- [tcp-stream-engine.ts:201-339](file://src/tcp-stream-engine.ts#L201-L339)
-- [line-framing.ts:15-17](file://src/line-framing.ts#L15-L17)
+- [cedro-protocol.ts:10-38](file://packages/tcp/src/cedro-protocol.ts#L10-L38)
+- [tcp-connection-common.ts:26-35](file://packages/tcp/src/tcp-connection-common.ts#L26-L35)
+- [tcp-stream-engine.ts:201-339](file://packages/tcp/src/tcp-stream-engine.ts#L201-L339)
+- [line-framing.ts:15-17](file://packages/tcp/src/line-framing.ts#L15-L17)
 
 ## Architecture Overview
 The client composes layers to provide a typed, effectful API over TCP:
@@ -113,9 +119,9 @@ Cedro->>Stream : sendText("SUB|...\\n")
 ```
 
 **Diagram sources**
-- [cedro-protocol.ts:40-89](file://src/cedro-protocol.ts#L40-L89)
-- [tcp-stream-engine.ts:89-178](file://src/tcp-stream-engine.ts#L89-L178)
-- [tcp-connection-bun.ts:18-136](file://src/tcp-connection-bun.ts#L18-L136)
+- [cedro-protocol.ts:40-89](file://packages/tcp/src/cedro-protocol.ts#L40-L89)
+- [tcp-stream-engine.ts:89-178](file://packages/tcp/src/tcp-stream-engine.ts#L89-L178)
+- [tcp-connection-bun.ts:18-136](file://packages/tcp/src/tcp-connection-bun.ts#L18-L136)
 
 ## Detailed Component Analysis
 
@@ -136,12 +142,12 @@ Fail --> End
 ```
 
 **Diagram sources**
-- [cedro-protocol.ts:44-65](file://src/cedro-protocol.ts#L44-L65)
+- [cedro-protocol.ts:44-65](file://packages/tcp/src/cedro-protocol.ts#L44-L65)
 
 **Section sources**
-- [cedro-protocol.ts:44-65](file://src/cedro-protocol.ts#L44-L65)
-- [cedro-protocol.test.ts:11-64](file://src/cedro-protocol.test.ts#L11-L64)
-- [cedro-protocol.test.ts:66-109](file://src/cedro-protocol.test.ts#L66-L109)
+- [cedro-protocol.ts:44-65](file://packages/tcp/src/cedro-protocol.ts#L44-L65)
+- [cedro-protocol.test.ts:11-64](file://packages/tcp/src/cedro-protocol.test.ts#L11-L64)
+- [cedro-protocol.test.ts:66-109](file://packages/tcp/src/cedro-protocol.test.ts#L66-L109)
 
 ### Subscription Management and Event Handling
 - Subscriptions are expressed as SUB|TICKERS lines. At least one ticker is required; otherwise, a protocol error is returned.
@@ -160,12 +166,12 @@ Stream-->>App : stream emits server frames
 ```
 
 **Diagram sources**
-- [cedro-protocol.ts:67-82](file://src/cedro-protocol.ts#L67-L82)
-- [cedro-protocol.test.ts:11-64](file://src/cedro-protocol.test.ts#L11-L64)
+- [cedro-protocol.ts:67-82](file://packages/tcp/src/cedro-protocol.ts#L67-L82)
+- [cedro-protocol.test.ts:11-64](file://packages/tcp/src/cedro-protocol.test.ts#L11-L64)
 
 **Section sources**
-- [cedro-protocol.ts:67-82](file://src/cedro-protocol.ts#L67-L82)
-- [cedro-protocol.test.ts:11-64](file://src/cedro-protocol.test.ts#L11-L64)
+- [cedro-protocol.ts:67-82](file://packages/tcp/src/cedro-protocol.ts#L67-L82)
+- [cedro-protocol.test.ts:11-64](file://packages/tcp/src/cedro-protocol.test.ts#L11-L64)
 
 ### Message Formatting and Parsing Mechanisms
 - Outgoing messages:
@@ -197,14 +203,14 @@ CedroClient --> FrameLines : "uses"
 ```
 
 **Diagram sources**
-- [cedro-protocol.ts:22-38](file://src/cedro-protocol.ts#L22-L38)
-- [tcp-connection-common.ts:26-35](file://src/tcp-connection-common.ts#L26-L35)
-- [line-framing.ts:15-17](file://src/line-framing.ts#L15-L17)
+- [cedro-protocol.ts:22-38](file://packages/tcp/src/cedro-protocol.ts#L22-L38)
+- [tcp-connection-common.ts:26-35](file://packages/tcp/src/tcp-connection-common.ts#L26-L35)
+- [line-framing.ts:15-17](file://packages/tcp/src/line-framing.ts#L15-L17)
 
 **Section sources**
-- [cedro-protocol.ts:44-82](file://src/cedro-protocol.ts#L44-L82)
-- [line-framing.ts:1-18](file://src/line-framing.ts#L1-L18)
-- [line-framing.test.ts:12-107](file://src/line-framing.test.ts#L12-L107)
+- [cedro-protocol.ts:44-82](file://packages/tcp/src/cedro-protocol.ts#L44-L82)
+- [line-framing.ts:1-18](file://packages/tcp/src/line-framing.ts#L1-L18)
+- [line-framing.test.ts:12-107](file://packages/tcp/src/line-framing.test.ts#L12-L107)
 
 ### Connection Establishment, Retry Logic, and Timeouts
 - Connection configuration supports host, port, TLS options, connect timeout, and retry policy (or custom schedule).
@@ -223,13 +229,13 @@ Handle --> Events["events stream"]
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:89-178](file://src/tcp-stream-engine.ts#L89-L178)
-- [tcp-stream-engine.ts:180-195](file://src/tcp-stream-engine.ts#L180-L195)
-- [tcp-connection-common.ts:85-100](file://src/tcp-connection-common.ts#L85-L100)
+- [tcp-stream-engine.ts:89-178](file://packages/tcp/src/tcp-stream-engine.ts#L89-L178)
+- [tcp-stream-engine.ts:180-195](file://packages/tcp/src/tcp-stream-engine.ts#L180-L195)
+- [tcp-connection-common.ts:85-100](file://packages/tcp/src/tcp-connection-common.ts#L85-L100)
 
 **Section sources**
-- [tcp-stream-engine.ts:89-195](file://src/tcp-stream-engine.ts#L89-L195)
-- [tcp-connection-common.ts:45-100](file://src/tcp-connection-common.ts#L45-L100)
+- [tcp-stream-engine.ts:89-195](file://packages/tcp/src/tcp-stream-engine.ts#L89-L195)
+- [tcp-connection-common.ts:45-100](file://packages/tcp/src/tcp-connection-common.ts#L45-L100)
 
 ### Lifecycle and State Management
 - The engine maintains phases connecting/ready/closed and ensures proper cleanup on interruption or errors.
@@ -250,12 +256,12 @@ Closed --> [*]
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:92-178](file://src/tcp-stream-engine.ts#L92-L178)
-- [tcp-stream-engine.ts:201-339](file://src/tcp-stream-engine.ts#L201-L339)
+- [tcp-stream-engine.ts:92-178](file://packages/tcp/src/tcp-stream-engine.ts#L92-L178)
+- [tcp-stream-engine.ts:201-339](file://packages/tcp/src/tcp-stream-engine.ts#L201-L339)
 
 **Section sources**
-- [tcp-stream-engine.ts:92-178](file://src/tcp-stream-engine.ts#L92-L178)
-- [tcp-stream-engine.ts:201-339](file://src/tcp-stream-engine.ts#L201-L339)
+- [tcp-stream-engine.ts:92-178](file://packages/tcp/src/tcp-stream-engine.ts#L92-L178)
+- [tcp-stream-engine.ts:201-339](file://packages/tcp/src/tcp-stream-engine.ts#L201-L339)
 
 ### Practical Usage Patterns
 - Real-time data streaming:
@@ -263,7 +269,7 @@ Closed --> [*]
   - Call authenticate() and subscribe().
   - Consume client.lines or client.rawStream to process incoming frames.
 - Order management:
-  - Use the same authenticated stream to send order-related messages following the protocol’s message format.
+  - Use the same authenticated stream to send order-related messages following the protocol's message format.
   - Parse incoming ORDER_UPDATE-like frames from the lines stream.
 - Market data consumption:
   - Subscribe to multiple tickers at once.
@@ -274,8 +280,8 @@ Example references:
 - Line framing tests show how multi-packet messages are correctly reassembled into lines.
 
 **Section sources**
-- [cedro-protocol.test.ts:11-64](file://src/cedro-protocol.test.ts#L11-L64)
-- [line-framing.test.ts:89-107](file://src/line-framing.test.ts#L89-L107)
+- [cedro-protocol.test.ts:11-64](file://packages/tcp/src/cedro-protocol.test.ts#L11-L64)
+- [line-framing.test.ts:89-107](file://packages/tcp/src/line-framing.test.ts#L89-L107)
 
 ## Dependency Analysis
 - CedroClient depends on:
@@ -298,16 +304,16 @@ TSE --> Bun["Bun Adapter"]
 ```
 
 **Diagram sources**
-- [cedro-protocol.ts:40-89](file://src/cedro-protocol.ts#L40-L89)
-- [tcp-stream-engine.ts:201-339](file://src/tcp-stream-engine.ts#L201-L339)
-- [tcp-connection-bun.ts:18-136](file://src/tcp-connection-bun.ts#L18-L136)
-- [tcp-connection-common.ts:45-57](file://src/tcp-connection-common.ts#L45-L57)
+- [cedro-protocol.ts:40-89](file://packages/tcp/src/cedro-protocol.ts#L40-L89)
+- [tcp-stream-engine.ts:201-339](file://packages/tcp/src/tcp-stream-engine.ts#L201-L339)
+- [tcp-connection-bun.ts:18-136](file://packages/tcp/src/tcp-connection-bun.ts#L18-L136)
+- [tcp-connection-common.ts:45-57](file://packages/tcp/src/tcp-connection-common.ts#L45-L57)
 
 **Section sources**
-- [cedro-protocol.ts:40-89](file://src/cedro-protocol.ts#L40-L89)
-- [tcp-stream-engine.ts:201-339](file://src/tcp-stream-engine.ts#L201-L339)
-- [tcp-connection-bun.ts:18-136](file://src/tcp-connection-bun.ts#L18-L136)
-- [tcp-connection-common.ts:45-57](file://src/tcp-connection-common.ts#L45-L57)
+- [cedro-protocol.ts:40-89](file://packages/tcp/src/cedro-protocol.ts#L40-L89)
+- [tcp-stream-engine.ts:201-339](file://packages/tcp/src/tcp-stream-engine.ts#L201-L339)
+- [tcp-connection-bun.ts:18-136](file://packages/tcp/src/tcp-connection-bun.ts#L18-L136)
+- [tcp-connection-common.ts:45-57](file://packages/tcp/src/tcp-connection-common.ts#L45-L57)
 
 ## Performance Considerations
 - Backpressure-aware writes:
@@ -346,13 +352,13 @@ Operational tips:
 - Disable retries in tests to simplify deterministic behavior.
 
 **Section sources**
-- [cedro-protocol.ts:44-65](file://src/cedro-protocol.ts#L44-L65)
-- [tcp-connection-common.ts:12-24](file://src/tcp-connection-common.ts#L12-L24)
-- [tcp-stream-engine.ts:180-195](file://src/tcp-stream-engine.ts#L180-L195)
-- [tcp-stream-engine.ts:295-339](file://src/tcp-stream-engine.ts#L295-L339)
+- [cedro-protocol.ts:44-65](file://packages/tcp/src/cedro-protocol.ts#L44-L65)
+- [tcp-connection-common.ts:12-24](file://packages/tcp/src/tcp-connection-common.ts#L12-L24)
+- [tcp-stream-engine.ts:180-195](file://packages/tcp/src/tcp-stream-engine.ts#L180-L195)
+- [tcp-stream-engine.ts:295-339](file://packages/tcp/src/tcp-stream-engine.ts#L295-L339)
 
 ## Conclusion
-The Cedro protocol client provides a robust, layered implementation for authentication, subscription, and streaming over TCP. It leverages Effect’s concurrency primitives and a pluggable engine to deliver reliable connectivity, clear error semantics, and efficient framing. With configurable retries, timeouts, and backpressure handling, it is well-suited for production scenarios including high-frequency trading where reliability and performance are critical.
+The Cedro protocol client provides a robust, layered implementation for authentication, subscription, and streaming over TCP. It leverages Effect's concurrency primitives and a pluggable engine to deliver reliable connectivity, clear error semantics, and efficient framing. With configurable retries, timeouts, and backpressure handling, it is well-suited for production scenarios including high-frequency trading where reliability and performance are critical.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
@@ -371,5 +377,5 @@ The Cedro protocol client provides a robust, layered implementation for authenti
   - Parse ORDER_UPDATE frames from the lines stream.
 
 References:
-- [cedro-protocol.test.ts:11-64](file://src/cedro-protocol.test.ts#L11-L64)
-- [cedro-protocol.ts:40-89](file://src/cedro-protocol.ts#L40-L89)
+- [cedro-protocol.test.ts:11-64](file://packages/tcp/src/cedro-protocol.test.ts#L11-L64)
+- [cedro-protocol.ts:40-89](file://packages/tcp/src/cedro-protocol.ts#L40-L89)

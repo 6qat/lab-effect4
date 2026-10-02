@@ -55,7 +55,7 @@ describe("CedroProtocol", () => {
 			const exit = await Effect.runPromiseExit(program);
 			expect(Exit.isSuccess(exit)).toBe(true);
 			expect(receivedData.join("")).toContain(
-				"AUTH|TOKEN_123|trader_user|secret_password\n",
+				"TOKEN_123\ntrader_user\nsecret_password\n",
 			);
 			expect(receivedData.join("")).toContain("SUB|PETR4,VALE3\n");
 		} finally {

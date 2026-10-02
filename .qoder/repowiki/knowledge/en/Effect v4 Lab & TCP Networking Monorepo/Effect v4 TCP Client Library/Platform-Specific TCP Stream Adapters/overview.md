@@ -1,0 +1,1 @@
+Provides Effect Layer-based TCP stream adapters for Bun and Node.js, plus a CLI example that dispatches between them to perform an HTTP GET over raw sockets.

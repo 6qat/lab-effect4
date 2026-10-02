@@ -1,1 +1,0 @@
-Bun runtime with pnpm workspaces; Effect-TS v4 (rc) for concurrency and TCP streaming; TypeScript 7 with strict mode and verbatimModuleSyntax; Biome for formatting/linting; Docker Compose for Redis-backed integration tests.

@@ -1,0 +1,1 @@
+Effect v4 (effect + @effect/platform-bun + @effect/platform-node) with Bun as the test runner; TypeScript module resolution with `.js` extensions in imports.

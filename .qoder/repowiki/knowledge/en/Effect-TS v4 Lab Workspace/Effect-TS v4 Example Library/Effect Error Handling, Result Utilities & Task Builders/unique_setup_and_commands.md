@@ -1,1 +1,0 @@
-Files are standalone scripts intended to be executed directly (e.g. `bun src/error-channel-operations.ts`); `running-effects.ts` depends on `@effect/platform-bun` so it requires a Bun environment because it calls `BunRuntime.runMain`.

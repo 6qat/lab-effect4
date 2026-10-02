@@ -1,0 +1,1 @@
+Built on Effect's `Effect`/`Layer` runtime; Node adapter uses built-in `node:net` and `node:tls`; Bun adapter uses `Bun.connect` with `binaryType: 'uint8array'`; example runs under `@effect/platform-bun`'s `BunRuntime.runMain`.

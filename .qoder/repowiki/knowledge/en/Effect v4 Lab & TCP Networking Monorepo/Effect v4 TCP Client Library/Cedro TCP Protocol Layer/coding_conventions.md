@@ -1,0 +1,4 @@
+- External configuration and clients are exposed as Effect `Context.Service` classes paired with a `make*` factory and a `*Live` `Layer.succeed` / `Layer.effect` provider.
+- Pure command construction returns `Result.Result<string, CedroProtocolError>` so validation failures stay in the type system before being lifted into effects via `Effect.fromResult`.
+- I/O operations are composed with `Effect.gen(function* () { ... })` generators that yield Effect values and delegate network writes to the injected `TcpStream` service.
+- Runtime-specific socket implementations are isolated behind a single re-export file, allowing the protocol layer to import `TcpStream` without knowing whether the runtime is Bun or Node.

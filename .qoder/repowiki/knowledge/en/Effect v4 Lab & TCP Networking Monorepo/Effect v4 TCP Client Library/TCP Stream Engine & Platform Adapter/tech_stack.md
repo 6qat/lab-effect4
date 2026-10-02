@@ -1,0 +1,1 @@
+Built on Effect v3 (`Context.Service`, `Layer`, `Scope`, `Deferred`, `Queue`, `Semaphore`, `Stream`) and `@effect/platform-bun`'s `BunSocket`; uses Node's built-in `node:tls` for TLS connections.

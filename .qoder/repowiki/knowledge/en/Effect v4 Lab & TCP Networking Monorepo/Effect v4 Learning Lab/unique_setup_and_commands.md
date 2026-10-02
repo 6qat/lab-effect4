@@ -1,0 +1,1 @@
+Run individual examples from the repo root with `bun packages/lab/src/<example>.ts`; `creating-effects.ts` reads `example.txt` from the current working directory so it must be invoked from the repo root. Project checks are run via `bun run --cwd packages/lab typecheck|test|lint|format:check`, with `format` applying Biome fixes.

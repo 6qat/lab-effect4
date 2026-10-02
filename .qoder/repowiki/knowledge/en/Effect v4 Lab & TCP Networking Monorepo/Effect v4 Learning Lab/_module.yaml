@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: packages_lab
+title: Effect v4 Learning Lab
+scope:
+    - packages/lab/
+source_files: []
+depends_on: []
+related_to: []

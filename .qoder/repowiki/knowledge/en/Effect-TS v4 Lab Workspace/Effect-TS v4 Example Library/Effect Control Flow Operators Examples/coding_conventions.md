@@ -1,3 +1,0 @@
-- Programs are executed at the top level of each file via `Effect.runPromise(...).then(console.log)` or `Effect.runFork(...)` rather than being exported as values.
-- Conditional logic inside effects is written either as native `if/else` inside `Effect.gen(function* () { ... })` generators or as `pipe(Random.nextBoolean, Effect.flatMap(...))` chains.
-- Side-effecting operations are composed through `pipe` with combinators like `Effect.tap(Console.log)` and `Effect.as`, instead of inline callbacks.

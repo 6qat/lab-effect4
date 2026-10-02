@@ -1,0 +1,1 @@
+Run all tests with `bun test ./src` from this package; typecheck via `tsc --noEmit -p tsconfig.json`; formatting/linting via biome scripts.

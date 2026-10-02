@@ -2,14 +2,20 @@
 
 <cite>
 **Referenced Files in This Document**
-- [tcp-connection-common.ts](file://src/tcp-connection-common.ts)
-- [tcp-stream-engine.ts](file://src/tcp-stream-engine.ts)
-- [tcp-connection-bun.ts](file://src/tcp-connection-bun.ts)
-- [tcp-connection-nodejs.ts](file://src/tcp-connection-nodejs.ts)
-- [tcp-connection-platform.ts](file://src/tcp-connection-platform.ts)
-- [tcp-stream-engine.test.ts](file://src/tcp-stream-engine.test.ts)
-- [tcp-connection-test-suite.ts](file://src/tcp-connection-test-suite.ts)
+- [tcp-connection-common.ts](file://packages/tcp/src/tcp-connection-common.ts)
+- [tcp-stream-engine.ts](file://packages/tcp/src/tcp-stream-engine.ts)
+- [tcp-connection-bun.ts](file://packages/tcp/src/tcp-connection-bun.ts)
+- [tcp-connection-nodejs.ts](file://packages/tcp/src/tcp-connection-nodejs.ts)
+- [tcp-connection-platform.ts](file://packages/tcp/src/tcp-connection-platform.ts)
+- [tcp-stream-engine.test.ts](file://packages/tcp/src/tcp-stream-engine.test.ts)
+- [tcp-connection-test-suite.ts](file://packages/tcp/src/tcp-connection-test-suite.ts)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated all file references from `src/` to `packages/tcp/src/` to reflect the new package structure
+- Maintained all existing functionality and API surface while updating paths
+- Preserved complete documentation structure and content accuracy
 
 ## Table of Contents
 1. Introduction
@@ -33,7 +39,7 @@ This document explains the shared types, validation logic, error normalization, 
 - Guidance for extending the configuration schema and adding new validation rules
 
 ## Project Structure
-The shared layer is implemented in a small set of files:
+The shared layer is implemented in a small set of files within the tcp package:
 - tcp-connection-common.ts: Shared types, services, validation, and utilities
 - tcp-stream-engine.ts: Engine orchestration, timeouts, retry wiring, and high-level stream construction
 - Platform adapters: tcp-connection-bun.ts, tcp-connection-nodejs.ts, tcp-connection-platform.ts implement the low-level socket bridge using the shared engine contract
@@ -47,15 +53,15 @@ B --> E["tcp-connection-platform.ts"]
 ```
 
 **Diagram sources**
-- [tcp-connection-common.ts:1-101](file://src/tcp-connection-common.ts#L1-L101)
-- [tcp-stream-engine.ts:1-359](file://src/tcp-stream-engine.ts#L1-L359)
-- [tcp-connection-bun.ts:1-145](file://src/tcp-connection-bun.ts#L1-L145)
-- [tcp-connection-nodejs.ts:1-132](file://src/tcp-connection-nodejs.ts#L1-L132)
-- [tcp-connection-platform.ts:1-135](file://src/tcp-connection-platform.ts#L1-L135)
+- [tcp-connection-common.ts:1-101](file://packages/tcp/src/tcp-connection-common.ts#L1-L101)
+- [tcp-stream-engine.ts:1-359](file://packages/tcp/src/tcp-stream-engine.ts#L1-L359)
+- [tcp-connection-bun.ts:1-145](file://packages/tcp/src/tcp-connection-bun.ts#L1-L145)
+- [tcp-connection-nodejs.ts:1-132](file://packages/tcp/src/tcp-connection-nodejs.ts#L1-L132)
+- [tcp-connection-platform.ts:1-135](file://packages/tcp/src/tcp-connection-platform.ts#L1-L135)
 
 **Section sources**
-- [tcp-connection-common.ts:1-101](file://src/tcp-connection-common.ts#L1-L101)
-- [tcp-stream-engine.ts:1-359](file://src/tcp-stream-engine.ts#L1-L359)
+- [tcp-connection-common.ts:1-101](file://packages/tcp/src/tcp-connection-common.ts#L1-L101)
+- [tcp-stream-engine.ts:1-359](file://packages/tcp/src/tcp-stream-engine.ts#L1-L359)
 
 ## Core Components
 - ConnectionConfigShape: The canonical connection configuration used by all adapters. Includes host, port, optional TLS options, retry policy or schedule, and connect timeout.
@@ -73,8 +79,8 @@ Key responsibilities:
 - Expose a stable engine interface that adapters implement
 
 **Section sources**
-- [tcp-connection-common.ts:12-101](file://src/tcp-connection-common.ts#L12-L101)
-- [tcp-stream-engine.ts:28-67](file://src/tcp-stream-engine.ts#L28-L67)
+- [tcp-connection-common.ts:12-101](file://packages/tcp/src/tcp-connection-common.ts#L12-L101)
+- [tcp-stream-engine.ts:28-67](file://packages/tcp/src/tcp-stream-engine.ts#L28-L67)
 
 ## Architecture Overview
 The architecture separates concerns into three layers:
@@ -103,10 +109,10 @@ Engine-->>App : success/failure
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:89-178](file://src/tcp-stream-engine.ts#L89-L178)
-- [tcp-connection-bun.ts:18-135](file://src/tcp-connection-bun.ts#L18-L135)
-- [tcp-connection-nodejs.ts:21-115](file://src/tcp-connection-nodejs.ts#L21-L115)
-- [tcp-connection-platform.ts:17-119](file://src/tcp-connection-platform.ts#L17-L119)
+- [tcp-stream-engine.ts:89-178](file://packages/tcp/src/tcp-stream-engine.ts#L89-L178)
+- [tcp-connection-bun.ts:18-135](file://packages/tcp/src/tcp-connection-bun.ts#L18-L135)
+- [tcp-connection-nodejs.ts:21-115](file://packages/tcp/src/tcp-connection-nodejs.ts#L21-L115)
+- [tcp-connection-platform.ts:17-119](file://packages/tcp/src/tcp-connection-platform.ts#L17-L119)
 
 ## Detailed Component Analysis
 
@@ -135,10 +141,10 @@ Valid --> |Yes| ReturnCfg["Return Result.succeed(config)"]
 ```
 
 **Diagram sources**
-- [tcp-connection-common.ts:65-89](file://src/tcp-connection-common.ts#L65-L89)
+- [tcp-connection-common.ts:65-89](file://packages/tcp/src/tcp-connection-common.ts#L65-L89)
 
 **Section sources**
-- [tcp-connection-common.ts:37-101](file://src/tcp-connection-common.ts#L37-L101)
+- [tcp-connection-common.ts:37-101](file://packages/tcp/src/tcp-connection-common.ts#L37-L101)
 
 ### Unified Error Type System
 - TcpStreamError carries:
@@ -182,13 +188,13 @@ class ConnectionConfigShape {
 ```
 
 **Diagram sources**
-- [tcp-connection-common.ts:12-57](file://src/tcp-connection-common.ts#L12-L57)
-- [tcp-stream-engine.ts:180-195](file://src/tcp-stream-engine.ts#L180-L195)
+- [tcp-connection-common.ts:12-57](file://packages/tcp/src/tcp-connection-common.ts#L12-L57)
+- [tcp-stream-engine.ts:180-195](file://packages/tcp/src/tcp-stream-engine.ts#L180-L195)
 
 **Section sources**
-- [tcp-connection-common.ts:12-24](file://src/tcp-connection-common.ts#L12-L24)
-- [tcp-stream-engine.ts:81-86](file://src/tcp-stream-engine.ts#L81-L86)
-- [tcp-stream-engine.ts:180-195](file://src/tcp-stream-engine.ts#L180-L195)
+- [tcp-connection-common.ts:12-24](file://packages/tcp/src/tcp-connection-common.ts#L12-L24)
+- [tcp-stream-engine.ts:81-86](file://packages/tcp/src/tcp-stream-engine.ts#L81-L86)
+- [tcp-stream-engine.ts:180-195](file://packages/tcp/src/tcp-stream-engine.ts#L180-L195)
 
 ### Connection State and Lifecycle
 - ConnectionState models Open vs Closed states, optionally capturing a terminal error.
@@ -207,11 +213,11 @@ Closed --> [*]
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:197-200](file://src/tcp-stream-engine.ts#L197-L200)
-- [tcp-stream-engine.ts:201-339](file://src/tcp-stream-engine.ts#L201-L339)
+- [tcp-stream-engine.ts:197-200](file://packages/tcp/src/tcp-stream-engine.ts#L197-L200)
+- [tcp-stream-engine.ts:201-339](file://packages/tcp/src/tcp-stream-engine.ts#L201-L339)
 
 **Section sources**
-- [tcp-stream-engine.ts:197-339](file://src/tcp-stream-engine.ts#L197-L339)
+- [tcp-stream-engine.ts:197-339](file://packages/tcp/src/tcp-stream-engine.ts#L197-L339)
 
 ### Platform Adapters and Cross-Platform Compatibility
 Adapters implement a cold adapter protocol consumed by makeTcpStreamEngine:
@@ -246,14 +252,14 @@ Note over Bun,Plat : Each adapter emits events and returns RawSocketHandle
 ```
 
 **Diagram sources**
-- [tcp-connection-bun.ts:18-135](file://src/tcp-connection-bun.ts#L18-L135)
-- [tcp-connection-nodejs.ts:21-115](file://src/tcp-connection-nodejs.ts#L21-L115)
-- [tcp-connection-platform.ts:17-119](file://src/tcp-connection-platform.ts#L17-L119)
+- [tcp-connection-bun.ts:18-135](file://packages/tcp/src/tcp-connection-bun.ts#L18-L135)
+- [tcp-connection-nodejs.ts:21-115](file://packages/tcp/src/tcp-connection-nodejs.ts#L21-L115)
+- [tcp-connection-platform.ts:17-119](file://packages/tcp/src/tcp-connection-platform.ts#L17-L119)
 
 **Section sources**
-- [tcp-connection-bun.ts:18-135](file://src/tcp-connection-bun.ts#L18-L135)
-- [tcp-connection-nodejs.ts:21-115](file://src/tcp-connection-nodejs.ts#L21-L115)
-- [tcp-connection-platform.ts:17-119](file://src/tcp-connection-platform.ts#L17-L119)
+- [tcp-connection-bun.ts:18-135](file://packages/tcp/src/tcp-connection-bun.ts#L18-L135)
+- [tcp-connection-nodejs.ts:21-115](file://packages/tcp/src/tcp-connection-nodejs.ts#L21-L115)
+- [tcp-connection-platform.ts:17-119](file://packages/tcp/src/tcp-connection-platform.ts#L17-L119)
 
 ### Message Handling and Stream Construction
 - Incoming data is queued and exposed via Stream.fromQueue for consumers
@@ -276,10 +282,10 @@ Done --> End
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:300-332](file://src/tcp-stream-engine.ts#L300-L332)
+- [tcp-stream-engine.ts:300-332](file://packages/tcp/src/tcp-stream-engine.ts#L300-L332)
 
 **Section sources**
-- [tcp-stream-engine.ts:201-339](file://src/tcp-stream-engine.ts#L201-L339)
+- [tcp-stream-engine.ts:201-339](file://packages/tcp/src/tcp-stream-engine.ts#L201-L339)
 
 ### Validation Logic Across Platforms
 - Host and port validation is centralized in validateHostAndPort and applied before connecting
@@ -292,10 +298,10 @@ Examples of validation usage:
 - Tests verify that invalid endpoints fail cleanly with TcpStreamError and bounded time
 
 **Section sources**
-- [tcp-connection-common.ts:65-101](file://src/tcp-connection-common.ts#L65-L101)
-- [tcp-stream-engine.ts:180-195](file://src/tcp-stream-engine.ts#L180-L195)
-- [tcp-stream-engine.test.ts:16-24](file://src/tcp-stream-engine.test.ts#L16-L24)
-- [tcp-connection-test-suite.ts:219-306](file://src/tcp-connection-test-suite.ts#L219-L306)
+- [tcp-connection-common.ts:65-101](file://packages/tcp/src/tcp-connection-common.ts#L65-L101)
+- [tcp-stream-engine.ts:180-195](file://packages/tcp/src/tcp-stream-engine.ts#L180-L195)
+- [tcp-stream-engine.test.ts:16-24](file://packages/tcp/src/tcp-stream-engine.test.ts#L16-L24)
+- [tcp-connection-test-suite.ts:219-306](file://packages/tcp/src/tcp-connection-test-suite.ts#L219-L306)
 
 ## Dependency Analysis
 - tcp-stream-engine depends on tcp-connection-common for types, services, validation, and utilities
@@ -314,22 +320,22 @@ Suite --> Engine
 ```
 
 **Diagram sources**
-- [tcp-connection-common.ts:1-101](file://src/tcp-connection-common.ts#L1-L101)
-- [tcp-stream-engine.ts:1-359](file://src/tcp-stream-engine.ts#L1-L359)
-- [tcp-connection-bun.ts:1-145](file://src/tcp-connection-bun.ts#L1-L145)
-- [tcp-connection-nodejs.ts:1-132](file://src/tcp-connection-nodejs.ts#L1-L132)
-- [tcp-connection-platform.ts:1-135](file://src/tcp-connection-platform.ts#L1-L135)
-- [tcp-stream-engine.test.ts:1-214](file://src/tcp-stream-engine.test.ts#L1-L214)
-- [tcp-connection-test-suite.ts:1-800](file://src/tcp-connection-test-suite.ts#L1-L800)
+- [tcp-connection-common.ts:1-101](file://packages/tcp/src/tcp-connection-common.ts#L1-L101)
+- [tcp-stream-engine.ts:1-359](file://packages/tcp/src/tcp-stream-engine.ts#L1-L359)
+- [tcp-connection-bun.ts:1-145](file://packages/tcp/src/tcp-connection-bun.ts#L1-L145)
+- [tcp-connection-nodejs.ts:1-132](file://packages/tcp/src/tcp-connection-nodejs.ts#L1-L132)
+- [tcp-connection-platform.ts:1-135](file://packages/tcp/src/tcp-connection-platform.ts#L1-L135)
+- [tcp-stream-engine.test.ts:1-214](file://packages/tcp/src/tcp-stream-engine.test.ts#L1-L214)
+- [tcp-connection-test-suite.ts:1-800](file://packages/tcp/src/tcp-connection-test-suite.ts#L1-L800)
 
 **Section sources**
-- [tcp-connection-common.ts:1-101](file://src/tcp-connection-common.ts#L1-L101)
-- [tcp-stream-engine.ts:1-359](file://src/tcp-stream-engine.ts#L1-L359)
-- [tcp-connection-bun.ts:1-145](file://src/tcp-connection-bun.ts#L1-L145)
-- [tcp-connection-nodejs.ts:1-132](file://src/tcp-connection-nodejs.ts#L1-L132)
-- [tcp-connection-platform.ts:1-135](file://src/tcp-connection-platform.ts#L1-L135)
-- [tcp-stream-engine.test.ts:1-214](file://src/tcp-stream-engine.test.ts#L1-L214)
-- [tcp-connection-test-suite.ts:1-800](file://src/tcp-connection-test-suite.ts#L1-L800)
+- [tcp-connection-common.ts:1-101](file://packages/tcp/src/tcp-connection-common.ts#L1-L101)
+- [tcp-stream-engine.ts:1-359](file://packages/tcp/src/tcp-stream-engine.ts#L1-L359)
+- [tcp-connection-bun.ts:1-145](file://packages/tcp/src/tcp-connection-bun.ts#L1-L145)
+- [tcp-connection-nodejs.ts:1-132](file://packages/tcp/src/tcp-connection-nodejs.ts#L1-L132)
+- [tcp-connection-platform.ts:1-135](file://packages/tcp/src/tcp-connection-platform.ts#L1-L135)
+- [tcp-stream-engine.test.ts:1-214](file://packages/tcp/src/tcp-stream-engine.test.ts#L1-L214)
+- [tcp-connection-test-suite.ts:1-800](file://packages/tcp/src/tcp-connection-test-suite.ts#L1-L800)
 
 ## Performance Considerations
 - Serialization of writes via a semaphore prevents concurrent writes and ensures ordered delivery
@@ -355,11 +361,11 @@ Debugging tips:
 - Provide custom retrySchedule for fine-grained control over retry behavior
 
 **Section sources**
-- [tcp-connection-common.ts:65-89](file://src/tcp-connection-common.ts#L65-L89)
-- [tcp-stream-engine.ts:81-86](file://src/tcp-stream-engine.ts#L81-L86)
-- [tcp-stream-engine.ts:180-195](file://src/tcp-stream-engine.ts#L180-L195)
-- [tcp-stream-engine.test.ts:100-149](file://src/tcp-stream-engine.test.ts#L100-L149)
-- [tcp-connection-test-suite.ts:219-306](file://src/tcp-connection-test-suite.ts#L219-L306)
+- [tcp-connection-common.ts:65-89](file://packages/tcp/src/tcp-connection-common.ts#L65-L89)
+- [tcp-stream-engine.ts:81-86](file://packages/tcp/src/tcp-stream-engine.ts#L81-L86)
+- [tcp-stream-engine.ts:180-195](file://packages/tcp/src/tcp-stream-engine.ts#L180-L195)
+- [tcp-stream-engine.test.ts:100-149](file://packages/tcp/src/tcp-stream-engine.test.ts#L100-L149)
+- [tcp-connection-test-suite.ts:219-306](file://packages/tcp/src/tcp-connection-test-suite.ts#L219-L306)
 
 ## Conclusion
 The shared types and validation layer centralizes configuration, error normalization, and retry behavior to ensure consistent TCP stream behavior across Bun, Node.js, and Platform adapters. By validating inputs early, normalizing errors, and providing robust retry and timeout mechanisms, the system offers a reliable foundation for building cross-platform network clients. Extending the configuration schema and adding validation rules follows established patterns: update ConnectionConfigShape, extend validators, and wire new options into the engine and adapters.
@@ -380,10 +386,10 @@ Example references:
 - Retry policy fields are validated and composed into schedules
 
 **Section sources**
-- [tcp-connection-common.ts:45-57](file://src/tcp-connection-common.ts#L45-L57)
-- [tcp-stream-engine.ts:244-251](file://src/tcp-stream-engine.ts#L244-L251)
-- [tcp-connection-bun.ts:57-63](file://src/tcp-connection-bun.ts#L57-L63)
-- [tcp-connection-nodejs.ts:75-83](file://src/tcp-connection-nodejs.ts#L75-L83)
+- [tcp-connection-common.ts:45-57](file://packages/tcp/src/tcp-connection-common.ts#L45-L57)
+- [tcp-stream-engine.ts:244-251](file://packages/tcp/src/tcp-stream-engine.ts#L244-L251)
+- [tcp-connection-bun.ts:57-63](file://packages/tcp/src/tcp-connection-bun.ts#L57-L63)
+- [tcp-connection-nodejs.ts:75-83](file://packages/tcp/src/tcp-connection-nodejs.ts#L75-L83)
 
 ### Adding New Validation Rules
 To add a new rule:
@@ -396,5 +402,5 @@ Example references:
 - Tests exercise these validations via ConnectionConfigLive and assertions on outcomes
 
 **Section sources**
-- [tcp-connection-common.ts:65-89](file://src/tcp-connection-common.ts#L65-L89)
-- [tcp-connection-test-suite.ts:219-276](file://src/tcp-connection-test-suite.ts#L219-L276)
+- [tcp-connection-common.ts:65-89](file://packages/tcp/src/tcp-connection-common.ts#L65-L89)
+- [tcp-connection-test-suite.ts:219-276](file://packages/tcp/src/tcp-connection-test-suite.ts#L219-L276)

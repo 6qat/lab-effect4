@@ -12,6 +12,26 @@ bun packages/tcp/src/tcp-connection-http-example.ts --engine=platform https://ex
 
 The default engine is `bun`. All three commands run under Bun; the engine option chooses the socket implementation. Existing module exports and the Bun-default [tcp-connection.ts](src/tcp-connection.ts) facade remain available within this project.
 
+## Cedro client
+
+Set `CEDRO_HOST`, `CEDRO_PORT`, `CEDRO_MAGIC_KEY`, `CEDRO_USER`, and
+`CEDRO_PASSWORD` in your environment, then run from the repository root:
+
+```bash
+bun packages/tcp/src/cedro-client.ts
+```
+
+On connection, the client immediately sends the magic key, username, and password,
+in that order, each terminated by LF (`\n`). It then prints incoming server lines
+until disconnect; Ctrl+C closes the scoped connection. TCP packet boundaries do
+not affect line framing. Login fields must be nonempty and contain no line breaks.
+
+The server's authentication success/failure format is not yet specified. Incoming
+responses are passed through as text; sending credentials does not establish that
+the server accepted them. The client sends no automatic subscription commands and
+does not reconnect after disconnect. To handle incoming lines in code, use
+`receiveCedroCommands` with an Effect callback and provide `CedroClientLive`.
+
 Run this project's checks from the repository root:
 
 ```bash

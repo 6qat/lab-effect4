@@ -3,11 +3,11 @@ schema_version: 1
 locale: en-US
 branch: master
 nodes_managed: true
-exported_at: "2026-09-25T14:03:49Z"
+exported_at: "2026-09-30T15:55:31Z"
 modules:
     "":
-        dir_name: Effect-TS v4 Lab Workspace
-        title: Effect-TS v4 Lab Workspace
+        dir_name: Effect v4 Lab & TCP Networking Monorepo
+        title: Effect v4 Lab & TCP Networking Monorepo
         scope:
             - AGENTS.md
             - CONTEXT.md
@@ -25,7 +25,8 @@ modules:
             - agent_skills
             - docs_and_research
             - editor_and_tooling_config
-            - src_library
+            - packages_lab
+            - packages_tcp
         depends_on: []
         related_to: []
     agent_skills:
@@ -49,8 +50,6 @@ modules:
         depends_on: []
         related_to:
             - path: agent_skills
-            - path: src_library/line_framing
-            - path: src_library/tcp_stream_engine
     editor_and_tooling_config:
         dir_name: Editor & Tooling Configuration
         title: Editor & Tooling Configuration
@@ -61,89 +60,63 @@ modules:
         children: []
         depends_on: []
         related_to: []
-    src_library:
-        dir_name: Effect-TS v4 Example Library
-        title: Effect-TS v4 Example Library
+    packages_lab:
+        dir_name: Effect v4 Learning Lab
+        title: Effect v4 Learning Lab
         scope:
-            - src/
+            - packages/lab/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    packages_tcp:
+        dir_name: Effect v4 TCP Client Library
+        title: Effect v4 TCP Client Library
+        scope:
+            - packages/tcp/
         source_files: []
         children:
-            - src_library/concurrency_primitives
-            - src_library/control_flow_operators
-            - src_library/error_result_utilities
-            - src_library/line_framing
-            - src_library/tcp_stream_engine
+            - packages_tcp/platform_adapters
+            - packages_tcp/protocol_layer
+            - packages_tcp/stream_engine
         depends_on: []
         related_to: []
-    src_library/concurrency_primitives:
-        dir_name: Effect Concurrency Primitives Examples
-        title: Effect Concurrency Primitives Examples
+    packages_tcp/platform_adapters:
+        dir_name: Platform-Specific TCP Stream Adapters
+        title: Platform-Specific TCP Stream Adapters
         scope:
-            - src/concurrency-deferred.ts
-            - src/concurrency-pubsub.ts
-            - src/concurrency-queue.ts
-        source_files: []
-        children: []
-        depends_on: []
-        related_to: []
-    src_library/control_flow_operators:
-        dir_name: Effect Control Flow Operators Examples
-        title: Effect Control Flow Operators Examples
-        scope:
-            - src/control-flow-foreach.ts
-            - src/control-flow-if.ts
-            - src/control-flow-iterate.ts
-            - src/control-flow-loop.ts
-            - src/control-flow-operators.ts
-            - src/control-flow-when.ts
-            - src/control-flow-zip.ts
-        source_files: []
-        children: []
-        depends_on: []
-        related_to: []
-    src_library/error_result_utilities:
-        dir_name: Effect Error Handling, Result Utilities & Task Builders
-        title: Effect Error Handling, Result Utilities & Task Builders
-        scope:
-            - src/result.ts
-            - src/error-channel-operations.ts
-            - src/default-services.ts
-            - src/creating-effects.ts
-            - src/running-effects.ts
-            - src/mq/index.ts
-            - src/index.ts
-        source_files: []
-        children: []
-        depends_on: []
-        related_to: []
-    src_library/line_framing:
-        dir_name: Cedro Protocol Line Framing & Client
-        title: Cedro Protocol Line Framing & Client
-        scope:
-            - src/line-framing.ts
-            - src/cedro-protocol.ts
-            - src/cedro-protocol.test.ts
+            - packages/tcp/src/tcp-connection-nodejs.ts
+            - packages/tcp/src/tcp-connection-bun.ts
+            - packages/tcp/src/tcp-connection-http-example.ts
         source_files: []
         children: []
         depends_on: []
         related_to:
-            - path: docs_and_research
-            - path: src_library/tcp_stream_engine
-    src_library/tcp_stream_engine:
-        dir_name: Platform-Abstraction TCP Stream Engine
-        title: Platform-Abstraction TCP Stream Engine
+            - path: packages_tcp/protocol_layer
+            - path: packages_tcp/stream_engine
+    packages_tcp/protocol_layer:
+        dir_name: Cedro TCP Protocol Layer
+        title: Cedro TCP Protocol Layer
         scope:
-            - src/tcp-connection.ts
-            - src/tcp-stream-engine.ts
-            - src/tcp-connection-platform.ts
-            - src/tcp-connection-common.ts
-            - src/tcp-connection-bun.ts
-            - src/tcp-connection-nodejs.ts
-            - src/tcp-connection-http-example.ts
-            - src/tcp-connection-test-suite.ts
+            - packages/tcp/src/cedro-protocol.ts
+            - packages/tcp/src/line-framing.ts
+            - packages/tcp/src/tcp-connection.ts
         source_files: []
         children: []
         depends_on: []
         related_to:
-            - path: docs_and_research
-            - path: src_library/line_framing
+            - path: packages_tcp/platform_adapters
+            - path: packages_tcp/stream_engine
+    packages_tcp/stream_engine:
+        dir_name: TCP Stream Engine & Platform Adapter
+        title: TCP Stream Engine & Platform Adapter
+        scope:
+            - packages/tcp/src/tcp-stream-engine.ts
+            - packages/tcp/src/tcp-connection-common.ts
+            - packages/tcp/src/tcp-connection-platform.ts
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: packages_tcp/platform_adapters
+            - path: packages_tcp/protocol_layer

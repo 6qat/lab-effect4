@@ -1,6 +1,0 @@
-- Domain failures are modeled as `class X extends Data.TaggedError("X")<{ ... }>` and constructed with `new X({ ... })` rather than plain strings.
-- Async I/O wrappers are expressed either with `Effect.callback((resume) => { ... resume(Effect.fail(new TaggedError(...))) })` for callback-style APIs or with `Effect.tryPromise({ try, catch: cause => new TaggedError({ cause }) })` for Promise-style APIs.
-- Cleanup on interruption/failure is wired with `Effect.onInterrupt` or `Effect.ensuring` around the core write operation, and temporary files are deleted via a dedicated helper passed to both paths.
-- Conditional branches that can return either `Effect.succeed` or `Effect.fail` are wrapped in `Effect.suspend(() => ...)` to force a single unified `Effect` return type instead of a union.
-- Synchronous pure validations return `Result.Result<T, E>` and are lifted into the effect pipeline with `yield* Effect.fromResult(...)` inside `Effect.gen` blocks.
-- Programs are composed declaratively with `pipe` and `Effect.gen(function* () { yield* ... })`, logging side effects through `Effect.tap(Console.log)` rather than direct `console.log`.

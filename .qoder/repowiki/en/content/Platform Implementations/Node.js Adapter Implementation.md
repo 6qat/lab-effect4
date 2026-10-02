@@ -2,15 +2,19 @@
 
 <cite>
 **Referenced Files in This Document**
-- [tcp-connection-nodejs.ts](file://src/tcp-connection-nodejs.ts)
-- [tcp-stream-engine.ts](file://src/tcp-stream-engine.ts)
-- [tcp-connection-common.ts](file://src/tcp-connection-common.ts)
-- [tcp-connection-nodejs.test.ts](file://src/tcp-connection-nodejs.test.ts)
-- [tcp-stream-engine.test.ts](file://src/tcp-stream-engine.test.ts)
-- [tcp-connection-test-suite.ts](file://src/tcp-connection-test-suite.ts)
-- [0001-direct-engine-socket-wrappers.md](file://docs/adr/0001-direct-engine-socket-wrappers.md)
-- [0002-unified-tcp-stream-engine-adapter-seam.md](file://docs/adr/0002-unified-tcp-stream-engine-adapter-seam.md)
+- [tcp-connection-nodejs.ts](file://packages/tcp/src/tcp-connection-nodejs.ts)
+- [tcp-stream-engine.ts](file://packages/tcp/src/tcp-stream-engine.ts)
+- [tcp-connection-common.ts](file://packages/tcp/src/tcp-connection-common.ts)
+- [tcp-connection-nodejs.test.ts](file://packages/tcp/src/tcp-connection-nodejs.test.ts)
+- [tcp-stream-engine.test.ts](file://packages/tcp/src/tcp-stream-engine.test.ts)
+- [tcp-connection-test-suite.ts](file://packages/tcp/src/tcp-connection-test-suite.ts)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated all file references from `src/` to `packages/tcp/src/` to reflect the new package structure
+- Maintained all existing content and functionality descriptions
+- Preserved architectural diagrams and component relationships
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -24,22 +28,22 @@
 9. [Conclusion](#conclusion)
 
 ## Introduction
-This document explains the Node.js adapter implementation that powers TCP and TLS connections for this project. The adapter is a thin, event-driven bridge between Node.js’s built-in `node:net` and `node:tls` modules and a unified Effect-based stream engine. It focuses on:
+This document explains the Node.js adapter implementation that powers TCP and TLS connections for this project. The adapter is a thin, event-driven bridge between Node.js's built-in `node:net` and `node:tls` modules and a unified Effect-based stream engine. It focuses on:
 - Socket creation with plaintext or TLS support
 - Event-driven data handling through Node.js socket events
 - Backpressure-aware writes using Node.js drain semantics
 - Mapping Node.js socket events to a unified adapter interface
-- Error handling strategies that integrate with Effect’s error model
+- Error handling strategies that integrate with Effect's error model
 - Configuration options including timeouts, retry policies, and TLS settings
 - Graceful shutdown procedures scoped to Effect lifecycles
 
 The design intentionally keeps runtime-specific logic minimal in the adapter while centralizing connection orchestration, retries, backpressure synchronization, and streaming in a shared engine layer.
 
 ## Project Structure
-The Node.js adapter lives alongside a shared engine and common types:
-- `src/tcp-connection-nodejs.ts`: Node.js-specific adapter using `node:net` and `node:tls`.
-- `src/tcp-stream-engine.ts`: Shared engine that orchestrates connection attempts, queues, retries, and streams.
-- `src/tcp-connection-common.ts`: Shared types, configuration, validation, and error definitions.
+The Node.js adapter lives alongside a shared engine and common types within the `packages/tcp` directory:
+- `packages/tcp/src/tcp-connection-nodejs.ts`: Node.js-specific adapter using `node:net` and `node:tls`.
+- `packages/tcp/src/tcp-stream-engine.ts`: Shared engine that orchestrates connection attempts, queues, retries, and streams.
+- `packages/tcp/src/tcp-connection-common.ts`: Shared types, configuration, validation, and error definitions.
 - Tests validate behavior across engines and scenarios.
 
 ```mermaid
@@ -64,20 +68,20 @@ EGT --> ENG
 ```
 
 **Diagram sources**
-- [tcp-connection-nodejs.ts:1-132](file://src/tcp-connection-nodejs.ts#L1-L132)
-- [tcp-stream-engine.ts:1-359](file://src/tcp-stream-engine.ts#L1-L359)
-- [tcp-connection-common.ts:1-101](file://src/tcp-connection-common.ts#L1-L101)
-- [tcp-connection-nodejs.test.ts:1-12](file://src/tcp-connection-nodejs.test.ts#L1-L12)
-- [tcp-connection-test-suite.ts:1-800](file://src/tcp-connection-test-suite.ts#L1-L800)
-- [tcp-stream-engine.test.ts:1-214](file://src/tcp-stream-engine.test.ts#L1-L214)
+- [tcp-connection-nodejs.ts:1-132](file://packages/tcp/src/tcp-connection-nodejs.ts#L1-L132)
+- [tcp-stream-engine.ts:1-359](file://packages/tcp/src/tcp-stream-engine.ts#L1-L359)
+- [tcp-connection-common.ts:1-101](file://packages/tcp/src/tcp-connection-common.ts#L1-L101)
+- [tcp-connection-nodejs.test.ts:1-12](file://packages/tcp/src/tcp-connection-nodejs.test.ts#L1-L12)
+- [tcp-connection-test-suite.ts:1-980](file://packages/tcp/src/tcp-connection-test-suite.ts#L1-L980)
+- [tcp-stream-engine.test.ts:1-214](file://packages/tcp/src/tcp-stream-engine.test.ts#L1-L214)
 
 **Section sources**
-- [tcp-connection-nodejs.ts:1-132](file://src/tcp-connection-nodejs.ts#L1-L132)
-- [tcp-stream-engine.ts:1-359](file://src/tcp-stream-engine.ts#L1-L359)
-- [tcp-connection-common.ts:1-101](file://src/tcp-connection-common.ts#L1-L101)
-- [tcp-connection-nodejs.test.ts:1-12](file://src/tcp-connection-nodejs.test.ts#L1-L12)
-- [tcp-stream-engine.test.ts:1-214](file://src/tcp-stream-engine.test.ts#L1-L214)
-- [tcp-connection-test-suite.ts:1-800](file://src/tcp-connection-test-suite.ts#L1-L800)
+- [tcp-connection-nodejs.ts:1-132](file://packages/tcp/src/tcp-connection-nodejs.ts#L1-L132)
+- [tcp-stream-engine.ts:1-359](file://packages/tcp/src/tcp-stream-engine.ts#L1-L359)
+- [tcp-connection-common.ts:1-101](file://packages/tcp/src/tcp-connection-common.ts#L1-L101)
+- [tcp-connection-nodejs.test.ts:1-12](file://packages/tcp/src/tcp-connection-nodejs.test.ts#L1-L12)
+- [tcp-stream-engine.test.ts:1-214](file://packages/tcp/src/tcp-stream-engine.test.ts#L1-L214)
+- [tcp-connection-test-suite.ts:1-980](file://packages/tcp/src/tcp-connection-test-suite.ts#L1-L980)
 
 ## Core Components
 - Node.js adapter (`tcp-connection-nodejs.ts`): Creates `net.Socket` or `tls.TLSSocket`, wires events (`data`, `drain`, `close`, `error`, `connect`/`secureConnect`), and exposes a `RawSocketHandle` with `write` and `close`.
@@ -85,17 +89,17 @@ EGT --> ENG
 - Common types (`tcp-connection-common.ts`): Defines `ConnectionConfigShape`, `TcpStreamError`, `TcpStreamShape`, retry policy configuration, and helpers like `unknownToMessage` and `buildDefaultRetrySchedule`.
 
 Key responsibilities:
-- Adapter: Map Node.js sockets to the engine’s cold adapter protocol.
+- Adapter: Map Node.js sockets to the engine's cold adapter protocol.
 - Engine: Orchestrate retries, timeouts, backpressure, and lifecycle.
 - Common: Provide shared contracts and utilities.
 
 **Section sources**
-- [tcp-connection-nodejs.ts:20-118](file://src/tcp-connection-nodejs.ts#L20-L118)
-- [tcp-stream-engine.ts:28-79](file://src/tcp-stream-engine.ts#L28-L79)
-- [tcp-stream-engine.ts:89-178](file://src/tcp-stream-engine.ts#L89-L178)
-- [tcp-stream-engine.ts:201-339](file://src/tcp-stream-engine.ts#L201-L339)
-- [tcp-connection-common.ts:18-52](file://src/tcp-connection-common.ts#L18-L52)
-- [tcp-connection-common.ts:62-100](file://src/tcp-connection-common.ts#L62-L100)
+- [tcp-connection-nodejs.ts:20-118](file://packages/tcp/src/tcp-connection-nodejs.ts#L20-L118)
+- [tcp-stream-engine.ts:28-79](file://packages/tcp/src/tcp-stream-engine.ts#L28-L79)
+- [tcp-stream-engine.ts:89-178](file://packages/tcp/src/tcp-stream-engine.ts#L89-L178)
+- [tcp-stream-engine.ts:201-339](file://packages/tcp/src/tcp-stream-engine.ts#L201-L339)
+- [tcp-connection-common.ts:18-52](file://packages/tcp/src/tcp-connection-common.ts#L18-L52)
+- [tcp-connection-common.ts:62-100](file://packages/tcp/src/tcp-connection-common.ts#L62-L100)
 
 ## Architecture Overview
 The Node.js adapter implements a cold adapter function consumed by the shared engine. The engine coordinates:
@@ -128,9 +132,9 @@ Engine-->>App : success or TcpStreamError
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:89-178](file://src/tcp-stream-engine.ts#L89-L178)
-- [tcp-stream-engine.ts:201-339](file://src/tcp-stream-engine.ts#L201-L339)
-- [tcp-connection-nodejs.ts:20-118](file://src/tcp-connection-nodejs.ts#L20-L118)
+- [tcp-stream-engine.ts:89-178](file://packages/tcp/src/tcp-stream-engine.ts#L89-L178)
+- [tcp-stream-engine.ts:201-339](file://packages/tcp/src/tcp-stream-engine.ts#L201-L339)
+- [tcp-connection-nodejs.ts:20-118](file://packages/tcp/src/tcp-connection-nodejs.ts#L20-L118)
 
 ## Detailed Component Analysis
 
@@ -169,11 +173,11 @@ Err --> |Yes| EmitErr["emit('Error', cause)"]
 ```
 
 **Diagram sources**
-- [tcp-connection-nodejs.ts:74-104](file://src/tcp-connection-nodejs.ts#L74-L104)
-- [tcp-connection-nodejs.ts:43-69](file://src/tcp-connection-nodejs.ts#L43-L69)
+- [tcp-connection-nodejs.ts:74-104](file://packages/tcp/src/tcp-connection-nodejs.ts#L74-L104)
+- [tcp-connection-nodejs.ts:43-69](file://packages/tcp/src/tcp-connection-nodejs.ts#L43-L69)
 
 **Section sources**
-- [tcp-connection-nodejs.ts:20-118](file://src/tcp-connection-nodejs.ts#L20-L118)
+- [tcp-connection-nodejs.ts:20-118](file://packages/tcp/src/tcp-connection-nodejs.ts#L20-L118)
 
 ### Unified Engine: Connection Lifecycle and Backpressure
 The shared engine builds a caller-first API:
@@ -230,17 +234,17 @@ TcpStream ..> TcpStreamEngine : "uses"
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:28-79](file://src/tcp-stream-engine.ts#L28-L79)
-- [tcp-stream-engine.ts:89-178](file://src/tcp-stream-engine.ts#L89-L178)
-- [tcp-stream-engine.ts:201-339](file://src/tcp-stream-engine.ts#L201-L339)
+- [tcp-stream-engine.ts:28-79](file://packages/tcp/src/tcp-stream-engine.ts#L28-L79)
+- [tcp-stream-engine.ts:89-178](file://packages/tcp/src/tcp-stream-engine.ts#L89-L178)
+- [tcp-stream-engine.ts:201-339](file://packages/tcp/src/tcp-stream-engine.ts#L201-L339)
 
 **Section sources**
-- [tcp-stream-engine.ts:89-178](file://src/tcp-stream-engine.ts#L89-L178)
-- [tcp-stream-engine.ts:180-195](file://src/tcp-stream-engine.ts#L180-L195)
-- [tcp-stream-engine.ts:201-339](file://src/tcp-stream-engine.ts#L201-L339)
+- [tcp-stream-engine.ts:89-178](file://packages/tcp/src/tcp-stream-engine.ts#L89-L178)
+- [tcp-stream-engine.ts:180-195](file://packages/tcp/src/tcp-stream-engine.ts#L180-L195)
+- [tcp-stream-engine.ts:201-339](file://packages/tcp/src/tcp-stream-engine.ts#L201-L339)
 
 ### Event Mapping: Node.js Socket Events to Unified Interface
-Node.js socket events map to the engine’s adapter events:
+Node.js socket events map to the engine's adapter events:
 - `connect`/`secureConnect` → `Ready`
 - `data` → `Data`
 - `drain` → `Drain`
@@ -268,15 +272,15 @@ ErrorEvt --> FailStream["Fail stream with TcpStreamError"]
 ```
 
 **Diagram sources**
-- [tcp-connection-nodejs.ts:84-101](file://src/tcp-connection-nodejs.ts#L84-L101)
-- [tcp-stream-engine.ts:106-138](file://src/tcp-stream-engine.ts#L106-L138)
+- [tcp-connection-nodejs.ts:84-101](file://packages/tcp/src/tcp-connection-nodejs.ts#L84-L101)
+- [tcp-stream-engine.ts:106-138](file://packages/tcp/src/tcp-stream-engine.ts#L106-L138)
 
 **Section sources**
-- [tcp-connection-nodejs.ts:84-101](file://src/tcp-connection-nodejs.ts#L84-L101)
-- [tcp-stream-engine.ts:106-138](file://src/tcp-stream-engine.ts#L106-L138)
+- [tcp-connection-nodejs.ts:84-101](file://packages/tcp/src/tcp-connection-nodejs.ts#L84-L101)
+- [tcp-stream-engine.ts:106-138](file://packages/tcp/src/tcp-stream-engine.ts#L106-L138)
 
 ### Error Handling Strategies
-Error handling integrates with Effect’s typed errors:
+Error handling integrates with Effect's typed errors:
 - `TcpStreamError` wraps operation, message, and cause
 - Adapter catches socket write errors and converts them to `TcpStreamError`
 - Engine classifies failures:
@@ -299,16 +303,16 @@ TimeoutErr --> Surface
 ```
 
 **Diagram sources**
-- [tcp-connection-nodejs.ts:49-60](file://src/tcp-connection-nodejs.ts#L49-L60)
-- [tcp-stream-engine.ts:81-86](file://src/tcp-stream-engine.ts#L81-L86)
-- [tcp-stream-engine.ts:125-136](file://src/tcp-stream-engine.ts#L125-L136)
-- [tcp-stream-engine.ts:180-195](file://src/tcp-stream-engine.ts#L180-L195)
+- [tcp-connection-nodejs.ts:49-60](file://packages/tcp/src/tcp-connection-nodejs.ts#L49-L60)
+- [tcp-stream-engine.ts:81-86](file://packages/tcp/src/tcp-stream-engine.ts#L81-L86)
+- [tcp-stream-engine.ts:125-136](file://packages/tcp/src/tcp-stream-engine.ts#L125-L136)
+- [tcp-stream-engine.ts:180-195](file://packages/tcp/src/tcp-stream-engine.ts#L180-L195)
 
 **Section sources**
-- [tcp-connection-nodejs.ts:49-60](file://src/tcp-connection-nodejs.ts#L49-L60)
-- [tcp-stream-engine.ts:81-86](file://src/tcp-stream-engine.ts#L81-L86)
-- [tcp-stream-engine.ts:125-136](file://src/tcp-stream-engine.ts#L125-L136)
-- [tcp-stream-engine.ts:180-195](file://src/tcp-stream-engine.ts#L180-L195)
+- [tcp-connection-nodejs.ts:49-60](file://packages/tcp/src/tcp-connection-nodejs.ts#L49-L60)
+- [tcp-stream-engine.ts:81-86](file://packages/tcp/src/tcp-stream-engine.ts#L81-L86)
+- [tcp-stream-engine.ts:125-136](file://packages/tcp/src/tcp-stream-engine.ts#L125-L136)
+- [tcp-stream-engine.ts:180-195](file://packages/tcp/src/tcp-stream-engine.ts#L180-L195)
 
 ### Configuration Options and Examples
 Configuration flows through `ConnectionConfigShape` and is validated before use:
@@ -330,11 +334,11 @@ These configurations are used by:
 - The adapter to choose TLS vs plaintext and pass TLS options to `tls.connect`
 
 **Section sources**
-- [tcp-connection-common.ts:45-52](file://src/tcp-connection-common.ts#L45-L52)
-- [tcp-connection-common.ts:85-88](file://src/tcp-connection-common.ts#L85-L88)
-- [tcp-connection-common.ts:90-100](file://src/tcp-connection-common.ts#L90-L100)
-- [tcp-stream-engine.ts:244-257](file://src/tcp-stream-engine.ts#L244-L257)
-- [tcp-connection-nodejs.ts:74-83](file://src/tcp-connection-nodejs.ts#L74-L83)
+- [tcp-connection-common.ts:45-52](file://packages/tcp/src/tcp-connection-common.ts#L45-L52)
+- [tcp-connection-common.ts:85-88](file://packages/tcp/src/tcp-connection-common.ts#L85-L88)
+- [tcp-connection-common.ts:90-100](file://packages/tcp/src/tcp-connection-common.ts#L90-L100)
+- [tcp-stream-engine.ts:244-257](file://packages/tcp/src/tcp-stream-engine.ts#L244-L257)
+- [tcp-connection-nodejs.ts:74-83](file://packages/tcp/src/tcp-connection-nodejs.ts#L74-L83)
 
 ### Backpressure Handling and HighWaterMark
 Backpressure is managed at two levels:
@@ -351,11 +355,11 @@ HighWaterMark specifics:
 Note: The current adapter does not expose a direct option to set `highWaterMark` on the underlying socket. If you need explicit control, extend the adapter to accept and apply socket options during creation.
 
 **Section sources**
-- [tcp-connection-nodejs.ts:94-96](file://src/tcp-connection-nodejs.ts#L94-L96)
-- [tcp-stream-engine.ts:300-332](file://src/tcp-stream-engine.ts#L300-L332)
+- [tcp-connection-nodejs.ts:94-96](file://packages/tcp/src/tcp-connection-nodejs.ts#L94-L96)
+- [tcp-stream-engine.ts:300-332](file://packages/tcp/src/tcp-stream-engine.ts#L300-L332)
 
 ### Graceful Shutdown Procedures
-Graceful shutdown is integrated with Effect’s scoping:
+Graceful shutdown is integrated with Effect's scoping:
 - `TcpStream.close`:
   - Marks the connection as closed
   - Interrupts the event forwarding fiber
@@ -381,14 +385,14 @@ Engine-->>App : scope closed
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:295-299](file://src/tcp-stream-engine.ts#L295-L299)
-- [tcp-stream-engine.ts:159-176](file://src/tcp-stream-engine.ts#L159-L176)
-- [tcp-connection-nodejs.ts:30-35](file://src/tcp-connection-nodejs.ts#L30-L35)
+- [tcp-stream-engine.ts:295-299](file://packages/tcp/src/tcp-stream-engine.ts#L295-L299)
+- [tcp-stream-engine.ts:159-176](file://packages/tcp/src/tcp-stream-engine.ts#L159-L176)
+- [tcp-connection-nodejs.ts:30-35](file://packages/tcp/src/tcp-connection-nodejs.ts#L30-L35)
 
 **Section sources**
-- [tcp-stream-engine.ts:295-299](file://src/tcp-stream-engine.ts#L295-L299)
-- [tcp-stream-engine.ts:159-176](file://src/tcp-stream-engine.ts#L159-L176)
-- [tcp-connection-nodejs.ts:30-35](file://src/tcp-connection-nodejs.ts#L30-L35)
+- [tcp-stream-engine.ts:295-299](file://packages/tcp/src/tcp-stream-engine.ts#L295-L299)
+- [tcp-stream-engine.ts:159-176](file://packages/tcp/src/tcp-stream-engine.ts#L159-L176)
+- [tcp-connection-nodejs.ts:30-35](file://packages/tcp/src/tcp-connection-nodejs.ts#L30-L35)
 
 ### Custom Socket Options and Timeouts
 Customization points:
@@ -407,9 +411,9 @@ Example patterns:
 These options are validated and forwarded appropriately by the engine and adapter.
 
 **Section sources**
-- [tcp-connection-common.ts:45-52](file://src/tcp-connection-common.ts#L45-L52)
-- [tcp-stream-engine.ts:180-195](file://src/tcp-stream-engine.ts#L180-L195)
-- [tcp-connection-nodejs.ts:74-83](file://src/tcp-connection-nodejs.ts#L74-L83)
+- [tcp-connection-common.ts:45-52](file://packages/tcp/src/tcp-connection-common.ts#L45-L52)
+- [tcp-stream-engine.ts:180-195](file://packages/tcp/src/tcp-stream-engine.ts#L180-L195)
+- [tcp-connection-nodejs.ts:74-83](file://packages/tcp/src/tcp-connection-nodejs.ts#L74-L83)
 
 ## Dependency Analysis
 The Node.js adapter depends on:
@@ -430,17 +434,17 @@ ENGTEST["tcp-stream-engine.test.ts"] --> ENG
 ```
 
 **Diagram sources**
-- [tcp-connection-nodejs.ts:1-18](file://src/tcp-connection-nodejs.ts#L1-L18)
-- [tcp-stream-engine.ts:1-24](file://src/tcp-stream-engine.ts#L1-L24)
-- [tcp-connection-common.ts:1-10](file://src/tcp-connection-common.ts#L1-L10)
-- [tcp-connection-nodejs.test.ts:1-12](file://src/tcp-connection-nodejs.test.ts#L1-L12)
-- [tcp-connection-test-suite.ts:1-22](file://src/tcp-connection-test-suite.ts#L1-L22)
-- [tcp-stream-engine.test.ts:1-14](file://src/tcp-stream-engine.test.ts#L1-L14)
+- [tcp-connection-nodejs.ts:1-18](file://packages/tcp/src/tcp-connection-nodejs.ts#L1-L18)
+- [tcp-stream-engine.ts:1-24](file://packages/tcp/src/tcp-stream-engine.ts#L1-L24)
+- [tcp-connection-common.ts:1-10](file://packages/tcp/src/tcp-connection-common.ts#L1-L10)
+- [tcp-connection-nodejs.test.ts:1-12](file://packages/tcp/src/tcp-connection-nodejs.test.ts#L1-L12)
+- [tcp-connection-test-suite.ts:1-22](file://packages/tcp/src/tcp-connection-test-suite.ts#L1-L22)
+- [tcp-stream-engine.test.ts:1-14](file://packages/tcp/src/tcp-stream-engine.test.ts#L1-L14)
 
 **Section sources**
-- [tcp-connection-nodejs.ts:1-18](file://src/tcp-connection-nodejs.ts#L1-L18)
-- [tcp-stream-engine.ts:1-24](file://src/tcp-stream-engine.ts#L1-L24)
-- [tcp-connection-common.ts:1-10](file://src/tcp-connection-common.ts#L1-L10)
+- [tcp-connection-nodejs.ts:1-18](file://packages/tcp/src/tcp-connection-nodejs.ts#L1-L18)
+- [tcp-stream-engine.ts:1-24](file://packages/tcp/src/tcp-stream-engine.ts#L1-L24)
+- [tcp-connection-common.ts:1-10](file://packages/tcp/src/tcp-connection-common.ts#L1-L10)
 
 ## Performance Considerations
 - Event-driven architecture minimizes overhead by leveraging Node.js socket events
@@ -448,8 +452,6 @@ ENGTEST["tcp-stream-engine.test.ts"] --> ENG
 - Unbounded queues are used internally; applications should consume streams promptly to avoid backlog
 - Retries use exponential backoff with jitter by default; tune `retry` or provide a custom schedule for specific workloads
 - Avoid large single writes; batch data thoughtfully and rely on drain events to pace output
-
-[No sources needed since this section provides general guidance]
 
 ## Troubleshooting Guide
 Common issues and resolutions:
@@ -471,11 +473,11 @@ Validation and tests cover:
 - Graceful client-side close
 
 **Section sources**
-- [tcp-stream-engine.test.ts:126-149](file://src/tcp-stream-engine.test.ts#L126-L149)
-- [tcp-connection-test-suite.ts:447-579](file://src/tcp-connection-test-suite.ts#L447-L579)
-- [tcp-connection-test-suite.ts:581-623](file://src/tcp-connection-test-suite.ts#L581-L623)
-- [tcp-connection-test-suite.ts:625-671](file://src/tcp-connection-test-suite.ts#L625-L671)
-- [tcp-connection-test-suite.ts:673-722](file://src/tcp-connection-test-suite.ts#L673-L722)
+- [tcp-stream-engine.test.ts:126-149](file://packages/tcp/src/tcp-stream-engine.test.ts#L126-L149)
+- [tcp-connection-test-suite.ts:447-579](file://packages/tcp/src/tcp-connection-test-suite.ts#L447-L579)
+- [tcp-connection-test-suite.ts:581-623](file://packages/tcp/src/tcp-connection-test-suite.ts#L581-L623)
+- [tcp-connection-test-suite.ts:625-671](file://packages/tcp/src/tcp-connection-test-suite.ts#L625-L671)
+- [tcp-connection-test-suite.ts:673-722](file://packages/tcp/src/tcp-connection-test-suite.ts#L673-L722)
 
 ## Conclusion
 The Node.js adapter provides a concise, event-driven bridge between Node.js sockets and a robust, shared Effect-based stream engine. It emphasizes:
@@ -486,5 +488,3 @@ The Node.js adapter provides a concise, event-driven bridge between Node.js sock
 - Graceful shutdown integrated with Effect scopes
 
 This design enables consistent TCP/TLS behavior across runtimes while preserving low-level control where needed.
-
-[No sources needed since this section summarizes without analyzing specific files]

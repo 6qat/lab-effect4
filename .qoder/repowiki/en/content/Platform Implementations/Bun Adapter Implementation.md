@@ -2,13 +2,19 @@
 
 <cite>
 **Referenced Files in This Document**
-- [tcp-connection-bun.ts](file://src/tcp-connection-bun.ts)
-- [tcp-stream-engine.ts](file://src/tcp-stream-engine.ts)
-- [tcp-connection-common.ts](file://src/tcp-connection-common.ts)
+- [tcp-connection-bun.ts](file://packages/tcp/src/tcp-connection-bun.ts)
+- [tcp-stream-engine.ts](file://packages/tcp/src/tcp-stream-engine.ts)
+- [tcp-connection-common.ts](file://packages/tcp/src/tcp-connection-common.ts)
 - [bun-tcp-connection-api.md](file://docs/research/bun-tcp-connection-api.md)
-- [tcp-connection.ts](file://src/tcp-connection.ts)
-- [tcp-connection-bun.test.ts](file://src/tcp-connection-bun.test.ts)
+- [tcp-connection.ts](file://packages/tcp/src/tcp-connection.ts)
+- [tcp-connection-bun.test.ts](file://packages/tcp/src/tcp-connection-bun.test.ts)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated all file references to reflect the move from `src/` to `packages/tcp/src/`
+- Maintained all existing content as no functional changes occurred
+- Updated diagram sources and section sources to point to new file locations
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -22,10 +28,10 @@
 9. [Conclusion](#conclusion)
 
 ## Introduction
-This document explains the Bun adapter implementation that provides a TCP socket adapter for the unified stream engine. It focuses on how the adapter uses Bun’s client connection API, handles socket events, manages connection lifecycles, and maps Bun-specific behaviors to the shared error model. It also covers Bun-specific characteristics such as binary type configuration, flush behavior, and termination strategies, along with performance considerations and TLS configuration examples.
+This document explains the Bun adapter implementation that provides a TCP socket adapter for the unified stream engine. It focuses on how the adapter uses Bun's client connection API, handles socket events, manages connection lifecycles, and maps Bun-specific behaviors to the shared error model. It also covers Bun-specific characteristics such as binary type configuration, flush behavior, and termination strategies, along with performance considerations and TLS configuration examples.
 
 ## Project Structure
-The Bun adapter is implemented as a thin layer over Bun’s native TCP primitives and integrates with the platform-agnostic stream engine:
+The Bun adapter is implemented as a thin layer over Bun's native TCP primitives and integrates with the platform-agnostic stream engine:
 
 - The Bun adapter constructs a cold adapter that connects via Bun and emits normalized events to the engine.
 - The engine coordinates queues, timeouts, retries, and backpressure using Effect primitives.
@@ -51,17 +57,17 @@ A -.-> E
 ```
 
 **Diagram sources**
-- [tcp-connection-bun.ts:18-137](file://src/tcp-connection-bun.ts#L18-L137)
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-connection-common.ts:18-52](file://src/tcp-connection-common.ts#L18-L52)
-- [tcp-connection.ts:1-10](file://src/tcp-connection.ts#L1-L10)
+- [tcp-connection-bun.ts:18-137](file://packages/tcp/src/tcp-connection-bun.ts#L18-L137)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-connection-common.ts:18-52](file://packages/tcp/src/tcp-connection-common.ts#L18-L52)
+- [tcp-connection.ts:1-10](file://packages/tcp/src/tcp-connection.ts#L1-L10)
 - [bun-tcp-connection-api.md:64-143](file://docs/research/bun-tcp-connection-api.md#L64-L143)
 
 **Section sources**
-- [tcp-connection-bun.ts:18-137](file://src/tcp-connection-bun.ts#L18-L137)
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-connection-common.ts:18-52](file://src/tcp-connection-common.ts#L18-L52)
-- [tcp-connection.ts:1-10](file://src/tcp-connection.ts#L1-L10)
+- [tcp-connection-bun.ts:18-137](file://packages/tcp/src/tcp-connection-bun.ts#L18-L137)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-connection-common.ts:18-52](file://packages/tcp/src/tcp-connection-common.ts#L18-L52)
+- [tcp-connection.ts:1-10](file://packages/tcp/src/tcp-connection.ts#L1-L10)
 - [bun-tcp-connection-api.md:64-143](file://docs/research/bun-tcp-connection-api.md#L64-L143)
 
 ## Core Components
@@ -77,12 +83,12 @@ Key responsibilities:
 - Event mapping to engine events and error normalization.
 
 **Section sources**
-- [tcp-connection-bun.ts:18-137](file://src/tcp-connection-bun.ts#L18-L137)
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-connection-common.ts:18-52](file://src/tcp-connection-common.ts#L18-L52)
+- [tcp-connection-bun.ts:18-137](file://packages/tcp/src/tcp-connection-bun.ts#L18-L137)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-connection-common.ts:18-52](file://packages/tcp/src/tcp-connection-common.ts#L18-L52)
 
 ## Architecture Overview
-The adapter implements the cold adapter protocol expected by makeTcpStreamEngine. It bridges Bun’s callback-based socket API to an Effect-driven stream pipeline.
+The adapter implements the cold adapter protocol expected by makeTcpStreamEngine. It bridges Bun's callback-based socket API to an Effect-driven stream pipeline.
 
 ```mermaid
 sequenceDiagram
@@ -107,8 +113,8 @@ Adapter->>BunSock : end() or terminate()
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-connection-bun.ts:18-137](file://src/tcp-connection-bun.ts#L18-L137)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-connection-bun.ts:18-137](file://packages/tcp/src/tcp-connection-bun.ts#L18-L137)
 
 ## Detailed Component Analysis
 
@@ -128,7 +134,7 @@ Examples of configuration:
 - TLS with custom options: pass a TLS options object including fields like ca, cert, key, serverName, rejectUnauthorized, ALPNProtocols.
 
 **Section sources**
-- [tcp-connection-bun.ts:57-63](file://src/tcp-connection-bun.ts#L57-L63)
+- [tcp-connection-bun.ts:57-63](file://packages/tcp/src/tcp-connection-bun.ts#L57-L63)
 - [bun-tcp-connection-api.md:231-294](file://docs/research/bun-tcp-connection-api.md#L231-L294)
 
 ### Socket Event Handling
@@ -165,10 +171,10 @@ Continue --> Handlers
 ```
 
 **Diagram sources**
-- [tcp-connection-bun.ts:63-86](file://src/tcp-connection-bun.ts#L63-L86)
+- [tcp-connection-bun.ts:63-86](file://packages/tcp/src/tcp-connection-bun.ts#L63-L86)
 
 **Section sources**
-- [tcp-connection-bun.ts:63-86](file://src/tcp-connection-bun.ts#L63-L86)
+- [tcp-connection-bun.ts:63-86](file://packages/tcp/src/tcp-connection-bun.ts#L63-L86)
 
 ### Connection Lifecycle Management
 - Cold adapter creation: Uses Effect.callback to manage asynchronous setup and cleanup.
@@ -187,12 +193,12 @@ Closed --> [*]
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:92-178](file://src/tcp-stream-engine.ts#L92-L178)
-- [tcp-connection-bun.ts:22-55](file://src/tcp-connection-bun.ts#L22-L55)
+- [tcp-stream-engine.ts:92-178](file://packages/tcp/src/tcp-stream-engine.ts#L92-L178)
+- [tcp-connection-bun.ts:22-55](file://packages/tcp/src/tcp-connection-bun.ts#L22-L55)
 
 **Section sources**
-- [tcp-connection-bun.ts:22-55](file://src/tcp-connection-bun.ts#L22-L55)
-- [tcp-stream-engine.ts:92-178](file://src/tcp-stream-engine.ts#L92-L178)
+- [tcp-connection-bun.ts:22-55](file://packages/tcp/src/tcp-connection-bun.ts#L22-L55)
+- [tcp-stream-engine.ts:92-178](file://packages/tcp/src/tcp-stream-engine.ts#L92-L178)
 
 ### Write Path, Flush, and Backpressure
 - Write implementation: Calls Bun socket write and then flush to push pending data to the wire.
@@ -212,12 +218,12 @@ EngineWait --> EndWrite
 ```
 
 **Diagram sources**
-- [tcp-connection-bun.ts:96-114](file://src/tcp-connection-bun.ts#L96-L114)
-- [tcp-stream-engine.ts:300-332](file://src/tcp-stream-engine.ts#L300-L332)
+- [tcp-connection-bun.ts:96-114](file://packages/tcp/src/tcp-connection-bun.ts#L96-L114)
+- [tcp-stream-engine.ts:300-332](file://packages/tcp/src/tcp-stream-engine.ts#L300-L332)
 
 **Section sources**
-- [tcp-connection-bun.ts:96-114](file://src/tcp-connection-bun.ts#L96-L114)
-- [tcp-stream-engine.ts:300-332](file://src/tcp-stream-engine.ts#L300-L332)
+- [tcp-connection-bun.ts:96-114](file://packages/tcp/src/tcp-connection-bun.ts#L96-L114)
+- [tcp-stream-engine.ts:300-332](file://packages/tcp/src/tcp-stream-engine.ts#L300-L332)
 
 ### Terminate vs End Methods
 - terminate: Attempts immediate abortive termination; falls back to end if terminate fails.
@@ -236,10 +242,10 @@ TermOk --> |No| Ignore["Ignore fallback error"]
 ```
 
 **Diagram sources**
-- [tcp-connection-bun.ts:27-48](file://src/tcp-connection-bun.ts#L27-L48)
+- [tcp-connection-bun.ts:27-48](file://packages/tcp/src/tcp-connection-bun.ts#L27-L48)
 
 **Section sources**
-- [tcp-connection-bun.ts:27-48](file://src/tcp-connection-bun.ts#L27-L48)
+- [tcp-connection-bun.ts:27-48](file://packages/tcp/src/tcp-connection-bun.ts#L27-L48)
 
 ### Error Handling Patterns and Mapping to TcpStreamError
 - Adapter-level errors: Connect-time errors from Bun.connect and socket error/connectError handlers are normalized into TcpStreamError with appropriate operation labels.
@@ -267,14 +273,14 @@ Engine --> TcpStreamError : "maps connect/read/write"
 ```
 
 **Diagram sources**
-- [tcp-connection-common.ts:18-24](file://src/tcp-connection-common.ts#L18-L24)
-- [tcp-connection-bun.ts:49-55](file://src/tcp-connection-bun.ts#L49-L55)
-- [tcp-stream-engine.ts:81-86](file://src/tcp-stream-engine.ts#L81-L86)
+- [tcp-connection-common.ts:18-24](file://packages/tcp/src/tcp-connection-common.ts#L18-L24)
+- [tcp-connection-bun.ts:49-55](file://packages/tcp/src/tcp-connection-bun.ts#L49-L55)
+- [tcp-stream-engine.ts:81-86](file://packages/tcp/src/tcp-stream-engine.ts#L81-L86)
 
 **Section sources**
-- [tcp-connection-common.ts:18-24](file://src/tcp-connection-common.ts#L18-L24)
-- [tcp-connection-bun.ts:49-55](file://src/tcp-connection-bun.ts#L49-L55)
-- [tcp-stream-engine.ts:81-86](file://src/tcp-stream-engine.ts#L81-L86)
+- [tcp-connection-common.ts:18-24](file://packages/tcp/src/tcp-connection-common.ts#L18-L24)
+- [tcp-connection-bun.ts:49-55](file://packages/tcp/src/tcp-connection-bun.ts#L49-L55)
+- [tcp-stream-engine.ts:81-86](file://packages/tcp/src/tcp-stream-engine.ts#L81-L86)
 
 ### Binary Type Configuration and Zero-Copy Considerations
 - The adapter sets binaryType to a typed array format to receive chunks as Uint8Array-like data.
@@ -286,7 +292,7 @@ Practical implications:
 - Avoid unnecessary string conversions unless required by application logic.
 
 **Section sources**
-- [tcp-connection-bun.ts:63-67](file://src/tcp-connection-bun.ts#L63-L67)
+- [tcp-connection-bun.ts:63-67](file://packages/tcp/src/tcp-connection-bun.ts#L63-L67)
 - [bun-tcp-connection-api.md:331-353](file://docs/research/bun-tcp-connection-api.md#L331-L353)
 
 ### Connection Events and Example Scenarios
@@ -308,7 +314,7 @@ Example references:
 
 **Section sources**
 - [bun-tcp-connection-api.md:64-143](file://docs/research/bun-tcp-connection-api.md#L64-L143)
-- [tcp-connection-bun.ts:57-86](file://src/tcp-connection-bun.ts#L57-L86)
+- [tcp-connection-bun.ts:57-86](file://packages/tcp/src/tcp-connection-bun.ts#L57-L86)
 
 ## Dependency Analysis
 The Bun adapter depends on:
@@ -325,16 +331,16 @@ DefaultExport["tcp-connection.ts"] --> Adapter
 ```
 
 **Diagram sources**
-- [tcp-connection-bun.ts:1-16](file://src/tcp-connection-bun.ts#L1-L16)
-- [tcp-stream-engine.ts:1-24](file://src/tcp-stream-engine.ts#L1-L24)
-- [tcp-connection-common.ts:1-24](file://src/tcp-connection-common.ts#L1-L24)
-- [tcp-connection.ts:1-10](file://src/tcp-connection.ts#L1-L10)
+- [tcp-connection-bun.ts:1-16](file://packages/tcp/src/tcp-connection-bun.ts#L1-L16)
+- [tcp-stream-engine.ts:1-24](file://packages/tcp/src/tcp-stream-engine.ts#L1-L24)
+- [tcp-connection-common.ts:1-24](file://packages/tcp/src/tcp-connection-common.ts#L1-L24)
+- [tcp-connection.ts:1-10](file://packages/tcp/src/tcp-connection.ts#L1-L10)
 
 **Section sources**
-- [tcp-connection-bun.ts:1-16](file://src/tcp-connection-bun.ts#L1-L16)
-- [tcp-stream-engine.ts:1-24](file://src/tcp-stream-engine.ts#L1-L24)
-- [tcp-connection-common.ts:1-24](file://src/tcp-connection-common.ts#L1-L24)
-- [tcp-connection.ts:1-10](file://src/tcp-connection.ts#L1-L10)
+- [tcp-connection-bun.ts:1-16](file://packages/tcp/src/tcp-connection-bun.ts#L1-L16)
+- [tcp-stream-engine.ts:1-24](file://packages/tcp/src/tcp-stream-engine.ts#L1-L24)
+- [tcp-connection-common.ts:1-24](file://packages/tcp/src/tcp-connection-common.ts#L1-L24)
+- [tcp-connection.ts:1-10](file://packages/tcp/src/tcp-connection.ts#L1-L10)
 
 ## Performance Considerations
 - Zero-copy writes: Passing Uint8Array or ArrayBuffer directly to Bun socket write minimizes copying overhead.
@@ -358,11 +364,11 @@ Operational tips:
 - Copy incoming chunks when emitting Data to prevent unintended mutations.
 
 **Section sources**
-- [tcp-stream-engine.ts:180-195](file://src/tcp-stream-engine.ts#L180-L195)
-- [tcp-connection-bun.ts:63-86](file://src/tcp-connection-bun.ts#L63-L86)
-- [tcp-connection-bun.ts:96-114](file://src/tcp-connection-bun.ts#L96-L114)
+- [tcp-stream-engine.ts:180-195](file://packages/tcp/src/tcp-stream-engine.ts#L180-L195)
+- [tcp-connection-bun.ts:63-86](file://packages/tcp/src/tcp-connection-bun.ts#L63-L86)
+- [tcp-connection-bun.ts:96-114](file://packages/tcp/src/tcp-connection-bun.ts#L96-L114)
 
 ## Conclusion
-The Bun adapter cleanly bridges Bun’s native TCP/TLS sockets to the unified stream engine. It leverages Bun.connect with configurable TLS, maps socket events to normalized engine events, and ensures robust lifecycle management with explicit flush and termination strategies. By adhering to Bun’s performance characteristics—typed array binary types, zero-copy writes, and explicit backpressure—the adapter delivers efficient, reliable TCP connectivity within the Effect-driven architecture.
+The Bun adapter cleanly bridges Bun's native TCP/TLS sockets to the unified stream engine. It leverages Bun.connect with configurable TLS, maps socket events to normalized engine events, and ensures robust lifecycle management with explicit flush and termination strategies. By adhering to Bun's performance characteristics—typed array binary types, zero-copy writes, and explicit backpressure—the adapter delivers efficient, reliable TCP connectivity within the Effect-driven architecture.
 
 [No sources needed since this section summarizes without analyzing specific files]

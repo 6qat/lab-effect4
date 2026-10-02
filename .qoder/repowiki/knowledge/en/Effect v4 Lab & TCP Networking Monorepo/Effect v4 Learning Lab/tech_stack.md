@@ -1,0 +1,1 @@
+Effect v4 (`effect@4.0.0-rc.109`) with `@effect/platform-bun` for Bun runtime integration, `effect-mq@^0.7.0` for typed jobs/workers, and `bun test` + Biome for tooling; TypeScript module mode (`"type": "module"`).

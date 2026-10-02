@@ -1,0 +1,1 @@
+Run any script across all packages with `bun run --workspaces <script>` (e.g. `bun run test`, `bun run typecheck`, `bun run format`). Start the dev Redis with `docker compose up`. Sync Zed prompts into `.zed` via `bun sync-prompts`.

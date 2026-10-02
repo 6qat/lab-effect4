@@ -1,3 +1,0 @@
-- Pure data transformation helpers (e.g. `formatAuthCommand`, `formatSubCommand`) return `Result<Result, CedroProtocolError>` and are consumed in I/O via `Effect.fromResult`, separating validation from side effects.
-- External capabilities are exposed as Effect `Context.Service` classes built with `Context.Service<Shape>()("Name")()` and instantiated through `Layer.effect`/`Layer.succeed` live layers rather than direct construction.
-- Network I/O errors are modeled as tagged errors (`Data.TaggedError`) so callers can pattern-match on error variants instead of inspecting strings.

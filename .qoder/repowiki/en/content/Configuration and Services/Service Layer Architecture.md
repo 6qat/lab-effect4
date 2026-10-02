@@ -2,15 +2,21 @@
 
 <cite>
 **Referenced Files in This Document**
-- [tcp-stream-engine.ts](file://src/tcp-stream-engine.ts)
-- [tcp-connection-common.ts](file://src/tcp-connection-common.ts)
-- [tcp-connection-bun.ts](file://src/tcp-connection-bun.ts)
-- [tcp-connection-nodejs.ts](file://src/tcp-connection-nodejs.ts)
-- [default-services.ts](file://src/default-services.ts)
-- [running-effects.ts](file://src/running-effects.ts)
-- [tcp-stream-engine.test.ts](file://src/tcp-stream-engine.test.ts)
-- [tcp-connection-test-suite.ts](file://src/tcp-connection-test-suite.ts)
+- [tcp-stream-engine.ts](file://packages/tcp/src/tcp-stream-engine.ts)
+- [tcp-connection-common.ts](file://packages/tcp/src/tcp-connection-common.ts)
+- [tcp-connection-bun.ts](file://packages/tcp/src/tcp-connection-bun.ts)
+- [tcp-connection-nodejs.ts](file://packages/tcp/src/tcp-connection-nodejs.ts)
+- [default-services.ts](file://packages/lab/src/default-services.ts)
+- [running-effects.ts](file://packages/lab/src/running-effects.ts)
+- [tcp-stream-engine.test.ts](file://packages/tcp/src/tcp-stream-engine.test.ts)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated file references to reflect the new package structure with service layer examples moved to packages/lab/src/default-services.ts and packages/lab/src/running-effects.ts
+- Updated all file path references from src/ to packages/tcp/src/ for TCP-related files
+- Updated all file path references from src/ to packages/lab/src/ for service layer examples
+- Maintained all architectural concepts and implementation details while updating file paths
 
 ## Table of Contents
 1. Introduction
@@ -24,58 +30,55 @@
 9. Conclusion
 
 ## Introduction
-This document explains the service layer architecture built on Effect’s Effect Layers and dependency injection patterns. It focuses on how services are defined, composed, and managed across the application lifecycle, with a concrete example centered on TCP stream engines, logging services, and error handling. You will learn:
+This document explains the service layer architecture built on Effect's Effect Layers and dependency injection patterns. It focuses on how services are defined, composed, and managed across the application lifecycle, with a concrete example centered on TCP stream engines, logging services, and error handling. You will learn:
 - How services are modeled as Context Services and provided via Layers
 - How default platform-specific services are supplied (Bun and Node.js TCP stream engines)
 - How to create custom services, extend or override defaults, and compose them into layers
 - How to test services using mocked implementations and layered composition
 
 ## Project Structure
-The service layer is organized around a small set of cohesive modules:
-- Common contracts and configuration services live in a shared module
+The service layer is organized around a small set of cohesive modules within the packages structure:
+- Common contracts and configuration services live in a shared module under packages/tcp/src
 - A platform-agnostic engine composes raw socket adapters into a stable API
 - Platform-specific adapters implement the adapter protocol for Bun and Node.js
 - Convenience layers expose ready-to-use services that wire configuration and engines together
 - Tests demonstrate composition, mocking, and lifecycle behavior
+- Service layer examples demonstrating Clock, Random, and runtime management are located in packages/lab/src
 
 ```mermaid
 graph TB
-subgraph "Common"
+subgraph "TCP Package"
 C1["tcp-connection-common.ts"]
-end
-subgraph "Engine"
 E1["tcp-stream-engine.ts"]
-end
-subgraph "Adapters"
 A1["tcp-connection-bun.ts"]
 A2["tcp-connection-nodejs.ts"]
 end
-subgraph "Usage"
-U1["default-services.ts"]
-U2["running-effects.ts"]
+subgraph "Lab Package"
+L1["default-services.ts"]
+L2["running-effects.ts"]
 end
 A1 --> E1
 A2 --> E1
 E1 --> C1
-U1 --> C1
-U2 --> C1
+L1 --> C1
+L2 --> C1
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:1-30](file://src/tcp-stream-engine.ts#L1-L30)
-- [tcp-connection-common.ts:1-60](file://src/tcp-connection-common.ts#L1-L60)
-- [tcp-connection-bun.ts:1-25](file://src/tcp-connection-bun.ts#L1-L25)
-- [tcp-connection-nodejs.ts:1-25](file://src/tcp-connection-nodejs.ts#L1-L25)
-- [default-services.ts:1-12](file://src/default-services.ts#L1-L12)
-- [running-effects.ts:1-15](file://src/running-effects.ts#L1-L15)
+- [tcp-stream-engine.ts:1-30](file://packages/tcp/src/tcp-stream-engine.ts#L1-L30)
+- [tcp-connection-common.ts:1-60](file://packages/tcp/src/tcp-connection-common.ts#L1-L60)
+- [tcp-connection-bun.ts:1-25](file://packages/tcp/src/tcp-connection-bun.ts#L1-L25)
+- [tcp-connection-nodejs.ts:1-25](file://packages/tcp/src/tcp-connection-nodejs.ts#L1-L25)
+- [default-services.ts:1-12](file://packages/lab/src/default-services.ts#L1-L12)
+- [running-effects.ts:1-15](file://packages/lab/src/running-effects.ts#L1-L15)
 
 **Section sources**
-- [tcp-stream-engine.ts:1-30](file://src/tcp-stream-engine.ts#L1-L30)
-- [tcp-connection-common.ts:1-60](file://src/tcp-connection-common.ts#L1-L60)
-- [tcp-connection-bun.ts:1-25](file://src/tcp-connection-bun.ts#L1-L25)
-- [tcp-connection-nodejs.ts:1-25](file://src/tcp-connection-nodejs.ts#L1-L25)
-- [default-services.ts:1-12](file://src/default-services.ts#L1-L12)
-- [running-effects.ts:1-15](file://src/running-effects.ts#L1-L15)
+- [tcp-stream-engine.ts:1-30](file://packages/tcp/src/tcp-stream-engine.ts#L1-L30)
+- [tcp-connection-common.ts:1-60](file://packages/tcp/src/tcp-connection-common.ts#L1-L60)
+- [tcp-connection-bun.ts:1-25](file://packages/tcp/src/tcp-connection-bun.ts#L1-L25)
+- [tcp-connection-nodejs.ts:1-25](file://packages/tcp/src/tcp-connection-nodejs.ts#L1-L25)
+- [default-services.ts:1-12](file://packages/lab/src/default-services.ts#L1-L12)
+- [running-effects.ts:1-15](file://packages/lab/src/running-effects.ts#L1-L15)
 
 ## Core Components
 This section introduces the primary services and their roles:
@@ -92,16 +95,16 @@ Key implementation highlights:
 - Error modeling uses tagged errors for precise failure semantics
 
 **Section sources**
-- [tcp-connection-common.ts:20-60](file://src/tcp-connection-common.ts#L20-L60)
-- [tcp-stream-engine.ts:49-68](file://src/tcp-stream-engine.ts#L49-L68)
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-stream-engine.ts:201-359](file://src/tcp-stream-engine.ts#L201-L359)
-- [tcp-connection-bun.ts:133-138](file://src/tcp-connection-bun.ts#L133-L138)
-- [tcp-connection-nodejs.ts:114-131](file://src/tcp-connection-nodejs.ts#L114-L131)
-- [default-services.ts:1-31](file://src/default-services.ts#L1-L31)
+- [tcp-connection-common.ts:20-60](file://packages/tcp/src/tcp-connection-common.ts#L20-L60)
+- [tcp-stream-engine.ts:49-68](file://packages/tcp/src/tcp-stream-engine.ts#L49-L68)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-stream-engine.ts:201-359](file://packages/tcp/src/tcp-stream-engine.ts#L201-L359)
+- [tcp-connection-bun.ts:133-138](file://packages/tcp/src/tcp-connection-bun.ts#L133-L138)
+- [tcp-connection-nodejs.ts:114-131](file://packages/tcp/src/tcp-connection-nodejs.ts#L114-L131)
+- [default-services.ts:1-31](file://packages/lab/src/default-services.ts#L1-L31)
 
 ## Architecture Overview
-At runtime, application code depends on services via Effect’s context. Layers provide concrete implementations at composition time. For TCP connectivity:
+At runtime, application code depends on services via Effect's context. Layers provide concrete implementations at composition time. For TCP connectivity:
 - Application code requests TcpStream from context
 - TcpStreamLayer constructs a connection using TcpStreamEngine
 - TcpStreamEngine.connect delegates to a platform adapter (Bun or Node.js)
@@ -129,10 +132,10 @@ TS-->>App : Stream<Uint8Array>, send(), close()
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-stream-engine.ts:201-359](file://src/tcp-stream-engine.ts#L201-L359)
-- [tcp-connection-bun.ts:18-138](file://src/tcp-connection-bun.ts#L18-L138)
-- [tcp-connection-nodejs.ts:21-119](file://src/tcp-connection-nodejs.ts#L21-L119)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-stream-engine.ts:201-359](file://packages/tcp/src/tcp-stream-engine.ts#L201-L359)
+- [tcp-connection-bun.ts:18-138](file://packages/tcp/src/tcp-connection-bun.ts#L18-L138)
+- [tcp-connection-nodejs.ts:21-119](file://packages/tcp/src/tcp-connection-nodejs.ts#L21-L119)
 
 ## Detailed Component Analysis
 
@@ -153,12 +156,12 @@ Practical implications:
 - Production code wires real implementations via platform-specific layers
 
 **Section sources**
-- [tcp-connection-common.ts:26-58](file://src/tcp-connection-common.ts#L26-L58)
-- [tcp-stream-engine.ts:49-68](file://src/tcp-stream-engine.ts#L49-L68)
+- [tcp-connection-common.ts:26-58](file://packages/tcp/src/tcp-connection-common.ts#L26-L58)
+- [tcp-stream-engine.ts:49-68](file://packages/tcp/src/tcp-stream-engine.ts#L49-L68)
 
 ### Engine Composition: makeTcpStreamEngine
 The engine abstracts over platform differences:
-- Accepts a “cold” adapter function that returns a handle and emits events
+- Accepts a "cold" adapter function that returns a handle and emits events
 - Manages connection lifecycle: connecting, ready, data, drain, close, error
 - Enforces connect timeout and normalizes failures
 - Exposes a stable interface: connect(config) returns an established connection with a socket handle and event stream
@@ -182,12 +185,12 @@ Use --> End(["Cleanup on scope exit"])
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-stream-engine.ts:180-195](file://src/tcp-stream-engine.ts#L180-L195)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-stream-engine.ts:180-195](file://packages/tcp/src/tcp-stream-engine.ts#L180-L195)
 
 **Section sources**
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-stream-engine.ts:180-195](file://src/tcp-stream-engine.ts#L180-L195)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-stream-engine.ts:180-195](file://packages/tcp/src/tcp-stream-engine.ts#L180-L195)
 
 ### High-Level Service: TcpStream
 TcpStream is the user-facing service that:
@@ -226,11 +229,11 @@ TcpStream --> ConnectionConfig : "reads"
 ```
 
 **Diagram sources**
-- [tcp-connection-common.ts:26-58](file://src/tcp-connection-common.ts#L26-L58)
-- [tcp-stream-engine.ts:201-359](file://src/tcp-stream-engine.ts#L201-L359)
+- [tcp-connection-common.ts:26-58](file://packages/tcp/src/tcp-connection-common.ts#L26-L58)
+- [tcp-stream-engine.ts:201-359](file://packages/tcp/src/tcp-stream-engine.ts#L201-L359)
 
 **Section sources**
-- [tcp-stream-engine.ts:201-359](file://src/tcp-stream-engine.ts#L201-L359)
+- [tcp-stream-engine.ts:201-359](file://packages/tcp/src/tcp-stream-engine.ts#L201-L359)
 
 ### Platform Adapters: Bun and Node.js
 Both adapters implement the same cold adapter protocol:
@@ -246,11 +249,11 @@ Differences:
 Both export convenience layers that bind the engine and configuration into a single provisionable unit.
 
 **Section sources**
-- [tcp-connection-bun.ts:18-138](file://src/tcp-connection-bun.ts#L18-L138)
-- [tcp-connection-nodejs.ts:21-131](file://src/tcp-connection-nodejs.ts#L21-L131)
+- [tcp-connection-bun.ts:18-138](file://packages/tcp/src/tcp-connection-bun.ts#L18-L138)
+- [tcp-connection-nodejs.ts:21-131](file://packages/tcp/src/tcp-connection-nodejs.ts#L21-L131)
 
 ### Default Services Provided by the Library
-Beyond TCP, the library demonstrates usage of core Effect services:
+Beyond TCP, the library demonstrates usage of core Effect services through examples in packages/lab/src:
 - Clock.currentTimeMillis for deterministic timestamps
 - Random.next for random numbers, with seeding support for tests
 - Console.log for logging via Effect-managed services
@@ -259,8 +262,8 @@ Beyond TCP, the library demonstrates usage of core Effect services:
 These illustrate how to consume and override services without coupling to global state.
 
 **Section sources**
-- [default-services.ts:1-31](file://src/default-services.ts#L1-L31)
-- [running-effects.ts:1-114](file://src/running-effects.ts#L1-L114)
+- [default-services.ts:1-31](file://packages/lab/src/default-services.ts#L1-L31)
+- [running-effects.ts:1-114](file://packages/lab/src/running-effects.ts#L1-L114)
 
 ### Creating Custom Services
 To define a new service:
@@ -275,8 +278,8 @@ Example pattern:
 - Compose layers to provide multiple services at once
 
 **Section sources**
-- [tcp-connection-common.ts:26-58](file://src/tcp-connection-common.ts#L26-L58)
-- [tcp-stream-engine.ts:49-68](file://src/tcp-stream-engine.ts#L49-L68)
+- [tcp-connection-common.ts:26-58](file://packages/tcp/src/tcp-connection-common.ts#L26-L58)
+- [tcp-stream-engine.ts:49-68](file://packages/tcp/src/tcp-stream-engine.ts#L49-L68)
 
 ### Extending and Overriding Defaults
 Override strategies:
@@ -290,9 +293,9 @@ In this codebase:
 - Tests inject a custom engine via Layer.succeed(TcpStreamEngine, engine)
 
 **Section sources**
-- [tcp-connection-bun.ts:133-138](file://src/tcp-connection-bun.ts#L133-L138)
-- [tcp-connection-nodejs.ts:114-131](file://src/tcp-connection-nodejs.ts#L114-L131)
-- [tcp-stream-engine.test.ts:195-205](file://src/tcp-stream-engine.test.ts#L195-L205)
+- [tcp-connection-bun.ts:133-138](file://packages/tcp/src/tcp-connection-bun.ts#L133-L138)
+- [tcp-connection-nodejs.ts:114-131](file://packages/tcp/src/tcp-connection-nodejs.ts#L114-L131)
+- [tcp-stream-engine.test.ts:195-205](file://packages/tcp/src/tcp-stream-engine.test.ts#L195-L205)
 
 ### Practical Examples of Service Composition
 Typical composition steps:
@@ -307,9 +310,8 @@ Example flows:
 - Application entrypoint: provide platform runner and all required layers
 
 **Section sources**
-- [tcp-stream-engine.ts:341-359](file://src/tcp-stream-engine.ts#L341-L359)
-- [tcp-stream-engine.test.ts:195-205](file://src/tcp-stream-engine.test.ts#L195-L205)
-- [tcp-connection-test-suite.ts:218-235](file://src/tcp-connection-test-suite.ts#L218-L235)
+- [tcp-stream-engine.ts:341-359](file://packages/tcp/src/tcp-stream-engine.ts#L341-L359)
+- [tcp-stream-engine.test.ts:195-205](file://packages/tcp/src/tcp-stream-engine.test.ts#L195-L205)
 
 ### Testing Strategies with Mocked Services
 Recommended practices demonstrated in the repository:
@@ -327,8 +329,7 @@ Key scenarios covered:
 - Graceful stream draining on teardown
 
 **Section sources**
-- [tcp-stream-engine.test.ts:26-214](file://src/tcp-stream-engine.test.ts#L26-L214)
-- [tcp-connection-test-suite.ts:218-306](file://src/tcp-connection-test-suite.ts#L218-L306)
+- [tcp-stream-engine.test.ts:26-214](file://packages/tcp/src/tcp-stream-engine.test.ts#L26-L214)
 
 ## Dependency Analysis
 Service dependencies form a clear hierarchy:
@@ -349,14 +350,14 @@ TS --> CC["ConnectionConfig"]
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:201-359](file://src/tcp-stream-engine.ts#L201-L359)
-- [tcp-connection-bun.ts:133-138](file://src/tcp-connection-bun.ts#L133-L138)
-- [tcp-connection-nodejs.ts:114-131](file://src/tcp-connection-nodejs.ts#L114-L131)
-- [tcp-connection-common.ts:45-60](file://src/tcp-connection-common.ts#L45-L60)
+- [tcp-stream-engine.ts:201-359](file://packages/tcp/src/tcp-stream-engine.ts#L201-L359)
+- [tcp-connection-bun.ts:133-138](file://packages/tcp/src/tcp-connection-bun.ts#L133-L138)
+- [tcp-connection-nodejs.ts:114-131](file://packages/tcp/src/tcp-connection-nodejs.ts#L114-L131)
+- [tcp-connection-common.ts:45-60](file://packages/tcp/src/tcp-connection-common.ts#L45-L60)
 
 **Section sources**
-- [tcp-stream-engine.ts:201-359](file://src/tcp-stream-engine.ts#L201-L359)
-- [tcp-connection-common.ts:45-60](file://src/tcp-connection-common.ts#L45-L60)
+- [tcp-stream-engine.ts:201-359](file://packages/tcp/src/tcp-stream-engine.ts#L201-L359)
+- [tcp-connection-common.ts:45-60](file://packages/tcp/src/tcp-connection-common.ts#L45-L60)
 
 ## Performance Considerations
 - Write serialization: TcpStream uses a semaphore to serialize writes, preventing interleaved frames and ensuring ordered delivery.
@@ -364,8 +365,6 @@ TS --> CC["ConnectionConfig"]
 - Retries: Default exponential backoff with jitter reduces thundering herds; customize via retrySchedule for predictable testing.
 - Timeouts: Connect timeouts prevent hanging connections; ensure they align with expected network conditions.
 - Resource management: Scoped lifecycles ensure timely cleanup of sockets and fibers, minimizing leaks under load.
-
-[No sources needed since this section provides general guidance]
 
 ## Troubleshooting Guide
 Common issues and resolutions:
@@ -381,18 +380,15 @@ Operational tips:
 - Prefer running programs with platform runtimes (e.g., BunRuntime.runMain) for consistent signal handling and exit codes
 
 **Section sources**
-- [tcp-stream-engine.ts:180-195](file://src/tcp-stream-engine.ts#L180-L195)
-- [tcp-stream-engine.ts:261-294](file://src/tcp-stream-engine.ts#L261-L294)
-- [tcp-connection-test-suite.ts:424-445](file://src/tcp-connection-test-suite.ts#L424-L445)
-- [running-effects.ts:101-114](file://src/running-effects.ts#L101-L114)
+- [tcp-stream-engine.ts:180-195](file://packages/tcp/src/tcp-stream-engine.ts#L180-L195)
+- [tcp-stream-engine.ts:261-294](file://packages/tcp/src/tcp-stream-engine.ts#L261-L294)
+- [running-effects.ts:101-114](file://packages/lab/src/running-effects.ts#L101-L114)
 
 ## Conclusion
-This service layer leverages Effect’s Context and Layer system to deliver a robust, testable, and extensible architecture. By defining clear service shapes, composing platform-specific implementations, and managing lifecycles with scopes, the code achieves:
+This service layer leverages Effect's Context and Layer system to deliver a robust, testable, and extensible architecture. By defining clear service shapes, composing platform-specific implementations, and managing lifecycles with scopes, the code achieves:
 - Decoupled business logic that depends only on abstractions
 - Easy substitution of implementations for testing and different environments
 - Predictable error handling and resource cleanup
 - Scalable composition of services across the application lifecycle
 
 Adopting these patterns enables you to add new services, override defaults safely, and maintain clarity as your application grows.
-
-[No sources needed since this section summarizes without analyzing specific files]

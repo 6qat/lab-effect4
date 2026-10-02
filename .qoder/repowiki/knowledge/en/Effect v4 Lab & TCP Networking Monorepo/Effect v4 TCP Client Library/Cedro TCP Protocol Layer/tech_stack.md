@@ -1,0 +1,1 @@
+Effect-TS (`Effect`, `Layer`, `Context.Service`, `Stream`, `Result`) for effectful I/O and error modeling; Bun-native TCP sockets are the default runtime behind the shim.

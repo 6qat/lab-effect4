@@ -1,1 +1,0 @@
-A pnpm workspace that bundles Effect-TS v4 example programs, agent skills, documentation, and editor/tooling configuration under a shared TypeScript and Biome toolchain.

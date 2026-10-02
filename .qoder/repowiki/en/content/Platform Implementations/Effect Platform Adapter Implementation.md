@@ -2,15 +2,21 @@
 
 <cite>
 **Referenced Files in This Document**
-- [tcp-connection-platform.ts](file://src/tcp-connection-platform.ts)
-- [tcp-stream-engine.ts](file://src/tcp-stream-engine.ts)
-- [tcp-connection-common.ts](file://src/tcp-connection-common.ts)
-- [tcp-connection-bun.ts](file://src/tcp-connection-bun.ts)
-- [tcp-connection-nodejs.ts](file://src/tcp-connection-nodejs.ts)
-- [tcp-connection-http-example.ts](file://src/tcp-connection-http-example.ts)
+- [tcp-connection-platform.ts](file://packages/tcp/src/tcp-connection-platform.ts)
+- [tcp-stream-engine.ts](file://packages/tcp/src/tcp-stream-engine.ts)
+- [tcp-connection-common.ts](file://packages/tcp/src/tcp-connection-common.ts)
+- [tcp-connection-bun.ts](file://packages/tcp/src/tcp-connection-bun.ts)
+- [tcp-connection-nodejs.ts](file://packages/tcp/src/tcp-connection-nodejs.ts)
+- [tcp-connection-http-example.ts](file://packages/tcp/src/tcp-connection-http-example.ts)
 - [0003-effect-platform-push-socket-implementation.md](file://docs/adr/0003-effect-platform-push-socket-implementation.md)
 - [0005-unified-platform-socket-engine-adapter-and-test-suite.md](file://docs/adr/0005-unified-platform-socket-engine-adapter-and-test-suite.md)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated all file path references from root `src/` to `packages/tcp/src/` to reflect the new package structure
+- Maintained all architectural and implementation details as they remain functionally unchanged
+- Preserved all diagrams and examples with updated file paths
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -31,7 +37,7 @@ This document explains the Effect Platform adapter implementation that provides 
 The repository implements a shared TCP stream orchestrator with three concrete engine adapters:
 - Bun-native adapter using Bun.connect
 - Node.js adapter using node:net and node:tls
-- Platform adapter using @effect/platform’s Socket.Socket (BunSocket.makeNet / BunSocket.fromDuplex)
+- Platform adapter using @effect/platform's Socket.Socket (BunSocket.makeNet / BunSocket.fromDuplex)
 
 All adapters implement a common engine seam so the same business logic can run on any supported runtime.
 
@@ -59,18 +65,18 @@ A --> B
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-connection-bun.ts:18-135](file://src/tcp-connection-bun.ts#L18-L135)
-- [tcp-connection-nodejs.ts:21-115](file://src/tcp-connection-nodejs.ts#L21-L115)
-- [tcp-connection-platform.ts:17-125](file://src/tcp-connection-platform.ts#L17-L125)
-- [tcp-connection-http-example.ts:149-269](file://src/tcp-connection-http-example.ts#L149-L269)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-connection-bun.ts:18-135](file://packages/tcp/src/tcp-connection-bun.ts#L18-L135)
+- [tcp-connection-nodejs.ts:21-115](file://packages/tcp/src/tcp-connection-nodejs.ts#L21-L115)
+- [tcp-connection-platform.ts:17-125](file://packages/tcp/src/tcp-connection-platform.ts#L17-L125)
+- [tcp-connection-http-example.ts:149-269](file://packages/tcp/src/tcp-connection-http-example.ts#L149-L269)
 
 **Section sources**
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-connection-bun.ts:18-135](file://src/tcp-connection-bun.ts#L18-L135)
-- [tcp-connection-nodejs.ts:21-115](file://src/tcp-connection-nodejs.ts#L21-L115)
-- [tcp-connection-platform.ts:17-125](file://src/tcp-connection-platform.ts#L17-L125)
-- [tcp-connection-http-example.ts:149-269](file://src/tcp-connection-http-example.ts#L149-L269)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-connection-bun.ts:18-135](file://packages/tcp/src/tcp-connection-bun.ts#L18-L135)
+- [tcp-connection-nodejs.ts:21-115](file://packages/tcp/src/tcp-connection-nodejs.ts#L21-L115)
+- [tcp-connection-platform.ts:17-125](file://packages/tcp/src/tcp-connection-platform.ts#L17-L125)
+- [tcp-connection-http-example.ts:149-269](file://packages/tcp/src/tcp-connection-http-example.ts#L149-L269)
 
 ## Core Components
 - TcpStreamEngine: The core service that exposes connect(config) returning an EstablishedConnection with a RawSocketHandle and a Stream of events.
@@ -84,13 +90,13 @@ Key responsibilities:
 - Consumers depend only on TcpStream and never import runtime-specific modules directly.
 
 **Section sources**
-- [tcp-stream-engine.ts:28-67](file://src/tcp-stream-engine.ts#L28-L67)
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-connection-common.ts:18-60](file://src/tcp-connection-common.ts#L18-L60)
-- [tcp-stream-engine.ts:341-359](file://src/tcp-stream-engine.ts#L341-L359)
+- [tcp-stream-engine.ts:28-67](file://packages/tcp/src/tcp-stream-engine.ts#L28-L67)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-connection-common.ts:18-60](file://packages/tcp/src/tcp-connection-common.ts#L18-L60)
+- [tcp-stream-engine.ts:341-359](file://packages/tcp/src/tcp-stream-engine.ts#L341-L359)
 
 ## Architecture Overview
-The platform adapter integrates via the same engine seam as Bun and Node.js adapters. It uses @effect/platform’s push-based Socket.Socket to bridge to the shared orchestrator.
+The platform adapter integrates via the same engine seam as Bun and Node.js adapters. It uses @effect/platform's push-based Socket.Socket to bridge to the shared orchestrator.
 
 ```mermaid
 sequenceDiagram
@@ -113,24 +119,24 @@ Sock-->>App : scope teardown
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-connection-platform.ts:17-125](file://src/tcp-connection-platform.ts#L17-L125)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-connection-platform.ts:17-125](file://packages/tcp/src/tcp-connection-platform.ts#L17-L125)
 
 ## Detailed Component Analysis
 
 ### Platform Adapter: tcp-connection-platform.ts
 Responsibilities:
-- Create sockets for plain TCP or TLS using @effect/platform’s BunSocket APIs.
-- Bridge push-based socket callbacks to the shared engine’s event model.
+- Create sockets for plain TCP or TLS using @effect/platform's BunSocket APIs.
+- Bridge push-based socket callbacks to the shared engine's event model.
 - Provide a RawSocketHandle whose write delegates to the effectful socket.writer and close closes the scoped owner.
 
 Runtime detection and TLS handling:
 - Plain TCP: uses BunSocket.makeNet with host and port.
-- TLS: wraps Node’s tls.connect inside BunSocket.fromDuplex, listening for secureConnect and error events, then resuming the Effect.
+- TLS: wraps Node's tls.connect inside BunSocket.fromDuplex, listening for secureConnect and error events, then resuming the Effect.
 
 Lifecycle and readiness:
 - Uses a Deferred to signal when the socket is ready or has errored.
-- Emits Ready, Data, Drain, Close, and Error events through the engine’s emit callback.
+- Emits Ready, Data, Drain, Close, and Error events through the engine's emit callback.
 - Ensures child-scoped resources are closed on exit or rejection.
 
 Error mapping:
@@ -141,7 +147,7 @@ Exports:
 - TcpStreamPlatformLive: convenience layer combining engine and config.
 
 **Section sources**
-- [tcp-connection-platform.ts:17-125](file://src/tcp-connection-platform.ts#L17-L125)
+- [tcp-connection-platform.ts:17-125](file://packages/tcp/src/tcp-connection-platform.ts#L17-L125)
 
 ### Shared Engine: tcp-stream-engine.ts
 Responsibilities:
@@ -156,9 +162,9 @@ Key behaviors:
 - Safe teardown with Scoped resources and fiber interruption.
 
 **Section sources**
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-stream-engine.ts:180-195](file://src/tcp-stream-engine.ts#L180-L195)
-- [tcp-stream-engine.ts:201-359](file://src/tcp-stream-engine.ts#L201-L359)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-stream-engine.ts:180-195](file://packages/tcp/src/tcp-stream-engine.ts#L180-L195)
+- [tcp-stream-engine.ts:201-359](file://packages/tcp/src/tcp-stream-engine.ts#L201-L359)
 
 ### Common Types and Config: tcp-connection-common.ts
 Responsibilities:
@@ -172,8 +178,8 @@ Usage:
 - Consumers depend on TcpStream and never touch engine internals.
 
 **Section sources**
-- [tcp-connection-common.ts:12-60](file://src/tcp-connection-common.ts#L12-L60)
-- [tcp-connection-common.ts:62-100](file://src/tcp-connection-common.ts#L62-L100)
+- [tcp-connection-common.ts:12-60](file://packages/tcp/src/tcp-connection-common.ts#L12-L60)
+- [tcp-connection-common.ts:62-100](file://packages/tcp/src/tcp-connection-common.ts#L62-L100)
 
 ### Runtime Selection and Configuration
 Runtime selection is explicit at the program boundary:
@@ -188,7 +194,7 @@ Configuration examples:
 - Timeouts: set connectTimeout to bound connection attempts.
 
 When to use the platform adapter:
-- Prefer when you want to leverage @effect/platform’s Socket abstractions and align with Effect ecosystem patterns.
+- Prefer when you want to leverage @effect/platform's Socket abstractions and align with Effect ecosystem patterns.
 - Useful for comparative benchmarking against native adapters.
 - Good choice if your codebase already depends on @effect/platform and you want a single abstraction surface.
 
@@ -197,9 +203,9 @@ When to prefer direct runtime implementations:
 - When targeting a known runtime and avoiding extra abstraction layers.
 
 **Section sources**
-- [tcp-connection-http-example.ts:49-116](file://src/tcp-connection-http-example.ts#L49-L116)
-- [tcp-connection-http-example.ts:149-170](file://src/tcp-connection-http-example.ts#L149-L170)
-- [tcp-connection-http-example.ts:214-269](file://src/tcp-connection-http-example.ts#L214-L269)
+- [tcp-connection-http-example.ts:49-116](file://packages/tcp/src/tcp-connection-http-example.ts#L49-L116)
+- [tcp-connection-http-example.ts:149-170](file://packages/tcp/src/tcp-connection-http-example.ts#L149-L170)
+- [tcp-connection-http-example.ts:214-269](file://packages/tcp/src/tcp-connection-http-example.ts#L214-L269)
 
 ### Class and Module Relationships
 ```mermaid
@@ -231,9 +237,9 @@ TcpStream --> ConnectionConfig : "reads"
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:28-67](file://src/tcp-stream-engine.ts#L28-L67)
-- [tcp-stream-engine.ts:201-359](file://src/tcp-stream-engine.ts#L201-L359)
-- [tcp-connection-common.ts:18-60](file://src/tcp-connection-common.ts#L18-L60)
+- [tcp-stream-engine.ts:28-67](file://packages/tcp/src/tcp-stream-engine.ts#L28-L67)
+- [tcp-stream-engine.ts:201-359](file://packages/tcp/src/tcp-stream-engine.ts#L201-L359)
+- [tcp-connection-common.ts:18-60](file://packages/tcp/src/tcp-connection-common.ts#L18-L60)
 
 ### Platform Adapter Flowchart
 ```mermaid
@@ -258,11 +264,11 @@ Close --> End
 ```
 
 **Diagram sources**
-- [tcp-connection-platform.ts:17-125](file://src/tcp-connection-platform.ts#L17-L125)
+- [tcp-connection-platform.ts:17-125](file://packages/tcp/src/tcp-connection-platform.ts#L17-L125)
 
 ## Dependency Analysis
 - Adapters depend on the shared engine seam and common types.
-- The platform adapter additionally depends on @effect/platform’s Socket and Node’s tls module for duplex wrapping.
+- The platform adapter additionally depends on @effect/platform's Socket and Node's tls module for duplex wrapping.
 - Consumers depend only on TcpStream and ConnectionConfig, enabling runtime swapping without changing business logic.
 
 ```mermaid
@@ -278,20 +284,20 @@ HttpExample --> Platform
 ```
 
 **Diagram sources**
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-connection-bun.ts:18-135](file://src/tcp-connection-bun.ts#L18-L135)
-- [tcp-connection-nodejs.ts:21-115](file://src/tcp-connection-nodejs.ts#L21-L115)
-- [tcp-connection-platform.ts:17-125](file://src/tcp-connection-platform.ts#L17-L125)
-- [tcp-connection-http-example.ts:149-269](file://src/tcp-connection-http-example.ts#L149-L269)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-connection-bun.ts:18-135](file://packages/tcp/src/tcp-connection-bun.ts#L18-L135)
+- [tcp-connection-nodejs.ts:21-115](file://packages/tcp/src/tcp-connection-nodejs.ts#L21-L115)
+- [tcp-connection-platform.ts:17-125](file://packages/tcp/src/tcp-connection-platform.ts#L17-L125)
+- [tcp-connection-http-example.ts:149-269](file://packages/tcp/src/tcp-connection-http-example.ts#L149-L269)
 
 **Section sources**
-- [tcp-stream-engine.ts:88-178](file://src/tcp-stream-engine.ts#L88-L178)
-- [tcp-connection-platform.ts:17-125](file://src/tcp-connection-platform.ts#L17-L125)
-- [tcp-connection-http-example.ts:149-269](file://src/tcp-connection-http-example.ts#L149-L269)
+- [tcp-stream-engine.ts:88-178](file://packages/tcp/src/tcp-stream-engine.ts#L88-L178)
+- [tcp-connection-platform.ts:17-125](file://packages/tcp/src/tcp-connection-platform.ts#L17-L125)
+- [tcp-connection-http-example.ts:149-269](file://packages/tcp/src/tcp-connection-http-example.ts#L149-L269)
 
 ## Performance Considerations
 - Direct runtime adapters (Bun, Node.js) call kernel socket APIs directly, minimizing abstraction overhead.
-- The platform adapter introduces an additional layer by wrapping Node’s tls.connect with BunSocket.fromDuplex and using push-based socket callbacks, which may add slight overhead compared to native wrappers.
+- The platform adapter introduces an additional layer by wrapping Node's tls.connect with BunSocket.fromDuplex and using push-based socket callbacks, which may add slight overhead compared to native wrappers.
 - Use the platform adapter when you value ecosystem alignment and uniformity; choose direct adapters when performance-critical paths demand minimal indirection.
 
 [No sources needed since this section provides general guidance]
@@ -309,9 +315,9 @@ Validation and configuration:
 - Set connectTimeout to avoid hanging on slow or unreachable endpoints.
 
 **Section sources**
-- [tcp-stream-engine.ts:81-86](file://src/tcp-stream-engine.ts#L81-L86)
-- [tcp-stream-engine.ts:106-138](file://src/tcp-stream-engine.ts#L106-L138)
-- [tcp-connection-common.ts:62-88](file://src/tcp-connection-common.ts#L62-L88)
+- [tcp-stream-engine.ts:81-86](file://packages/tcp/src/tcp-stream-engine.ts#L81-L86)
+- [tcp-stream-engine.ts:106-138](file://packages/tcp/src/tcp-stream-engine.ts#L106-L138)
+- [tcp-connection-common.ts:62-88](file://packages/tcp/src/tcp-connection-common.ts#L62-L88)
 
 ## Conclusion
 The Effect Platform adapter provides a unified TCP streaming interface that integrates seamlessly with the shared engine seam used by Bun and Node.js adapters. It enables runtime-agnostic code while offering a clear path to swap implementations based on deployment needs. Choose the platform adapter for ecosystem alignment and comparability; choose direct runtime adapters for minimal overhead and tight control.
@@ -332,8 +338,8 @@ Examples of usage patterns:
 - Retry behavior: enable default exponential backoff or supply a custom Schedule.
 
 **Section sources**
-- [tcp-connection-http-example.ts:149-170](file://src/tcp-connection-http-example.ts#L149-L170)
-- [tcp-connection-http-example.ts:214-269](file://src/tcp-connection-http-example.ts#L214-L269)
+- [tcp-connection-http-example.ts:149-170](file://packages/tcp/src/tcp-connection-http-example.ts#L149-L170)
+- [tcp-connection-http-example.ts:214-269](file://packages/tcp/src/tcp-connection-http-example.ts#L214-L269)
 
 ### Design Decisions and Trade-offs
 - Effectful RawSocketHandle allows both synchronous kernel writes and asynchronous writers to coexist under one contract.

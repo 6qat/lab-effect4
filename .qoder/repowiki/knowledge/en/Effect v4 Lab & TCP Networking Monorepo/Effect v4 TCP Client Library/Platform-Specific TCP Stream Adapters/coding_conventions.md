@@ -1,0 +1,5 @@
+- Each platform adapter defines an `adapter(config, emit)` factory wrapped in `Effect.callback` that returns a cleanup effect, and constructs a `RawSocketHandle` whose `write` is wrapped in `Effect.try` converting exceptions into `TcpStreamError`.
+- Adapters guard all event emissions and resource teardown behind per-instance `settled`/`cancelled` flags so that async callbacks never double-resume or double-close the socket.
+- Every adapter module follows the same export shape: a `*Live` `Layer.succeed(TcpStreamEngine, ...)` layer, a convenience layer via `makeConvenienceLayer`, re-export of `ConnectionConfigLive`, and re-exports of core types from `tcp-stream-engine.js` and `tcp-connection-common.js`.
+- Errors are modelled as `Data.TaggedError` subclasses (e.g. `MissingCliArgError`, `UnsupportedProtocolError`, `InvalidUrlError`, `UnsupportedEngineError`) rather than plain `Error` instances, enabling `catchTag` handling in the example.
+- CLI argument parsing returns `Result.Result` values and the top-level program chains `Effect.catchTag('TcpStreamError', ...)` plus a generic `Effect.tapError` switch over tagged error shapes for user-facing messages.

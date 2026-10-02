@@ -3,25 +3,33 @@
 <cite>
 **Referenced Files in This Document**
 - [package.json](file://package.json)
-- [src/tcp-connection.ts](file://src/tcp-connection.ts)
-- [src/tcp-stream-engine.ts](file://src/tcp-stream-engine.ts)
-- [src/tcp-connection-common.ts](file://src/tcp-connection-common.ts)
-- [src/tcp-connection-bun.ts](file://src/tcp-connection-bun.ts)
-- [src/tcp-connection-nodejs.ts](file://src/tcp-connection-nodejs.ts)
-- [src/tcp-connection-platform.ts](file://src/tcp-connection-platform.ts)
-- [src/tcp-connection-http-example.ts](file://src/tcp-connection-http-example.ts)
+- [README.md](file://README.md)
+- [packages/tcp/package.json](file://packages/tcp/package.json)
+- [packages/lab/package.json](file://packages/lab/package.json)
+- [packages/tcp/src/tcp-connection-http-example.ts](file://packages/tcp/src/tcp-connection-http-example.ts)
+- [docs/adr/0009-private-lab-and-tcp-workspaces.md](file://docs/adr/0009-private-lab-and-tcp-workspaces.md)
 </cite>
+
+## Update Summary
+**Changes Made**
+- Updated installation instructions to use Bun instead of pnpm
+- Updated package manager references throughout the document
+- Added workspace-aware script examples using bun run --workspaces
+- Updated example execution commands to use bun directly
+- Added information about the Bun monorepo structure and lock file
 
 ## Table of Contents
 1. Introduction
-2. Project Structure
-3. Core Components
-4. Architecture Overview
-5. Detailed Component Analysis
-6. Dependency Analysis
-7. Performance Considerations
-8. Troubleshooting Guide
-9. Conclusion
+2. Environment Requirements
+3. Installation
+4. Project Structure
+5. Core Components
+6. Architecture Overview
+7. Detailed Component Analysis
+8. Dependency Analysis
+9. Performance Considerations
+10. Troubleshooting Guide
+11. Conclusion
 
 ## Introduction
 This guide helps you get started with the TCP stream library that provides a unified, Effect-based API for connecting to TCP servers across multiple runtimes: Bun, Node.js, and the Effect Platform. You will learn environment requirements, installation steps, basic configuration, and step-by-step examples ranging from a simple TCP connection to an HTTP client built over raw TCP.
@@ -30,6 +38,58 @@ The library exposes:
 - A runtime-agnostic TcpStream service for sending data and reading responses as streams
 - Engine-specific implementations for Bun, Node.js, and the Effect Platform
 - An example program that performs HTTP GET requests over raw TCP using any supported engine
+
+## Environment Requirements
+- **Runtime**: Bun 1.4.2+ or Node.js (for different adapters)
+- **Package Manager**: Bun (primary), with workspace support
+- **TypeScript**: Compatible with TypeScript 7.x
+- **Effect**: Effect v4 ecosystem packages
+
+**Section sources**
+- [package.json:6-27](file://package.json#L6-L27)
+- [docs/adr/0009-private-lab-and-tcp-workspaces.md:5](file://docs/adr/0009-private-lab-and-tcp-workspaces.md#L5)
+
+## Installation
+**Updated** The project now uses Bun as the primary package manager with workspace support.
+
+### Prerequisites
+1. Install Bun 1.4.2+ from https://bun.sh
+2. Ensure you have TypeScript installed (included in devDependencies)
+
+### Installation Steps
+1. Clone the repository
+2. Navigate to the repository root
+3. Install dependencies using Bun:
+
+```bash
+bun install
+```
+
+This creates a single `bun.lock` file at the repository root that manages dependencies for both workspace packages (`packages/lab` and `packages/tcp`).
+
+### Workspace Scripts
+The repository provides workspace-aware scripts that run across both packages:
+
+```bash
+# Run tests for all workspaces
+bun run test
+
+# Type check all workspaces  
+bun run typecheck
+
+# Format all workspaces
+bun run format
+
+# Check formatting across all workspaces
+bun run format:check
+
+# Lint all workspaces
+bun run lint
+```
+
+**Section sources**
+- [package.json:6-16](file://package.json#L6-L16)
+- [README.md:12-38](file://README.md#L12-L38)
 
 ## Project Structure
 At a high level:
@@ -51,14 +111,10 @@ F --> I["@effect/platform Socket"]
 ```
 
 **Diagram sources**
-- [src/tcp-stream-engine.ts:89-178](file://src/tcp-stream-engine.ts#L89-L178)
-- [src/tcp-connection-bun.ts:18-135](file://src/tcp-connection-bun.ts#L18-L135)
-- [src/tcp-connection-nodejs.ts:21-119](file://src/tcp-connection-nodejs.ts#L21-L119)
-- [src/tcp-connection-platform.ts:17-128](file://src/tcp-connection-platform.ts#L17-L128)
+- [packages/tcp/src/tcp-connection-http-example.ts:1-10](file://packages/tcp/src/tcp-connection-http-example.ts#L1-L10)
 
 **Section sources**
-- [package.json:1-33](file://package.json#L1-L33)
-- [src/tcp-connection.ts:1-10](file://src/tcp-connection.ts#L1-L10)
+- [package.json:7-9](file://package.json#L7-L9)
 
 ## Core Components
 - TcpStream: The main service your application uses to send bytes or text and read incoming data as a stream. It also exposes close for graceful shutdown.
@@ -72,11 +128,6 @@ Key capabilities:
 - Send binary or text payloads safely with backpressure handling
 - Read incoming data incrementally via a stream
 - Graceful close and cleanup under interruption
-
-**Section sources**
-- [src/tcp-connection-common.ts:12-101](file://src/tcp-connection-common.ts#L12-L101)
-- [src/tcp-stream-engine.ts:28-67](file://src/tcp-stream-engine.ts#L28-L67)
-- [src/tcp-stream-engine.ts:201-341](file://src/tcp-stream-engine.ts#L201-L341)
 
 ## Architecture Overview
 The library separates concerns between a stable public API and pluggable platform adapters:
@@ -105,40 +156,7 @@ App->>Stream : close()
 Stream->>Adapter : close()
 ```
 
-**Diagram sources**
-- [src/tcp-stream-engine.ts:89-178](file://src/tcp-stream-engine.ts#L89-L178)
-- [src/tcp-connection-bun.ts:18-135](file://src/tcp-connection-bun.ts#L18-L135)
-- [src/tcp-connection-nodejs.ts:21-119](file://src/tcp-connection-nodejs.ts#L21-L119)
-- [src/tcp-connection-platform.ts:17-128](file://src/tcp-connection-platform.ts#L17-L128)
-
 ## Detailed Component Analysis
-
-### Environment Requirements and Installation
-- Runtime support: Bun, Node.js, and Effect Platform are supported via separate adapters.
-- Dependencies: The project depends on Effect v4 and platform packages for Bun and Node.
-- Package manager: Use npm, pnpm, or yarn to install dependencies.
-
-Steps:
-1. Ensure you have a compatible runtime installed (Bun or Node.js).
-2. Install dependencies using your preferred package manager.
-3. Configure your program to provide the appropriate engine layer and connection configuration.
-
-**Section sources**
-- [package.json:16-28](file://package.json#L16-L28)
-
-### Basic Configuration Setup
-To use the library, provide:
-- host: target hostname or IP address
-- port: target port number
-- tls: optional boolean or TLS options for secure connections
-- retry: optional policy or false to disable retries
-- connectTimeout: optional duration for connection attempts
-
-You can supply these via a configuration layer so your program can depend only on the TcpStream service.
-
-**Section sources**
-- [src/tcp-connection-common.ts:45-60](file://src/tcp-connection-common.ts#L45-L60)
-- [src/tcp-stream-engine.ts:244-259](file://src/tcp-stream-engine.ts#L244-L259)
 
 ### First Connection Example: Establish, Send, Receive
 This example shows how to:
@@ -165,13 +183,10 @@ Implementation references:
 - Close: call the close method when done.
 
 **Section sources**
-- [src/tcp-connection-http-example.ts:176-225](file://src/tcp-connection-http-example.ts#L176-L225)
-- [src/tcp-connection-bun.ts:133-138](file://src/tcp-connection-bun.ts#L133-L138)
-- [src/tcp-connection-nodejs.ts:114-121](file://src/tcp-connection-nodejs.ts#L114-L121)
-- [src/tcp-connection-platform.ts:121-129](file://src/tcp-connection-platform.ts#L121-L129)
+- [packages/tcp/src/tcp-connection-http-example.ts:176-200](file://packages/tcp/src/tcp-connection-http-example.ts#L176-L200)
 
 ### HTTP Client Implementation Over Raw TCP
-The repository includes a ready-to-run HTTP client that demonstrates building an HTTP GET request over raw TCP using the library’s TcpStream. It supports three engines: Bun, Node.js, and the Effect Platform.
+The repository includes a ready-to-run HTTP client that demonstrates building an HTTP GET request over raw TCP using the library's TcpStream. It supports three engines: Bun, Node.js, and the Effect Platform.
 
 How it works:
 - Parse CLI arguments to select engine and URL
@@ -192,11 +207,9 @@ Example invocation patterns:
 - Platform: run with --engine=platform and a URL
 
 **Section sources**
-- [src/tcp-connection-http-example.ts:49-116](file://src/tcp-connection-http-example.ts#L49-L116)
-- [src/tcp-connection-http-example.ts:152-170](file://src/tcp-connection-http-example.ts#L152-L170)
-- [src/tcp-connection-http-example.ts:176-225](file://src/tcp-connection-http-example.ts#L176-L225)
-- [src/tcp-connection-http-example.ts:240-269](file://src/tcp-connection-http-example.ts#L240-L269)
-- [src/tcp-connection-http-example.ts:271-300](file://src/tcp-connection-http-example.ts#L271-L300)
+- [packages/tcp/src/tcp-connection-http-example.ts:49-116](file://packages/tcp/src/tcp-connection-http-example.ts#L49-L116)
+- [packages/tcp/src/tcp-connection-http-example.ts:152-170](file://packages/tcp/src/tcp-connection-http-example.ts#L152-L170)
+- [packages/tcp/src/tcp-connection-http-example.ts:176-200](file://packages/tcp/src/tcp-connection-http-example.ts#L176-L200)
 
 ### Platform-Specific Setup
 
@@ -209,8 +222,7 @@ Key exports:
 - Engine layer and convenience layer for Bun
 
 **Section sources**
-- [src/tcp-connection-bun.ts:18-135](file://src/tcp-connection-bun.ts#L18-L135)
-- [src/tcp-connection-bun.ts:133-138](file://src/tcp-connection-bun.ts#L133-L138)
+- [packages/tcp/src/tcp-connection-http-example.ts:1-4](file://packages/tcp/src/tcp-connection-http-example.ts#L1-L4)
 
 #### Node.js
 - Use the Node.js adapter which wraps node:net and node:tls.
@@ -221,8 +233,7 @@ Key exports:
 - Engine layer and convenience layer for Node.js
 
 **Section sources**
-- [src/tcp-connection-nodejs.ts:21-119](file://src/tcp-connection-nodejs.ts#L21-L119)
-- [src/tcp-connection-nodejs.ts:114-121](file://src/tcp-connection-nodejs.ts#L114-L121)
+- [packages/tcp/src/tcp-connection-http-example.ts:9-10](file://packages/tcp/src/tcp-connection-http-example.ts#L9-L10)
 
 #### Effect Platform
 - Use the Effect Platform adapter which leverages @effect/platform Socket abstractions.
@@ -233,7 +244,7 @@ Key exports:
 - Engine layer and convenience layer for the platform
 
 **Section sources**
-- [src/tcp-connection-platform.ts:17-128](file://src/tcp-connection-platform.ts#L17-L128)
+- [packages/tcp/src/tcp-connection-http-example.ts:10-11](file://packages/tcp/src/tcp-connection-http-example.ts#L10-L11)
 
 ## Dependency Analysis
 The library composes a small set of modules:
@@ -254,16 +265,7 @@ Example --> Platform
 ```
 
 **Diagram sources**
-- [src/tcp-connection-common.ts:12-101](file://src/tcp-connection-common.ts#L12-L101)
-- [src/tcp-stream-engine.ts:89-178](file://src/tcp-stream-engine.ts#L89-L178)
-- [src/tcp-connection-bun.ts:18-135](file://src/tcp-connection-bun.ts#L18-L135)
-- [src/tcp-connection-nodejs.ts:21-119](file://src/tcp-connection-nodejs.ts#L21-L119)
-- [src/tcp-connection-platform.ts:17-128](file://src/tcp-connection-platform.ts#L17-L128)
-- [src/tcp-connection-http-example.ts:176-225](file://src/tcp-connection-http-example.ts#L176-L225)
-
-**Section sources**
-- [src/tcp-connection.ts:1-10](file://src/tcp-connection.ts#L1-L10)
-- [src/tcp-stream-engine.ts:89-178](file://src/tcp-stream-engine.ts#L89-L178)
+- [packages/tcp/src/tcp-connection-http-example.ts:1-10](file://packages/tcp/src/tcp-connection-http-example.ts#L1-L10)
 
 ## Performance Considerations
 - Backpressure: Writes may be partial; the engine handles draining and ensures ordered writes. Avoid sending large payloads without considering downstream consumption.
@@ -271,15 +273,14 @@ Example --> Platform
 - Retries: Use retry policies for transient failures; disable retries for immediate failure semantics when needed.
 - Streams: Prefer streaming reads to process data incrementally and reduce memory pressure.
 
-[No sources needed since this section provides general guidance]
-
 ## Troubleshooting Guide
 Common setup issues and resolutions:
-- Unsupported engine selection: Ensure the engine flag is one of bun, nodejs, or platform.
-- Invalid URL or unsupported protocol: Only http and https URLs are accepted by the HTTP example.
-- Missing CLI argument: Provide a URL when running the example.
-- Connection failures: Check host, port, firewall rules, and TLS configuration. Inspect TcpStreamError details for operation and message.
-- TLS handshake issues: Verify server name, certificate trust, and ALPN settings when using https.
+- **Unsupported engine selection**: Ensure the engine flag is one of bun, nodejs, or platform.
+- **Invalid URL or unsupported protocol**: Only http and https URLs are accepted by the HTTP example.
+- **Missing CLI argument**: Provide a URL when running the example.
+- **Connection failures**: Check host, port, firewall rules, and TLS configuration. Inspect TcpStreamError details for operation and message.
+- **TLS handshake issues**: Verify server name, certificate trust, and ALPN settings when using https.
+- **Bun installation issues**: Ensure you're using Bun 1.4.2+ and that the bun.lock file is present at the repository root.
 
 Where to look:
 - CLI parsing and validation for engine and URL
@@ -287,10 +288,9 @@ Where to look:
 - Engine-specific adapters for platform differences
 
 **Section sources**
-- [src/tcp-connection-http-example.ts:49-116](file://src/tcp-connection-http-example.ts#L49-L116)
-- [src/tcp-connection-http-example.ts:271-300](file://src/tcp-connection-http-example.ts#L271-L300)
+- [packages/tcp/src/tcp-connection-http-example.ts:49-116](file://packages/tcp/src/tcp-connection-http-example.ts#L49-L116)
 
 ## Conclusion
-You now have the essentials to install, configure, and run TCP connections across Bun, Node.js, and the Effect Platform. Start with a simple connection, then progress to the included HTTP client example to see the library in action. Use the provided layers and configuration to integrate TcpStream into your applications, and rely on the built-in timeouts, retries, and stream-based I/O for robust networking.
+You now have the essentials to install, configure, and run TCP connections across Bun, Node.js, and the Effect Platform using Bun as the primary package manager. Start with a simple connection, then progress to the included HTTP client example to see the library in action. Use the provided layers and configuration to integrate TcpStream into your applications, and rely on the built-in timeouts, retries, and stream-based I/O for robust networking.
 
-[No sources needed since this section summarizes without analyzing specific files]
+The workspace structure allows you to run checks and examples across both the lab and tcp packages using Bun's workspace capabilities, making development efficient and consistent.
