@@ -302,4 +302,178 @@ describe("CedroScidSink: Multi-Ticker Routing & Buffered I/O", () => {
 			await fs.rm(tmpDir, { recursive: true, force: true });
 		}
 	});
+
+	it("handles dynamic date rollover via getCurrentDate in daily partition mode", async () => {
+		const tmpDir = await fs.mkdtemp(
+			path.join(os.tmpdir(), "scid-sink-dyn-rollover-"),
+		);
+		let mockDate = "2026-10-05";
+
+		try {
+			await Effect.runPromise(
+				Effect.scoped(
+					Effect.gen(function* () {
+						const sink = yield* makeCedroScidSink({
+							baseDir: tmpDir,
+							getCurrentDate: () => mockDate,
+							partitionMode: "daily",
+							flushInterval: "1 hour",
+						});
+
+						// Trades on Day 1
+						yield* sink.writeLine(
+							"V:PETR4:A:17:59:50.000:36.00:1:2:100:101:0:A:0",
+						);
+						yield* sink.writeLine(
+							"V:PETR4:A:17:59:55.000:36.10:1:2:100:102:0:A:0",
+						);
+
+						// Day rolls over to 2026-10-06
+						mockDate = "2026-10-06";
+
+						// Trade on Day 2 triggers automatic rollover, flushing Day 1 and initializing Day 2
+						yield* sink.writeLine(
+							"V:PETR4:A:10:00:00.000:36.50:1:2:200:201:0:A:0",
+						);
+						yield* sink.flush();
+					}),
+				),
+			);
+
+			// Assert Day 1 file
+			const day1File = path.join(tmpDir, "PETR4", "PETR4-2026-10-05.scid");
+			const day1Buf = await fs.readFile(day1File);
+			expect(day1Buf.byteLength).toBe(SCID_HEADER_SIZE + SCID_RECORD_SIZE * 2);
+
+			const d1Header = deserializeScidHeader(
+				day1Buf.subarray(0, SCID_HEADER_SIZE),
+			);
+			expect(d1Header.fileType).toBe("SCID");
+
+			const d1r1 = deserializeScidRecord(day1Buf, SCID_HEADER_SIZE);
+			expect(d1r1.close).toBeCloseTo(36.0, 2);
+
+			const d1r2 = deserializeScidRecord(
+				day1Buf,
+				SCID_HEADER_SIZE + SCID_RECORD_SIZE,
+			);
+			expect(d1r2.close).toBeCloseTo(36.1, 2);
+
+			// Assert Day 2 file
+			const day2File = path.join(tmpDir, "PETR4", "PETR4-2026-10-06.scid");
+			const day2Buf = await fs.readFile(day2File);
+			expect(day2Buf.byteLength).toBe(SCID_HEADER_SIZE + SCID_RECORD_SIZE);
+
+			const d2Header = deserializeScidHeader(
+				day2Buf.subarray(0, SCID_HEADER_SIZE),
+			);
+			expect(d2Header.fileType).toBe("SCID");
+
+			const d2r1 = deserializeScidRecord(day2Buf, SCID_HEADER_SIZE);
+			expect(d2r1.close).toBeCloseTo(36.5, 2);
+			expect(d2r1.askVolume).toBe(200);
+		} finally {
+			await fs.rm(tmpDir, { recursive: true, force: true });
+		}
+	});
+
+	it("handles manual date rollover via rotateDate", async () => {
+		const tmpDir = await fs.mkdtemp(
+			path.join(os.tmpdir(), "scid-sink-manual-rollover-"),
+		);
+
+		try {
+			await Effect.runPromise(
+				Effect.scoped(
+					Effect.gen(function* () {
+						const sink = yield* makeCedroScidSink({
+							baseDir: tmpDir,
+							sessionDate: "2026-10-05",
+							partitionMode: "daily",
+							flushInterval: "1 hour",
+						});
+
+						yield* sink.writeLine(
+							"V:WINV26:A:17:55:00.000:130000:1:2:5:101:0:A:0",
+						);
+
+						// Explicitly rotate date to next day
+						yield* sink.rotateDate("2026-10-06");
+
+						yield* sink.writeLine(
+							"V:WINV26:A:09:05:00.000:130200:1:2:10:201:0:V:0",
+						);
+						yield* sink.flush();
+					}),
+				),
+			);
+
+			const day1File = path.join(tmpDir, "WINV26", "WINV26-2026-10-05.scid");
+			const day1Buf = await fs.readFile(day1File);
+			expect(day1Buf.byteLength).toBe(SCID_HEADER_SIZE + SCID_RECORD_SIZE);
+
+			const day2File = path.join(tmpDir, "WINV26", "WINV26-2026-10-06.scid");
+			const day2Buf = await fs.readFile(day2File);
+			expect(day2Buf.byteLength).toBe(SCID_HEADER_SIZE + SCID_RECORD_SIZE);
+
+			const rec2 = deserializeScidRecord(day2Buf, SCID_HEADER_SIZE);
+			expect(rec2.close).toBe(130200);
+			expect(rec2.bidVolume).toBe(10);
+		} finally {
+			await fs.rm(tmpDir, { recursive: true, force: true });
+		}
+	});
+
+	it("monolithic mode appends across date rollovers into a single file", async () => {
+		const tmpDir = await fs.mkdtemp(
+			path.join(os.tmpdir(), "scid-sink-mono-rollover-"),
+		);
+		const petrFile = path.join(tmpDir, "PETR4.scid");
+		let mockDate = "2026-10-05";
+
+		try {
+			await Effect.runPromise(
+				Effect.scoped(
+					Effect.gen(function* () {
+						const sink = yield* makeCedroScidSink({
+							baseDir: tmpDir,
+							getCurrentDate: () => mockDate,
+							partitionMode: "monolithic",
+							flushInterval: "1 hour",
+						});
+
+						// Day 1 trade
+						yield* sink.writeLine(
+							"V:PETR4:A:17:59:00.000:36.00:1:2:100:101:0:A:0",
+						);
+
+						// Advance date
+						mockDate = "2026-10-06";
+
+						// Day 2 trade
+						yield* sink.writeLine(
+							"V:PETR4:A:10:00:00.000:36.20:1:2:150:201:0:A:0",
+						);
+						yield* sink.flush();
+					}),
+				),
+			);
+
+			// Assert single file directly in baseDir
+			const buf = await fs.readFile(petrFile);
+			expect(buf.byteLength).toBe(SCID_HEADER_SIZE + SCID_RECORD_SIZE * 2);
+
+			const r1 = deserializeScidRecord(buf, SCID_HEADER_SIZE);
+			const r2 = deserializeScidRecord(
+				buf,
+				SCID_HEADER_SIZE + SCID_RECORD_SIZE,
+			);
+
+			expect(r1.close).toBeCloseTo(36.0, 2);
+			expect(r2.close).toBeCloseTo(36.2, 2);
+			expect(r2.dateTime).toBeGreaterThan(r1.dateTime);
+		} finally {
+			await fs.rm(tmpDir, { recursive: true, force: true });
+		}
+	});
 });

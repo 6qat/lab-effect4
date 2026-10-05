@@ -27,6 +27,8 @@ export interface CedroScidSinkOptions {
 	readonly baseDir: string;
 	/** Session date formatted as "YYYY-MM-DD". Defaults to current UTC date. */
 	readonly sessionDate?: string;
+	/** Dynamic date resolver function. Used if sessionDate is omitted or to detect date rollovers. */
+	readonly getCurrentDate?: () => string;
 	/** Number of records to buffer before triggering an immediate disk flush. Defaults to 50. */
 	readonly batchSize?: number;
 	/** Periodic background flush interval. Defaults to "500 millis". */
@@ -49,6 +51,18 @@ export interface CedroScidSinkShape {
 	 * Manually flushes all currently buffered records across all tickers to disk.
 	 */
 	readonly flush: () => Effect.Effect<void, never>;
+
+	/**
+	 * Manually triggers a session date rollover:
+	 * flushes existing records, rotates active file paths in daily mode,
+	 * and initializes fresh 56-byte SCID headers for subsequent writes.
+	 */
+	readonly rotateDate: (newDate: string) => Effect.Effect<void, never>;
+
+	/**
+	 * Returns the currently active session date (YYYY-MM-DD).
+	 */
+	readonly getCurrentDate: () => string;
 }
 
 export class CedroScidSink extends Context.Service<
@@ -99,14 +113,15 @@ export const defaultResolveFilePath = (
 };
 
 interface TickerState {
-	readonly filePath: string;
+	filePath: string;
+	currentDate: string;
 	lastTimestamp?: bigint | undefined;
 	buffer: ScidRecord[];
 }
 
 /**
  * Creates a scoped CedroScidSink service instance.
- * Manages multi-ticker routing, batching, periodic flushing, and scoped teardown.
+ * Manages multi-ticker routing, batching, periodic flushing, date rollover, and scoped teardown.
  */
 export const makeCedroScidSink = (
 	options: CedroScidSinkOptions,
@@ -116,7 +131,11 @@ export const makeCedroScidSink = (
 		const partitionMode = options.partitionMode ?? "monolithic";
 		const batchSize = options.batchSize ?? 50;
 		const flushInterval = options.flushInterval ?? "500 millis";
-		const sessionDate = options.sessionDate;
+
+		let activeDate =
+			options.sessionDate ??
+			options.getCurrentDate?.() ??
+			new Date().toISOString().slice(0, 10);
 
 		const resolvePath =
 			options.resolveFilePath ??
@@ -159,6 +178,34 @@ export const makeCedroScidSink = (
 		const flush = (): Effect.Effect<void, never> =>
 			sem.withPermit(flushAllInternal).pipe(Effect.uninterruptible);
 
+		const rotateDate = (newDate: string): Effect.Effect<void, never> =>
+			sem
+				.withPermit(
+					Effect.gen(function* () {
+						activeDate = newDate;
+						if (partitionMode === "daily") {
+							for (const [ticker, state] of tickers.entries()) {
+								if (state.currentDate !== newDate) {
+									yield* flushTickerInternal(state);
+									const newFilePath = resolvePath(ticker, newDate);
+									state.filePath = newFilePath;
+									state.currentDate = newDate;
+									state.lastTimestamp = yield* Effect.promise(() =>
+										getLastTimestampFromFile(newFilePath),
+									);
+								}
+							}
+						} else {
+							// In monolithic mode, flush existing records and keep appending
+							yield* flushAllInternal;
+						}
+					}),
+				)
+				.pipe(Effect.uninterruptible);
+
+		const getCurrentDate = (): string =>
+			options.getCurrentDate?.() ?? activeDate;
+
 		const writeLine = (line: string): Effect.Effect<void, never> =>
 			Effect.gen(function* () {
 				const opt = parseCedroTradeLine(line);
@@ -169,17 +216,33 @@ export const makeCedroScidSink = (
 
 				yield* sem.withPermit(
 					Effect.gen(function* () {
+						const currentDate = getCurrentDate();
 						const existingState = tickers.get(trade.ticker);
 						let state: TickerState;
+
 						if (existingState) {
 							state = existingState;
+							if (
+								partitionMode === "daily" &&
+								state.currentDate !== currentDate
+							) {
+								// Date rollover detected: flush previous day's buffer and rotate path
+								yield* flushTickerInternal(state);
+								const newFilePath = resolvePath(trade.ticker, currentDate);
+								state.filePath = newFilePath;
+								state.currentDate = currentDate;
+								state.lastTimestamp = yield* Effect.promise(() =>
+									getLastTimestampFromFile(newFilePath),
+								);
+							}
 						} else {
-							const filePath = resolvePath(trade.ticker, sessionDate);
+							const filePath = resolvePath(trade.ticker, currentDate);
 							const lastTimestamp = yield* Effect.promise(() =>
 								getLastTimestampFromFile(filePath),
 							);
 							state = {
 								filePath,
+								currentDate,
 								lastTimestamp,
 								buffer: [],
 							};
@@ -188,7 +251,7 @@ export const makeCedroScidSink = (
 
 						const scDateTime = cedroTimeToScDateTimeMS(
 							trade.timeStr,
-							sessionDate,
+							state.currentDate,
 							state.lastTimestamp,
 						);
 						state.lastTimestamp = scDateTime;
@@ -218,6 +281,8 @@ export const makeCedroScidSink = (
 		return {
 			writeLine,
 			flush,
+			rotateDate,
+			getCurrentDate,
 		};
 	});
 
