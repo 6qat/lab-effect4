@@ -21,26 +21,40 @@ const credentials = {
 };
 
 describe("Cedro client", () => {
-	it("runs the reusable command with the requested environment names and redacts echoed credentials", async () => {
+	it("runs the reusable command with reconnection, trade restoration, and credential redaction", async () => {
 		const token = "magic-test-user-key";
-		const expectedLogin = `${token}\n${credentials.username}\n${credentials.password}\n`;
-		let received = "";
-		let replied = false;
+		let connectionCount = 0;
+		const receivedData: string[] = [];
+
 		const server = Bun.listen({
 			hostname: "127.0.0.1",
 			port: 0,
 			socket: {
 				data(socket, data) {
-					received += new TextDecoder().decode(data);
-					if (!replied && received.split("\n").length >= 4) {
-						replied = true;
-						socket.end(
-							`You are connected\n${token} ${credentials.username} ${credentials.password}\nQUOTE|PETR4|42.10\nQUOTE|PETR4|42.11\n`,
+					const text = new TextDecoder().decode(data);
+					receivedData.push(text);
+					if (text.includes("test-password\n")) {
+						socket.write(
+							`You are connected\n${token} ${credentials.username} ${credentials.password}\n`,
 						);
 					}
+					if (
+						text.includes("GQT WINV26 S\n") ||
+						text.includes("GQT PETR4 S\n")
+					) {
+						if (connectionCount === 1) {
+							socket.end("TRADE|WINV26|120000\n");
+						} else {
+							socket.write("TRADE|PETR4|42.10\n");
+						}
+					}
+				},
+				open() {
+					connectionCount++;
 				},
 			},
 		});
+
 		const child = Bun.spawn([process.execPath, "run", "cedro"], {
 			cwd: `${import.meta.dir}/../../..`,
 			env: {
@@ -54,25 +68,39 @@ describe("Cedro client", () => {
 			stdout: "pipe",
 			stderr: "pipe",
 		});
-		const timeout = setTimeout(() => child.kill(), 3000);
+
+		let stdoutText = "";
+		const reader = (async () => {
+			const stream = child.stdout;
+			const decoder = new TextDecoder();
+			for await (const chunk of stream) {
+				stdoutText += decoder.decode(chunk);
+				if (stdoutText.includes("TRADE|PETR4|42.10")) {
+					child.kill("SIGINT");
+					break;
+				}
+			}
+		})();
+
+		const timeout = setTimeout(() => child.kill(), 5000);
 		try {
-			const [exitCode, stdout, stderr] = await Promise.all([
-				child.exited,
-				new Response(child.stdout).text(),
-				new Response(child.stderr).text(),
-			]);
-			expect(exitCode).toBe(0);
-			expect(received).toBe(expectedLogin);
-			expect(stdout).toBe(
-				"You are connected\n[REDACTED] [REDACTED] [REDACTED]\nQUOTE|PETR4|42.10\nQUOTE|PETR4|42.11\n",
-			);
+			await reader;
+			await child.exited;
+			const stderrText = await new Response(child.stderr).text();
+
+			expect(connectionCount).toBe(2);
+			expect(stdoutText).toContain("You are connected");
+			expect(stdoutText).toContain("[REDACTED] [REDACTED] [REDACTED]");
+			expect(stdoutText).toContain("TRADE|WINV26|120000");
+			expect(stdoutText).toContain("TRADE|PETR4|42.10");
+
 			for (const secret of [
 				token,
 				credentials.username,
 				credentials.password,
 			]) {
-				expect(stdout).not.toContain(secret);
-				expect(stderr).not.toContain(secret);
+				expect(stdoutText).not.toContain(secret);
+				expect(stderrText).not.toContain(secret);
 			}
 		} finally {
 			clearTimeout(timeout);
@@ -364,7 +392,10 @@ describe("Cedro client", () => {
 						loginsReceived.push(text);
 						socket.write("You are connected\n");
 					}
-					if (text.includes("GQT WINV26 S\n") || text.includes("GQT PETR4 S\n")) {
+					if (
+						text.includes("GQT WINV26 S\n") ||
+						text.includes("GQT PETR4 S\n")
+					) {
 						subscriptionsReceived.push(text);
 						if (connectionCount === 1) {
 							// First connection: emit a trade and close
@@ -486,8 +517,12 @@ describe("Cedro client", () => {
 			);
 
 			// Should have logged backoff progresses: attempt 1 (10ms), attempt 2 (30ms)
-			expect(statuses.some((s) => s.includes("10ms") || s.includes("0.01s"))).toBe(true);
-			expect(statuses.some((s) => s.includes("30ms") || s.includes("0.03s"))).toBe(true);
+			expect(
+				statuses.some((s) => s.includes("10ms") || s.includes("0.01s")),
+			).toBe(true);
+			expect(
+				statuses.some((s) => s.includes("30ms") || s.includes("0.03s")),
+			).toBe(true);
 		} finally {
 			server.stop(true);
 		}
@@ -525,7 +560,9 @@ describe("Cedro client", () => {
 
 			expect(Exit.isFailure(exit)).toBe(true);
 			if (Exit.isFailure(exit)) {
-				expect(Cause.squash(exit.cause)).toBeInstanceOf(CedroAuthRejectionError);
+				expect(Cause.squash(exit.cause)).toBeInstanceOf(
+					CedroAuthRejectionError,
+				);
 			}
 			expect(connectionCount).toBe(1);
 		} finally {

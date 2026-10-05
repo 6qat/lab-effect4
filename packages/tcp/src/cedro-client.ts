@@ -309,22 +309,19 @@ export const main = Effect.gen(function* () {
 	const secrets = Object.values(credentials).sort(
 		(a, b) => b.length - a.length,
 	);
-	const cedroLayer = CedroClientLive.pipe(
-		Layer.provide(
-			Layer.merge(
-				TcpStreamLive({ host, port, retry: false }),
-				CedroConfigLive(credentials),
-			),
-		),
-	);
-	return yield* receiveCedroCommands((line) =>
-		Console.log(
-			secrets.reduce(
-				(text, secret) => text.replaceAll(secret, "[REDACTED]"),
-				line,
-			),
-		),
-	).pipe(Effect.provide(cedroLayer));
+	const redact = (text: string) =>
+		secrets.reduce(
+			(acc, secret) => (secret ? acc.replaceAll(secret, "[REDACTED]") : acc),
+			text,
+		);
+
+	return yield* runCedroSupervisor((line) => Console.log(redact(line)), {
+		host,
+		port,
+		credentials,
+		tickers: ["WINV26", "PETR4"],
+		onStatus: (status) => Console.log(redact(status)),
+	});
 });
 
 if (import.meta.main) {
