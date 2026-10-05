@@ -1,14 +1,17 @@
 import { BunRuntime } from "@effect/platform-bun";
 import {
+	Cause,
 	Config,
 	Console,
 	Data,
 	Deferred,
-	type Duration,
+	Duration,
 	Effect,
+	Exit,
 	Fiber,
 	Layer,
 	Redacted,
+	Ref,
 	type Scope,
 	Stream,
 } from "effect";
@@ -16,6 +19,7 @@ import {
 	CedroClient,
 	CedroClientLive,
 	CedroConfigLive,
+	type CedroConfigShape,
 	CedroProtocolError,
 	isCedroAuthRejection,
 } from "./cedro-protocol.js";
@@ -38,6 +42,7 @@ export interface CedroSessionOptions {
 	readonly tickers?: ReadonlyArray<string>;
 	readonly authTimeout?: Duration.Input;
 	readonly isAuthRejection?: (line: string) => boolean;
+	readonly onSubscribed?: () => Effect.Effect<void, never>;
 }
 
 /** Send the login sequence immediately, then consume server text until disconnect. */
@@ -136,9 +141,156 @@ export const runCedroSession = <E = never, R = never>(
 		if (tickers.length > 0) {
 			yield* client.subscribeTrades(tickers);
 		}
+		if (options?.onSubscribed) {
+			yield* options.onSubscribed();
+		}
 
 		// 5. Await consumer fiber until completion
 		yield* Fiber.join(lineConsumerFiber);
+	});
+
+export interface CedroSupervisorOptions extends CedroSessionOptions {
+	readonly host: string;
+	readonly port: number;
+	readonly credentials: CedroConfigShape;
+	readonly backoffDelays?: ReadonlyArray<Duration.Input>;
+	readonly onStatus?: (status: string) => Effect.Effect<void, never>;
+}
+
+/**
+ * Supervised Cedro connection loop with capped exponential backoff.
+ * Reconnects on clean disconnects, transport errors, and auth timeouts.
+ * Re-authenticates afresh and restores trade subscriptions on each reconnect.
+ * Resets backoff delay upon successful authentication and subscription restoration.
+ * Terminates on fatal errors (explicit auth rejection, invalid credentials) or cancellation.
+ */
+export const runCedroSupervisor = <E = never, R = never>(
+	onLine: (line: string) => Effect.Effect<void, E, R>,
+	options: CedroSupervisorOptions,
+): Effect.Effect<void, CedroAuthRejectionError | CedroProtocolError | E, R> =>
+	Effect.gen(function* () {
+		const delays = options.backoffDelays ?? [
+			"1 second",
+			"2 seconds",
+			"4 seconds",
+			"8 seconds",
+			"16 seconds",
+			"30 seconds",
+		];
+		const onStatus =
+			options.onStatus ?? ((status: string) => Console.log(status));
+		const attemptRef = yield* Ref.make(0);
+
+		// Validate credentials upfront (so invalid local config fails fast before loop)
+		if (
+			!options.credentials.magicToken ||
+			!options.credentials.username ||
+			!options.credentials.password
+		) {
+			return yield* Effect.fail(
+				new CedroProtocolError({
+					message: "Missing required Cedro credentials or magic token",
+				}),
+			);
+		}
+		if (
+			[
+				options.credentials.magicToken,
+				options.credentials.username,
+				options.credentials.password,
+			].some((val) => /[\r\n]/.test(val))
+		) {
+			return yield* Effect.fail(
+				new CedroProtocolError({
+					message: "Cedro login fields must not contain line breaks",
+				}),
+			);
+		}
+
+		while (true) {
+			const attempt = yield* Ref.get(attemptRef);
+			const sessionLayer = CedroClientLive.pipe(
+				Layer.provide(
+					Layer.merge(
+						TcpStreamLive({
+							host: options.host,
+							port: options.port,
+							retry: false,
+						}),
+						CedroConfigLive(options.credentials),
+					),
+				),
+			);
+
+			yield* onStatus(
+				`[cedro] Connecting to ${options.host}:${options.port}...`,
+			);
+
+			const sessionResult = yield* Effect.scoped(
+				runCedroSession(onLine, {
+					...options,
+					onSubscribed: () =>
+						Effect.gen(function* () {
+							yield* onStatus(
+								`[cedro] Authenticated, restored subscriptions: ${(
+									options.tickers ?? ["WINV26", "PETR4"]
+								).join(", ")}`,
+							);
+							yield* Ref.set(attemptRef, 0);
+							if (options.onSubscribed) {
+								yield* options.onSubscribed();
+							}
+						}),
+				}).pipe(Effect.provide(sessionLayer)),
+			).pipe(Effect.exit);
+
+			if (Exit.isSuccess(sessionResult)) {
+				yield* onStatus("[cedro] Disconnected from server.");
+			} else {
+				const cause = sessionResult.cause;
+				if (cause.reasons.some(Cause.isInterruptReason)) {
+					return yield* Effect.interrupt;
+				}
+				const failure = Cause.squash(cause);
+				if (failure instanceof CedroAuthRejectionError) {
+					yield* onStatus(
+						`[cedro] Fatal authentication rejection: ${failure.message}`,
+					);
+					return yield* Effect.fail(failure);
+				}
+				if (
+					failure instanceof CedroProtocolError &&
+					(failure.message.includes("line breaks") ||
+						failure.message.includes("Missing required"))
+				) {
+					yield* onStatus(
+						`[cedro] Fatal configuration error: ${failure.message}`,
+					);
+					return yield* Effect.fail(failure);
+				}
+
+				if (failure instanceof CedroAuthTimeoutError) {
+					yield* onStatus("[cedro] Authentication confirmation timed out.");
+				} else {
+					yield* onStatus(
+						`[cedro] Connection error: ${
+							failure instanceof Error ? failure.message : String(failure)
+						}`,
+					);
+				}
+			}
+
+			// Delay before reconnecting using capped backoff
+			const delayInput =
+				delays[Math.min(attempt, delays.length - 1)] ?? "1 second";
+			const delayDuration = Duration.fromInputUnsafe(delayInput);
+			yield* Ref.set(attemptRef, attempt + 1);
+
+			yield* onStatus(
+				`[cedro] Reconnecting in ${Duration.format(delayDuration)}...`,
+			);
+			yield* Effect.sleep(delayDuration);
+		}
 	});
 
 export const main = Effect.gen(function* () {

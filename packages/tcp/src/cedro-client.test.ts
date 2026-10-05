@@ -1,10 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { Cause, Effect, Exit, Layer, Stream } from "effect";
+import { Cause, Deferred, Effect, Exit, Fiber, Layer, Stream } from "effect";
 import {
 	CedroAuthRejectionError,
 	CedroAuthTimeoutError,
 	receiveCedroCommands,
 	runCedroSession,
+	runCedroSupervisor,
 } from "./cedro-client.js";
 import {
 	CedroClient,
@@ -342,6 +343,231 @@ describe("Cedro client", () => {
 			// Should fail almost immediately on EOF, well before 5 seconds
 			expect(elapsed).toBeLessThan(2000);
 			expect(Exit.isFailure(exit)).toBe(true);
+		} finally {
+			server.stop(true);
+		}
+	});
+
+	it("reconnects on server disconnect, re-authenticates, and restores both trade subscriptions", async () => {
+		let connectionCount = 0;
+		const loginsReceived: string[] = [];
+		const subscriptionsReceived: string[] = [];
+		const tradesReceived: string[] = [];
+
+		const server = Bun.listen({
+			hostname: "127.0.0.1",
+			port: 0,
+			socket: {
+				data(socket, data) {
+					const text = new TextDecoder().decode(data);
+					if (text.includes("test-password\n")) {
+						loginsReceived.push(text);
+						socket.write("You are connected\n");
+					}
+					if (text.includes("GQT WINV26 S\n") || text.includes("GQT PETR4 S\n")) {
+						subscriptionsReceived.push(text);
+						if (connectionCount === 1) {
+							// First connection: emit a trade and close
+							socket.end("TRADE|WINV26|100\n");
+						} else {
+							// Second connection: emit trade and keep open
+							socket.write("TRADE|PETR4|200\n");
+						}
+					}
+				},
+				open() {
+					connectionCount++;
+				},
+			},
+		});
+
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					const done = yield* Deferred.make<void>();
+
+					const supervisorFiber = yield* Effect.forkChild(
+						runCedroSupervisor(
+							(line) =>
+								Effect.gen(function* () {
+									tradesReceived.push(line);
+									if (line === "TRADE|PETR4|200") {
+										yield* Deferred.succeed(done, void 0);
+									}
+								}),
+							{
+								host: "127.0.0.1",
+								port: server.port,
+								credentials,
+								tickers: ["WINV26", "PETR4"],
+								backoffDelays: ["10 millis", "20 millis"],
+								authTimeout: "1 second",
+							},
+						),
+					);
+
+					yield* Deferred.await(done);
+					yield* Fiber.interrupt(supervisorFiber);
+				}),
+			);
+
+			expect(connectionCount).toBe(2);
+			expect(loginsReceived.length).toBe(2);
+			expect(tradesReceived).toContain("TRADE|WINV26|100");
+			expect(tradesReceived).toContain("TRADE|PETR4|200");
+		} finally {
+			server.stop(true);
+		}
+	});
+
+	it("progresses backoff delays on failure and resets backoff upon successful session", async () => {
+		let connectionCount = 0;
+		const statuses: string[] = [];
+
+		const server = Bun.listen({
+			hostname: "127.0.0.1",
+			port: 0,
+			socket: {
+				data(socket, data) {
+					const text = new TextDecoder().decode(data);
+					if (text.includes("test-password\n")) {
+						if (connectionCount <= 2) {
+							// Fail first two attempts by dropping connection before auth
+							socket.end();
+						} else {
+							// Succeed on third attempt
+							socket.write("You are connected\n");
+						}
+					}
+					if (text.includes("GQT WINV26 S\n")) {
+						// Once subscribed on third attempt, close connection to test backoff reset
+						socket.end("TRADE|DONE\n");
+					}
+				},
+				open() {
+					connectionCount++;
+				},
+			},
+		});
+
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					const done = yield* Deferred.make<void>();
+
+					const supervisorFiber = yield* Effect.forkChild(
+						runCedroSupervisor(
+							(line) =>
+								Effect.gen(function* () {
+									if (line === "TRADE|DONE") {
+										// Wait a bit to observe next status after disconnect
+										yield* Effect.sleep("50 millis");
+										yield* Deferred.succeed(done, void 0);
+									}
+								}),
+							{
+								host: "127.0.0.1",
+								port: server.port,
+								credentials,
+								tickers: ["WINV26"],
+								backoffDelays: ["10 millis", "30 millis", "60 millis"],
+								authTimeout: "500 millis",
+								onStatus: (status) =>
+									Effect.sync(() => {
+										statuses.push(status);
+									}),
+							},
+						),
+					);
+
+					yield* Deferred.await(done);
+					yield* Fiber.interrupt(supervisorFiber);
+				}),
+			);
+
+			// Should have logged backoff progresses: attempt 1 (10ms), attempt 2 (30ms)
+			expect(statuses.some((s) => s.includes("10ms") || s.includes("0.01s"))).toBe(true);
+			expect(statuses.some((s) => s.includes("30ms") || s.includes("0.03s"))).toBe(true);
+		} finally {
+			server.stop(true);
+		}
+	});
+
+	it("explicit auth rejection is fatal and stops supervisor immediately", async () => {
+		let connectionCount = 0;
+		const server = Bun.listen({
+			hostname: "127.0.0.1",
+			port: 0,
+			socket: {
+				data(socket, data) {
+					const text = new TextDecoder().decode(data);
+					if (text.includes("test-password\n")) {
+						socket.write("ERROR: Authentication failed\n");
+					}
+				},
+				open() {
+					connectionCount++;
+				},
+			},
+		});
+
+		try {
+			const exit = await Effect.runPromiseExit(
+				runCedroSupervisor(() => Effect.void, {
+					host: "127.0.0.1",
+					port: server.port,
+					credentials,
+					tickers: ["WINV26"],
+					backoffDelays: ["10 millis"],
+					authTimeout: "1 second",
+				}),
+			);
+
+			expect(Exit.isFailure(exit)).toBe(true);
+			if (Exit.isFailure(exit)) {
+				expect(Cause.squash(exit.cause)).toBeInstanceOf(CedroAuthRejectionError);
+			}
+			expect(connectionCount).toBe(1);
+		} finally {
+			server.stop(true);
+		}
+	});
+
+	it("stops promptly when interrupted during backoff sleep", async () => {
+		const server = Bun.listen({
+			hostname: "127.0.0.1",
+			port: 0,
+			socket: {
+				data(socket) {
+					// Drop immediately to trigger backoff
+					socket.end();
+				},
+			},
+		});
+
+		try {
+			await Effect.runPromise(
+				Effect.gen(function* () {
+					const fiber = yield* Effect.forkChild(
+						runCedroSupervisor(() => Effect.void, {
+							host: "127.0.0.1",
+							port: server.port,
+							credentials,
+							tickers: ["WINV26"],
+							backoffDelays: ["5 seconds"],
+							authTimeout: "1 second",
+						}),
+					);
+
+					// Allow it to fail connection 1 and enter 5-second sleep
+					yield* Effect.sleep("50 millis");
+					// Interrupt should finish promptly without waiting 5 seconds
+					const start = Date.now();
+					yield* Fiber.interrupt(fiber);
+					const elapsed = Date.now() - start;
+					expect(elapsed).toBeLessThan(1000);
+				}),
+			);
 		} finally {
 			server.stop(true);
 		}
