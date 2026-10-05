@@ -1,9 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { Effect, Exit, Layer, Stream } from "effect";
+import { Effect, Exit, Layer, Result, Stream } from "effect";
 import {
 	CedroClient,
 	CedroClientLive,
 	CedroConfigLive,
+	formatTradeSubCommand,
+	isCedroAuthRejection,
 } from "./cedro-protocol.js";
 import { ConnectionConfigLive, TcpStreamLive } from "./tcp-connection.js";
 
@@ -106,5 +108,126 @@ describe("CedroProtocol", () => {
 		} finally {
 			server.stop(true);
 		}
+	});
+
+	it("formats trade subscription command as GQT <ticker> S and rejects empty or invalid tickers", () => {
+		const valid = formatTradeSubCommand("WINV26");
+		expect(Result.isSuccess(valid)).toBe(true);
+		if (Result.isSuccess(valid)) {
+			expect(valid.success).toBe("GQT WINV26 S\n");
+		}
+
+		const empty = formatTradeSubCommand("");
+		expect(Result.isFailure(empty)).toBe(true);
+		if (Result.isFailure(empty)) {
+			expect(empty.failure.message).toContain("non-empty");
+		}
+
+		const withNewline = formatTradeSubCommand("WINV26\n");
+		expect(Result.isFailure(withNewline)).toBe(true);
+		if (Result.isFailure(withNewline)) {
+			expect(withNewline.failure.message).toContain("line break");
+		}
+	});
+
+	it("sends GQT trade subscription commands for each ticker over TCP", async () => {
+		const receivedData: string[] = [];
+		const server = Bun.listen({
+			hostname: "127.0.0.1",
+			port: 0,
+			socket: {
+				data(socket, data) {
+					receivedData.push(new TextDecoder().decode(data));
+					socket.write("ACK\n");
+				},
+			},
+		});
+
+		const tcpConfig = ConnectionConfigLive({
+			host: "127.0.0.1",
+			port: server.port,
+			retry: false,
+		});
+
+		const cedroConfig = CedroConfigLive({
+			magicToken: "TOKEN_123",
+			username: "trader_user",
+			password: "secret_password",
+		});
+
+		const tcpLayer = TcpStreamLive().pipe(Layer.provide(tcpConfig));
+		const cedroLayer = CedroClientLive.pipe(
+			Layer.provide(Layer.merge(tcpLayer, cedroConfig)),
+		);
+
+		const program = Effect.gen(function* () {
+			const client = yield* CedroClient;
+			yield* client.subscribeTrades(["WINV26", "PETR4"]);
+			yield* Stream.runHead(client.rawStream);
+		}).pipe(Effect.provide(cedroLayer));
+
+		try {
+			const exit = await Effect.runPromiseExit(program);
+			expect(Exit.isSuccess(exit)).toBe(true);
+			expect(receivedData.join("")).toBe("GQT WINV26 S\nGQT PETR4 S\n");
+		} finally {
+			server.stop(true);
+		}
+	});
+
+	it("rejects empty tickers list for subscribeTrades", async () => {
+		const server = Bun.listen({
+			hostname: "127.0.0.1",
+			port: 0,
+			socket: {
+				data() {},
+			},
+		});
+
+		const tcpConfig = ConnectionConfigLive({
+			host: "127.0.0.1",
+			port: server.port,
+			retry: false,
+		});
+
+		const cedroConfig = CedroConfigLive({
+			magicToken: "TOKEN_123",
+			username: "trader_user",
+			password: "secret_password",
+		});
+
+		const tcpLayer = TcpStreamLive().pipe(Layer.provide(tcpConfig));
+		const cedroLayer = CedroClientLive.pipe(
+			Layer.provide(Layer.merge(tcpLayer, cedroConfig)),
+		);
+
+		const program = Effect.gen(function* () {
+			const client = yield* CedroClient;
+			yield* client.subscribeTrades([]);
+		}).pipe(Effect.provide(cedroLayer));
+
+		try {
+			const exit = await Effect.runPromiseExit(program);
+			expect(Exit.isFailure(exit)).toBe(true);
+			if (Exit.isFailure(exit)) {
+				expect(exit.cause.toString()).toContain("CedroProtocolError");
+			}
+		} finally {
+			server.stop(true);
+		}
+	});
+
+	it("correctly identifies explicit auth rejections while ignoring confirmation and noise", () => {
+		expect(isCedroAuthRejection("Authentication failed")).toBe(true);
+		expect(isCedroAuthRejection("Invalid password")).toBe(true);
+		expect(isCedroAuthRejection("Access denied")).toBe(true);
+		expect(isCedroAuthRejection("ERROR: login failed")).toBe(true);
+		expect(isCedroAuthRejection("Usuario ou senha incorretos")).toBe(true);
+
+		// Confirmation and noise must not be considered rejection
+		expect(isCedroAuthRejection("You are connected")).toBe(false);
+		expect(isCedroAuthRejection("SYN")).toBe(false);
+		expect(isCedroAuthRejection("Cedro Market Data v3.0")).toBe(false);
+		expect(isCedroAuthRejection("GQT|WINV26|120000")).toBe(false);
 	});
 });

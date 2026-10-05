@@ -28,6 +28,9 @@ export interface CedroClientShape {
 	readonly subscribe: (
 		tickers: ReadonlyArray<string>,
 	) => Effect.Effect<void, TcpStreamError | CedroProtocolError>;
+	readonly subscribeTrades: (
+		tickers: ReadonlyArray<string>,
+	) => Effect.Effect<void, TcpStreamError | CedroProtocolError>;
 	readonly rawStream: Stream.Stream<Uint8Array, TcpStreamError>;
 	/** Framed line stream: raw TCP bytes decoded to UTF-8 and split on line boundaries. */
 	readonly lines: Stream.Stream<string, TcpStreamError>;
@@ -37,6 +40,43 @@ export class CedroClient extends Context.Service<
 	CedroClient,
 	CedroClientShape
 >()("CedroClient") {}
+
+export const formatTradeSubCommand = (
+	ticker: string,
+): Result.Result<string, CedroProtocolError> => {
+	const trimmed = ticker.trim();
+	if (!trimmed) {
+		return Result.fail(
+			new CedroProtocolError({
+				message: "Cedro trade ticker must be non-empty",
+			}),
+		);
+	}
+	if (/[\r\n]/.test(ticker)) {
+		return Result.fail(
+			new CedroProtocolError({
+				message: "Cedro trade ticker must not contain line breaks",
+			}),
+		);
+	}
+	return Result.succeed(`GQT ${trimmed} S\n`);
+};
+
+export const isCedroAuthRejection = (line: string): boolean => {
+	const lower = line.toLowerCase();
+	return (
+		lower.includes("authentication failed") ||
+		lower.includes("invalid password") ||
+		lower.includes("invalid username") ||
+		lower.includes("access denied") ||
+		lower.includes("login failed") ||
+		lower.includes("login incorreto") ||
+		lower.includes("senha incorreta") ||
+		lower.includes("usuario ou senha") ||
+		lower.startsWith("error|auth") ||
+		lower.startsWith("auth_error")
+	);
+};
 
 export const makeCedroClient = Effect.gen(function* () {
 	const tcp = yield* TcpStream;
@@ -91,9 +131,27 @@ export const makeCedroClient = Effect.gen(function* () {
 			yield* tcp.sendText(payload);
 		});
 
+	const subscribeTrades = (tickers: ReadonlyArray<string>) =>
+		Effect.gen(function* () {
+			if (tickers.length === 0) {
+				return yield* Effect.fail(
+					new CedroProtocolError({
+						message: "At least one ticker is required for trade subscription",
+					}),
+				);
+			}
+			let payload = "";
+			for (const ticker of tickers) {
+				const cmd = yield* Effect.fromResult(formatTradeSubCommand(ticker));
+				payload += cmd;
+			}
+			yield* tcp.sendText(payload);
+		});
+
 	return CedroClient.of({
 		authenticate,
 		subscribe,
+		subscribeTrades,
 		rawStream: tcp.stream,
 		lines: frameLines(tcp.stream),
 	});
