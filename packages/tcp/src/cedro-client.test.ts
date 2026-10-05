@@ -1,4 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
 import { Cause, Deferred, Effect, Exit, Fiber, Layer, Stream } from "effect";
 import {
 	CedroAuthRejectionError,
@@ -12,6 +15,12 @@ import {
 	CedroClientLive,
 	CedroConfigLive,
 } from "./cedro-protocol.js";
+import {
+	deserializeScidHeader,
+	deserializeScidRecord,
+	SCID_HEADER_SIZE,
+	SCID_RECORD_SIZE,
+} from "./scid-format.js";
 import { TcpStream, TcpStreamLive } from "./tcp-connection.js";
 
 const credentials = {
@@ -106,6 +115,134 @@ describe("Cedro client", () => {
 			clearTimeout(timeout);
 			child.kill();
 			server.stop(true);
+		}
+	});
+
+	it("spawns cedro CLI subprocess with SCID persistence and verifies binary .scid files on disk", async () => {
+		const tmpDir = await fs.mkdtemp(
+			path.join(os.tmpdir(), "cedro-cli-scid-test-"),
+		);
+		const token = "magic-test-scid-token";
+
+		const server = Bun.listen({
+			hostname: "127.0.0.1",
+			port: 0,
+			socket: {
+				data(socket, data) {
+					const text = new TextDecoder().decode(data);
+					if (text.includes("test-password\n")) {
+						socket.write("You are connected\n");
+					}
+					if (
+						text.includes("GQT WINV26 S\n") ||
+						text.includes("GQT PETR4 S\n")
+					) {
+						socket.write(
+							"V:WINV26:A:10:00:01.000:130000:1:2:5:101:0:A:0\n" +
+								"V:PETR4:A:10:00:02.000:36.50:3:4:100:102:0:V:0\n" +
+								"V:WINV26:A:10:00:03.000:130050:5:6:10:103:0:A:0\n" +
+								"V:PETR4:A:10:00:04.000:36.60:7:8:200:104:0:A:0\n",
+						);
+					}
+				},
+			},
+		});
+
+		const child = Bun.spawn([process.execPath, "run", "cedro"], {
+			cwd: `${import.meta.dir}/../../..`,
+			env: {
+				PATH: process.env.PATH,
+				CEDRO_HOST: "127.0.0.1",
+				CEDRO_PORT: String(server.port),
+				CEDRO_TOKEN: token,
+				CEDRO_USERNAME: credentials.username,
+				CEDRO_PASSWORD: credentials.password,
+				SCID_BASE_DIR: tmpDir,
+				SCID_PARTITION_STRATEGY: "daily",
+			},
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+
+		let stdoutText = "";
+		const reader = (async () => {
+			const stream = child.stdout;
+			const decoder = new TextDecoder();
+			for await (const chunk of stream) {
+				stdoutText += decoder.decode(chunk);
+				if (stdoutText.includes("104:0:A:0")) {
+					// Wait briefly for lines to be processed, then signal graceful interrupt
+					await new Promise((r) => setTimeout(r, 100));
+					child.kill("SIGINT");
+					break;
+				}
+			}
+		})();
+
+		const timeout = setTimeout(() => child.kill(), 8000);
+		try {
+			await reader;
+			await child.exited;
+			const stderrText = await new Response(child.stderr).text();
+
+			expect(stdoutText).toContain("SCID persistence active");
+			expect(stdoutText).toContain("strategy=daily");
+
+			// Ensure credentials were not leaked
+			expect(stdoutText).not.toContain(token);
+			expect(stdoutText).not.toContain(credentials.username);
+			expect(stdoutText).not.toContain(credentials.password);
+			expect(stderrText).not.toContain(token);
+
+			// Verify .scid files on disk
+			const dateStr = new Date().toISOString().slice(0, 10);
+
+			// 1. WINV26.scid
+			const winFile = path.join(tmpDir, "WINV26", `WINV26-${dateStr}.scid`);
+			const winBuf = await fs.readFile(winFile);
+			expect(winBuf.byteLength).toBe(SCID_HEADER_SIZE + SCID_RECORD_SIZE * 2);
+
+			const winHeader = deserializeScidHeader(
+				winBuf.subarray(0, SCID_HEADER_SIZE),
+			);
+			expect(winHeader.fileType).toBe("SCID");
+
+			const wRec1 = deserializeScidRecord(winBuf, SCID_HEADER_SIZE);
+			expect(wRec1.close).toBe(130000);
+			expect(wRec1.askVolume).toBe(5);
+
+			const wRec2 = deserializeScidRecord(
+				winBuf,
+				SCID_HEADER_SIZE + SCID_RECORD_SIZE,
+			);
+			expect(wRec2.close).toBe(130050);
+			expect(wRec2.askVolume).toBe(10);
+
+			// 2. PETR4.scid
+			const petrFile = path.join(tmpDir, "PETR4", `PETR4-${dateStr}.scid`);
+			const petrBuf = await fs.readFile(petrFile);
+			expect(petrBuf.byteLength).toBe(SCID_HEADER_SIZE + SCID_RECORD_SIZE * 2);
+
+			const petrHeader = deserializeScidHeader(
+				petrBuf.subarray(0, SCID_HEADER_SIZE),
+			);
+			expect(petrHeader.fileType).toBe("SCID");
+
+			const pRec1 = deserializeScidRecord(petrBuf, SCID_HEADER_SIZE);
+			expect(pRec1.close).toBeCloseTo(36.5, 2);
+			expect(pRec1.bidVolume).toBe(100);
+
+			const pRec2 = deserializeScidRecord(
+				petrBuf,
+				SCID_HEADER_SIZE + SCID_RECORD_SIZE,
+			);
+			expect(pRec2.close).toBeCloseTo(36.6, 2);
+			expect(pRec2.askVolume).toBe(200);
+		} finally {
+			clearTimeout(timeout);
+			child.kill();
+			server.stop(true);
+			await fs.rm(tmpDir, { recursive: true, force: true });
 		}
 	});
 

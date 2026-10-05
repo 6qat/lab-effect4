@@ -51,6 +51,42 @@ lines in code with automatic supervision and reconnection, use `runCedroSupervis
 For a single scoped authenticated session, use `runCedroSession`; the baseline
 single-session `receiveCedroCommands` helper also remains available.
 
+## SCID Market Data Persistence
+
+The Cedro client automatically captures and persists real-time trade streams (`V:<ticker>:A:...`)
+into binary Sierra Chart Intraday Data (`.scid`) files on disk.
+
+### File Format & Specifications
+
+- **Header (`s_IntradayHeader`)**: 56 bytes, Little-Endian, magic `SCID`, record size 40.
+- **Records (`s_IntradayRecord`)**: 40 bytes, Little-Endian, 8-byte aligned.
+  - `DateTime`: Microseconds since December 30, 1899, 00:00:00 UTC (`SCDateTimeMS`).
+  - `Open`, `High`, `Low`, `Close`: 4-byte IEEE 754 floats.
+  - `NumTrades`, `TotalVolume`, `BidVolume`, `AskVolume`: 4-byte unsigned integers.
+  - Trade aggressor mapping: Buyer aggressor (`A`) maps to `AskVolume`; Seller aggressor (`V`) maps to `BidVolume`.
+- **Monotonicity**: Automatic microsecond incrementing prevents collisions and preserves strict non-decreasing ordering even across service restarts.
+
+### Configuration & Environment Variables
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `SCID_BASE_DIR` | `data/scid` | Root directory for persisted `.scid` files. |
+| `SCID_PARTITION_STRATEGY` | `daily` | Partitioning strategy: `daily` or `monolithic`. |
+
+- **`daily`**: Partitions into ticker directories with session dates:
+  `<SCID_BASE_DIR>/<TICKER>/<TICKER>-<YYYY-MM-DD>.scid` (e.g. `data/scid/WINV26/WINV26-2026-10-05.scid`).
+  Automatically closes the previous day's file and initializes a fresh 56-byte header on date rollover.
+- **`monolithic`**: Appends continuously to a single file per ticker:
+  `<SCID_BASE_DIR>/<TICKER>.scid` (e.g. `data/scid/PETR4.scid`).
+
+### Architecture & Guarantees
+
+- **Multi-Ticker Demuxing**: Routes incoming lines for multiple subscribed instruments (e.g. `WINV26`, `PETR4`) to their respective file targets while safely ignoring non-trade lines and deletion frames.
+- **In-Memory Buffering**: Batches records in memory with count-based immediate flush (`batchSize`) and background interval flush (`flushInterval`).
+- **Scoped Teardown**: Integrates with Effect's `Scope` via `Effect.addFinalizer`, guaranteeing all buffered records are flushed uninterruptibly on process exit, cancellation, or Ctrl+C.
+- **Programmatic API**: Use `makeCedroScidSink` for scoped instantiation, `CedroScidSinkLive` for layer provision, or pass `scidSink` directly to `runCedroSupervisor`.
+
+
 Run this project's checks from the repository root:
 
 ```bash

@@ -63,6 +63,17 @@ export interface CedroScidSinkShape {
 	 * Returns the currently active session date (YYYY-MM-DD).
 	 */
 	readonly getCurrentDate: () => string;
+
+	/**
+	 * Returns current writer diagnostics and counters.
+	 */
+	readonly getStats: () => Effect.Effect<CedroScidStats, never>;
+}
+
+export interface CedroScidStats {
+	readonly totalTradesProcessed: number;
+	readonly totalRecordsFlushed: number;
+	readonly activeTickers: ReadonlyArray<string>;
 }
 
 export class CedroScidSink extends Context.Service<
@@ -144,6 +155,8 @@ export const makeCedroScidSink = (
 
 		const tickers = new Map<string, TickerState>();
 		const sem = yield* Semaphore.make(1);
+		let totalTradesProcessed = 0;
+		let totalRecordsFlushed = 0;
 
 		const flushTickerInternal = (
 			state: TickerState,
@@ -156,6 +169,11 @@ export const makeCedroScidSink = (
 				yield* Effect.promise(() =>
 					writeOrAppendScidFile(state.filePath, recordsToFlush),
 				).pipe(
+					Effect.tap(() =>
+						Effect.sync(() => {
+							totalRecordsFlushed += recordsToFlush.length;
+						}),
+					),
 					Effect.catch((err) =>
 						Effect.sync(() => {
 							state.buffer.unshift(...recordsToFlush);
@@ -257,6 +275,7 @@ export const makeCedroScidSink = (
 						state.lastTimestamp = scDateTime;
 						const record = tradeToScidRecord(trade, scDateTime);
 						state.buffer.push(record);
+						totalTradesProcessed++;
 
 						if (state.buffer.length >= batchSize) {
 							yield* flushTickerInternal(state);
@@ -278,11 +297,19 @@ export const makeCedroScidSink = (
 			}),
 		);
 
+		const getStats = (): Effect.Effect<CedroScidStats, never> =>
+			Effect.sync(() => ({
+				totalTradesProcessed,
+				totalRecordsFlushed,
+				activeTickers: Array.from(tickers.keys()),
+			}));
+
 		return {
 			writeLine,
 			flush,
 			rotateDate,
 			getCurrentDate,
+			getStats,
 		};
 	});
 

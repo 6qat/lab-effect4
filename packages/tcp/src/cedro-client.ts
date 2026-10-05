@@ -23,6 +23,11 @@ import {
 	CedroProtocolError,
 	isCedroAuthRejection,
 } from "./cedro-protocol.js";
+import {
+	type CedroScidSinkShape,
+	makeCedroScidSink,
+	type ScidPartitionMode,
+} from "./cedro-scid-sink.js";
 import { type TcpStreamError, TcpStreamLive } from "./tcp-connection.js";
 
 export class CedroAuthTimeoutError extends Data.TaggedError(
@@ -155,6 +160,7 @@ export interface CedroSupervisorOptions extends CedroSessionOptions {
 	readonly credentials: CedroConfigShape;
 	readonly backoffDelays?: ReadonlyArray<Duration.Input>;
 	readonly onStatus?: (status: string) => Effect.Effect<void, never>;
+	readonly scidSink?: CedroScidSinkShape;
 }
 
 /**
@@ -227,21 +233,36 @@ export const runCedroSupervisor = <E = never, R = never>(
 			);
 
 			const sessionResult = yield* Effect.scoped(
-				runCedroSession(onLine, {
-					...options,
-					onSubscribed: () =>
+				runCedroSession(
+					(line) =>
 						Effect.gen(function* () {
-							yield* onStatus(
-								`[cedro] Authenticated, restored subscriptions: ${(
-									options.tickers ?? ["WINV26", "PETR4"]
-								).join(", ")}`,
-							);
-							yield* Ref.set(attemptRef, 0);
-							if (options.onSubscribed) {
-								yield* options.onSubscribed();
+							if (options.scidSink) {
+								yield* options.scidSink.writeLine(line);
 							}
+							yield* onLine(line);
 						}),
-				}).pipe(Effect.provide(sessionLayer)),
+					{
+						...options,
+						onSubscribed: () =>
+							Effect.gen(function* () {
+								yield* onStatus(
+									`[cedro] Authenticated, restored subscriptions: ${(
+										options.tickers ?? ["WINV26", "PETR4"]
+									).join(", ")}`,
+								);
+								if (options.scidSink) {
+									const stats = yield* options.scidSink.getStats();
+									yield* onStatus(
+										`[cedro] SCID writer active: ${stats.totalRecordsFlushed} records flushed across [${stats.activeTickers.join(", ")}]`,
+									);
+								}
+								yield* Ref.set(attemptRef, 0);
+								if (options.onSubscribed) {
+									yield* options.onSubscribed();
+								}
+							}),
+					},
+				).pipe(Effect.provide(sessionLayer)),
 			).pipe(Effect.exit);
 
 			if (Exit.isSuccess(sessionResult)) {
@@ -301,6 +322,17 @@ export const main = Effect.gen(function* () {
 	const magicToken = yield* Config.redacted("CEDRO_TOKEN");
 	const username = yield* Config.redacted("CEDRO_USERNAME");
 	const password = yield* Config.redacted("CEDRO_PASSWORD");
+	const scidBaseDir = yield* Config.string("SCID_BASE_DIR").pipe(
+		Config.withDefault("data/scid"),
+	);
+	const scidPartitionStrategy = yield* Config.string(
+		"SCID_PARTITION_STRATEGY",
+	).pipe(Config.withDefault("daily"));
+	const partitionMode: ScidPartitionMode =
+		scidPartitionStrategy.toLowerCase() === "monolithic"
+			? "monolithic"
+			: "daily";
+
 	const credentials = {
 		magicToken: Redacted.value(magicToken),
 		username: Redacted.value(username),
@@ -315,13 +347,29 @@ export const main = Effect.gen(function* () {
 			text,
 		);
 
-	return yield* runCedroSupervisor((line) => Console.log(redact(line)), {
-		host,
-		port,
-		credentials,
-		tickers: ["WINV26", "PETR4"],
-		onStatus: (status) => Console.log(redact(status)),
-	});
+	yield* Console.log(
+		redact(
+			`[cedro] SCID persistence active: baseDir=${scidBaseDir}, strategy=${partitionMode}`,
+		),
+	);
+
+	return yield* Effect.scoped(
+		Effect.gen(function* () {
+			const scidSink = yield* makeCedroScidSink({
+				baseDir: scidBaseDir,
+				partitionMode,
+			});
+
+			yield* runCedroSupervisor((line) => Console.log(redact(line)), {
+				host,
+				port,
+				credentials,
+				tickers: ["WINV26", "PETR4"],
+				onStatus: (status) => Console.log(redact(status)),
+				scidSink,
+			});
+		}),
+	);
 });
 
 if (import.meta.main) {
