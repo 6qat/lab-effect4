@@ -805,4 +805,45 @@ describe("Webview HTML & Messaging Protocol", () => {
 			await Effect.runPromise(program);
 		});
 	});
+
+	describe("TanStack Virtual Dual-Bundle Architecture & CSP", () => {
+		it("renders webview HTML with external scriptUri, initial data script, and strict CSP", () => {
+			const initMessage: InitMessage = {
+				type: "INIT",
+				fileName: "WINV26-2026-10-06.scid",
+				summary: {
+					fileType: "SCID",
+					headerSize: 56,
+					recordSize: 40,
+					version: 1,
+					totalRecords: 50000,
+					fileSize: 56 + 50000 * 40,
+				},
+				offsetIndex: 49500,
+				pageSize: 500,
+				records: [],
+			};
+
+			const scriptUri = "vscode-resource://dist/webview.js";
+			const cspSource = "vscode-resource:";
+			const html = renderWebviewHtml(
+				"WINV26-2026-10-06.scid",
+				initMessage,
+				scriptUri,
+				cspSource,
+			);
+
+			expect(html).toContain("content=\"default-src 'none';");
+			expect(html).toContain('id="scid-initial-data"');
+			expect(html).toContain(
+				'<script src="vscode-resource://dist/webview.js">',
+			);
+			expect(html).toContain('class="scid-table" role="table"');
+			expect(html).toContain('class="table-header-row" role="row"');
+			expect(html).toContain('role="columnheader"');
+			expect(html).toContain('id="spacerTop" class="spacer"');
+			expect(html).toContain('id="spacerBottom" class="spacer"');
+			expect(html).not.toContain("acquireVsCodeApi()");
+		});
+	});
 });

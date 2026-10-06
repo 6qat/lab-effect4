@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import { Effect, Fiber } from "effect";
-import type * as vscode from "vscode";
+import * as vscode from "vscode";
 import type { ScidReaderShape } from "../reader/scid-reader.js";
 import type {
 	AppendRecordsMessage,
@@ -23,7 +23,10 @@ export class ScidEditorProvider
 {
 	public static readonly viewType = "scidViewer.editor";
 
-	constructor(private readonly reader: ScidReaderShape) {}
+	constructor(
+		private readonly reader: ScidReaderShape,
+		private readonly extensionUri?: vscode.Uri,
+	) {}
 
 	openCustomDocument(uri: vscode.Uri): ScidCustomDocument {
 		return new ScidCustomDocument(uri);
@@ -37,10 +40,21 @@ export class ScidEditorProvider
 		const webview = webviewPanel.webview;
 		webview.options = {
 			enableScripts: true,
+			localResourceRoots: this.extensionUri
+				? [vscode.Uri.joinPath(this.extensionUri, "dist")]
+				: [],
 		};
 
 		const filePath = document.uri.fsPath;
 		const fileName = path.basename(filePath);
+
+		const scriptUri = this.extensionUri
+			? webview
+					.asWebviewUri(
+						vscode.Uri.joinPath(this.extensionUri, "dist", "webview.js"),
+					)
+					.toString()
+			: undefined;
 
 		const reader = this.reader;
 
@@ -81,7 +95,12 @@ export class ScidEditorProvider
 
 		try {
 			const initMessage = await Effect.runPromise(initProgram);
-			webview.html = renderWebviewHtml(fileName, initMessage);
+			webview.html = renderWebviewHtml(
+				fileName,
+				initMessage,
+				scriptUri,
+				webview.cspSource,
+			);
 		} catch (err) {
 			webview.html = `<!DOCTYPE html>
 <html>

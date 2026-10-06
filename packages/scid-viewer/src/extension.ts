@@ -5,7 +5,7 @@ import { ScidTreeDataProvider } from "./tree/tree-data-provider.js";
 
 export function activate(context: vscode.ExtensionContext) {
 	const reader = makeScidReader();
-	const editorProvider = new ScidEditorProvider(reader);
+	const editorProvider = new ScidEditorProvider(reader, context.extensionUri);
 	const treeDataProvider = new ScidTreeDataProvider(reader);
 
 	context.subscriptions.push(

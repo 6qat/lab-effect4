@@ -448,7 +448,7 @@ export const renderTableRows = (
 	timeMode: "UTC" | "LOCAL" = "UTC",
 ): string => {
 	if (records.length === 0) {
-		return `<tr><td colspan="7" class="empty-cell">No records available</td></tr>`;
+		return `<div class="table-row empty-row" role="row" colspan="7"><div class="table-cell empty-cell" role="cell">No records available</div></div>`;
 	}
 
 	const isLocal = timeMode === "LOCAL";
@@ -464,15 +464,15 @@ export const renderTableRows = (
 			const priceVal =
 				typeof rec.price === "number" ? rec.price : (rec.close ?? 0);
 			const timeStr = isLocal ? rec.localFormatted || rec.isoUtc : rec.isoUtc;
-			return `<tr>
-				<td class="col-index">${rec.index.toLocaleString()}</td>
-				<td class="col-time">${escapeHtml(timeStr)}</td>
-				<td class="col-price">${priceVal.toFixed(2)}</td>
-				<td class="col-qty">${rec.totalVolume.toLocaleString()}</td>
-				<td class="col-side"><span class="badge ${sideClass}">${rec.side}</span></td>
-				<td class="col-volume">${rec.bidVolume.toLocaleString()}</td>
-				<td class="col-volume">${rec.askVolume.toLocaleString()}</td>
-			</tr>`;
+			return `<div class="table-row" role="row">
+				<div class="table-cell col-index" role="cell">${rec.index.toLocaleString()}</div>
+				<div class="table-cell col-time" role="cell">${escapeHtml(timeStr)}</div>
+				<div class="table-cell col-price" role="cell">${priceVal.toFixed(2)}</div>
+				<div class="table-cell col-qty" role="cell">${rec.totalVolume.toLocaleString()}</div>
+				<div class="table-cell col-side" role="cell"><span class="badge ${sideClass}">${rec.side}</span></div>
+				<div class="table-cell col-volume" role="cell">${rec.bidVolume.toLocaleString()}</div>
+				<div class="table-cell col-volume" role="cell">${rec.askVolume.toLocaleString()}</div>
+			</div>`;
 		})
 		.join("\n");
 };
@@ -480,6 +480,8 @@ export const renderTableRows = (
 export const renderWebviewHtml = (
 	fileName: string,
 	initialData?: InitMessage,
+	scriptUri?: string,
+	cspSource?: string,
 ): string => {
 	const summary = initialData?.summary;
 	const totalRecords = summary?.totalRecords ?? 0;
@@ -506,6 +508,7 @@ export const renderWebviewHtml = (
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	${cspSource ? `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https:; script-src ${cspSource} 'unsafe-inline'; style-src ${cspSource} 'unsafe-inline'; font-src ${cspSource};">` : ""}
 	<title>${escapeHtml(fileName)} - SCID Data Viewer</title>
 	<style>
 		:root {
@@ -727,7 +730,7 @@ export const renderWebviewHtml = (
 			text-align: left;
 		}
 
-		thead {
+		thead, .table-header-row {
 			position: sticky;
 			top: 0;
 			background-color: var(--header-bg);
@@ -735,41 +738,59 @@ export const renderWebviewHtml = (
 			border-bottom: 2px solid var(--border-color);
 		}
 
-		th {
+		.table-header-row {
+			display: grid;
+			grid-template-columns: 80px 220px 100px 90px 80px 90px 90px;
+			height: 34px;
+			align-items: center;
+		}
+
+		th, .table-header-cell {
 			padding: 8px 12px;
 			font-weight: 600;
 			color: var(--vscode-editorHeader-foreground, #bbbbbb);
 			white-space: nowrap;
 			border-bottom: 1px solid var(--border-color);
+			box-sizing: border-box;
+			user-select: none;
 		}
 
-		tbody tr {
+		tbody tr, .table-row {
 			height: 28px;
 			box-sizing: border-box;
 		}
 
-		td {
+		.table-row {
+			display: grid;
+			grid-template-columns: 80px 220px 100px 90px 80px 90px 90px;
+			border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+			align-items: center;
+		}
+
+		td, .table-cell {
 			padding: 4px 12px;
 			border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 			white-space: nowrap;
 			height: 28px;
 			box-sizing: border-box;
+			display: flex;
+			align-items: center;
 		}
 
-		tbody tr:nth-child(even) {
+		tbody tr:nth-child(even), .table-row:nth-child(even) {
 			background-color: var(--row-alt-bg);
 		}
 
-		tbody tr:hover {
+		tbody tr:hover, .table-row:hover {
 			background-color: var(--row-hover-bg);
 		}
 
-		.col-index { width: 70px; color: var(--vscode-descriptionForeground, #888); }
-		.col-time { width: 220px; }
-		.col-price { width: 100px; font-weight: 600; }
-		.col-qty { width: 90px; }
-		.col-side { width: 80px; text-align: center; }
-		.col-volume { width: 90px; text-align: right; }
+		.col-index { width: 80px; color: var(--vscode-descriptionForeground, #888); justify-content: flex-start; }
+		.col-time { width: 220px; justify-content: flex-start; }
+		.col-price { width: 100px; font-weight: 600; justify-content: flex-end; text-align: right; }
+		.col-qty { width: 90px; justify-content: flex-end; text-align: right; }
+		.col-side { width: 80px; justify-content: center; text-align: center; }
+		.col-volume { width: 90px; justify-content: flex-end; text-align: right; }
 
 		.badge {
 			display: inline-block;
@@ -799,11 +820,20 @@ export const renderWebviewHtml = (
 			border: 1px solid var(--badge-neutral-fg);
 		}
 
+		.empty-row { display: block; width: 100%; }
 		.empty-cell {
 			text-align: center;
+			justify-content: center;
 			padding: 40px;
+			width: 100%;
 			color: var(--vscode-descriptionForeground, #888888);
 			font-style: italic;
+		}
+
+		.spacer {
+			width: 100%;
+			flex-shrink: 0;
+			background: transparent;
 		}
 
 		#spacerTop td, #spacerBottom td {
@@ -934,31 +964,33 @@ export const renderWebviewHtml = (
 	</div>
 
 	<div class="table-wrapper" id="tableWrapper">
-		<table>
-			<thead>
-				<tr>
-					<th class="col-index">#</th>
-					<th class="col-time" id="thTime">Time (UTC)</th>
-					<th class="col-price">Price</th>
-					<th class="col-qty">Quantity</th>
-					<th class="col-side">Side</th>
-					<th class="col-volume">Bid Vol</th>
-					<th class="col-volume">Ask Vol</th>
-				</tr>
-			</thead>
-			<tbody id="tableBody">
-				<tr id="spacerTop" style="height: ${initialSpacers.topSpacerHeight}px;"><td colspan="7"></td></tr>
+		<div class="scid-table" role="table">
+			<div class="table-header-row" role="row">
+				<div class="table-header-cell col-index" role="columnheader">#</div>
+				<div class="table-header-cell col-time" id="thTime" role="columnheader">Time (UTC)</div>
+				<div class="table-header-cell col-price" role="columnheader">Price</div>
+				<div class="table-header-cell col-qty" role="columnheader">Quantity</div>
+				<div class="table-header-cell col-side" role="columnheader">Side</div>
+				<div class="table-header-cell col-volume" role="columnheader">Bid Vol</div>
+				<div class="table-header-cell col-volume" role="columnheader">Ask Vol</div>
+			</div>
+			<div id="spacerTop" class="spacer" style="height: ${initialSpacers.topSpacerHeight}px;"></div>
+			<div id="tableBody" class="table-body" role="rowgroup">
 				${rowsHtml}
-				<tr id="spacerBottom" style="height: ${initialSpacers.bottomSpacerHeight}px;"><td colspan="7"></td></tr>
-			</tbody>
-		</table>
+			</div>
+			<div id="spacerBottom" class="spacer" style="height: ${initialSpacers.bottomSpacerHeight}px;"></div>
+		</div>
 		<button id="floatingFollowPill" class="floating-follow-pill" style="display: none;" title="Resume Live Tail follow mode">
 			<span class="pill-icon">↓</span>
 			<span id="pillText">0 new trades — Resume Live Tail</span>
 		</button>
 	</div>
 
-	<script>
+	<script id="scid-initial-data" type="application/json">${initialJson}</script>
+	${
+		scriptUri
+			? `<script src="${escapeHtml(scriptUri)}"></script>`
+			: `<script>
 		(function() {
 			const vscode = acquireVsCodeApi();
 			const ROW_HEIGHT = 28;
@@ -1550,7 +1582,8 @@ export const renderWebviewHtml = (
 				renderVirtualWindow();
 			}
 		})();
-	</script>
+	</script>`
+	}
 </body>
 </html>`;
 };

@@ -75,6 +75,7 @@
 		"lint": "biome lint ."
 	},
 	"dependencies": {
+		"@tanstack/virtual-core": "^3.17.11",
 		"effect": "4.0.1",
 		"tcp": "workspace:*"
 	},
