@@ -369,6 +369,72 @@ export const resumeFollow = (
 export const formatUnreadPillText = (unreadCount: number): string =>
 	`↓ ${unreadCount.toLocaleString()} new trades — Resume Live Tail`;
 
+export interface PriceFilter {
+	readonly op: ">=" | "<=" | ">" | "<" | "=";
+	readonly val: number;
+}
+
+export const parsePriceFilter = (raw: string): PriceFilter | null => {
+	if (!raw?.trim()) return null;
+	const trimmed = raw.trim();
+	const match = trimmed.match(/^([><]=?|=)?\s*([0-9]+(?:\.[0-9]+)?)$/);
+	if (!match) return null;
+	const op = (match[1] as PriceFilter["op"]) || "=";
+	const val = Number.parseFloat(match[2] as string);
+	if (Number.isNaN(val)) return null;
+	return { op, val };
+};
+
+export const matchesRecordFilter = (
+	record: {
+		readonly price?: number;
+		readonly close?: number;
+		readonly totalVolume: number;
+	},
+	minVolume = 0,
+	priceFilter: PriceFilter | null = null,
+): boolean => {
+	if (minVolume > 0 && record.totalVolume < minVolume) {
+		return false;
+	}
+	if (priceFilter !== null) {
+		const price =
+			typeof record.price === "number" ? record.price : (record.close ?? 0);
+		const target = priceFilter.val;
+		switch (priceFilter.op) {
+			case ">=":
+				if (!(price >= target)) return false;
+				break;
+			case "<=":
+				if (!(price <= target)) return false;
+				break;
+			case ">":
+				if (!(price > target)) return false;
+				break;
+			case "<":
+				if (!(price < target)) return false;
+				break;
+			default:
+				if (Math.abs(price - target) > 0.001) return false;
+				break;
+		}
+	}
+	return true;
+};
+
+export const formatFilteredRangeIndicator = (
+	matchCount: number,
+	renderedCount: number,
+): string =>
+	`Filtered: ${matchCount.toLocaleString()} matching of ${renderedCount.toLocaleString()} visible in window`;
+
+export const formatRangeIndicator = (
+	dispStart: number,
+	endIndex: number,
+	totalRecords: number,
+): string =>
+	`Showing ${dispStart.toLocaleString()} - ${endIndex.toLocaleString()} of ${totalRecords.toLocaleString()}`;
+
 export const escapeHtml = (str: string): string =>
 	str
 		.replace(/&/g, "&amp;")
@@ -1254,7 +1320,8 @@ export const renderWebviewHtml = (
 
 				const dispStart = state.totalRecords === 0 ? 0 : startIndex + 1;
 				if (isFiltered) {
-					rangeIndicator.textContent = 'Filtered: ' + matchCount.toLocaleString() + ' matching of ' + state.totalRecords.toLocaleString();
+					rangeIndicator.textContent =
+						'Filtered: ' + matchCount.toLocaleString() + ' matching of ' + renderedCount.toLocaleString() + ' visible in window';
 				} else {
 					rangeIndicator.textContent =
 						'Showing ' + dispStart.toLocaleString() + ' - ' + endIndex.toLocaleString() + ' of ' + state.totalRecords.toLocaleString();
@@ -1417,8 +1484,15 @@ export const renderWebviewHtml = (
 							tableWrapper.scrollTop = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
 						} else {
 							const incomingCount = msg.records ? msg.records.length : 0;
-							state.unreadCount += incomingCount;
-							updateFollowPill();
+							const isFiltered = state.minVolume > 0 || state.priceFilterVal !== null;
+							let matchingIncoming = incomingCount;
+							if (isFiltered && msg.records && msg.records.length > 0) {
+								matchingIncoming = msg.records.filter(matchesFilter).length;
+							}
+							if (matchingIncoming > 0) {
+								state.unreadCount += matchingIncoming;
+								updateFollowPill();
+							}
 						}
 					}
 					renderVirtualWindow();

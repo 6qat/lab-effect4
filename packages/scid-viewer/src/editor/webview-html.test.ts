@@ -1,5 +1,12 @@
 import { describe, expect, it } from "bun:test";
-import type { FormattedScidRecord } from "../reader/scid-reader.js";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { Effect } from "effect";
+import {
+	type FormattedScidRecord,
+	ScidReader,
+	ScidReaderLive,
+} from "../reader/scid-reader.js";
 import type {
 	AppendRecordsMessage,
 	InitMessage,
@@ -15,6 +22,8 @@ import {
 	escapeHtml,
 	FOLLOW_THRESHOLD_PX,
 	formatFileSize,
+	formatFilteredRangeIndicator,
+	formatRangeIndicator,
 	formatUnreadPillText,
 	handleFollowAppend,
 	handleFollowScroll,
@@ -23,8 +32,10 @@ import {
 	LruChunkCache,
 	MAX_CACHED_CHUNKS,
 	MAX_CONTAINER_HEIGHT,
+	matchesRecordFilter,
 	OVERSCAN_ROWS,
 	PREFETCH_MARGIN,
+	parsePriceFilter,
 	ROW_HEIGHT,
 	renderSkeletonRows,
 	renderTableRows,
@@ -567,6 +578,231 @@ describe("Webview HTML & Messaging Protocol", () => {
 			expect(html).toContain('id="floatingFollowPill"');
 			expect(html).toContain('id="pillText"');
 			expect(html).toContain("Live Tail: OFF");
+		});
+	});
+
+	describe("Viewport Filtering Engine (Volume & Price)", () => {
+		it("parses price filter expressions correctly", () => {
+			expect(parsePriceFilter("125000")).toEqual({ op: "=", val: 125000 });
+			expect(parsePriceFilter("  125000.50  ")).toEqual({
+				op: "=",
+				val: 125000.5,
+			});
+			expect(parsePriceFilter(">= 125000")).toEqual({
+				op: ">=",
+				val: 125000,
+			});
+			expect(parsePriceFilter("<=125000.25")).toEqual({
+				op: "<=",
+				val: 125000.25,
+			});
+			expect(parsePriceFilter("> 125000")).toEqual({ op: ">", val: 125000 });
+			expect(parsePriceFilter("<125000")).toEqual({ op: "<", val: 125000 });
+			expect(parsePriceFilter("= 125000")).toEqual({ op: "=", val: 125000 });
+
+			expect(parsePriceFilter("")).toBeNull();
+			expect(parsePriceFilter("   ")).toBeNull();
+			expect(parsePriceFilter("invalid-price")).toBeNull();
+		});
+
+		it("evaluates min volume filtering against trade records", () => {
+			const recLowVol = { totalVolume: 10, price: 125000 };
+			const recHighVol = { totalVolume: 100, price: 125000 };
+
+			expect(matchesRecordFilter(recLowVol, 50, null)).toBe(false);
+			expect(matchesRecordFilter(recHighVol, 50, null)).toBe(true);
+			expect(matchesRecordFilter(recLowVol, 0, null)).toBe(true);
+		});
+
+		it("evaluates price comparison operators correctly", () => {
+			const rec = { totalVolume: 10, price: 125000 };
+
+			expect(matchesRecordFilter(rec, 0, { op: "=", val: 125000 })).toBe(true);
+			expect(matchesRecordFilter(rec, 0, { op: "=", val: 125005 })).toBe(false);
+
+			expect(matchesRecordFilter(rec, 0, { op: ">=", val: 125000 })).toBe(true);
+			expect(matchesRecordFilter(rec, 0, { op: ">=", val: 124995 })).toBe(true);
+			expect(matchesRecordFilter(rec, 0, { op: ">=", val: 125005 })).toBe(
+				false,
+			);
+
+			expect(matchesRecordFilter(rec, 0, { op: "<=", val: 125000 })).toBe(true);
+			expect(matchesRecordFilter(rec, 0, { op: "<=", val: 125005 })).toBe(true);
+			expect(matchesRecordFilter(rec, 0, { op: "<=", val: 124995 })).toBe(
+				false,
+			);
+
+			expect(matchesRecordFilter(rec, 0, { op: ">", val: 124995 })).toBe(true);
+			expect(matchesRecordFilter(rec, 0, { op: ">", val: 125000 })).toBe(false);
+
+			expect(matchesRecordFilter(rec, 0, { op: "<", val: 125005 })).toBe(true);
+			expect(matchesRecordFilter(rec, 0, { op: "<", val: 125000 })).toBe(false);
+		});
+
+		it("evaluates combined volume and price filtering", () => {
+			const rec1 = { totalVolume: 10, price: 125000 };
+			const rec2 = { totalVolume: 100, price: 125000 };
+			const rec3 = { totalVolume: 100, price: 124000 };
+
+			const filter = { op: ">=" as const, val: 125000 };
+			expect(matchesRecordFilter(rec1, 50, filter)).toBe(false); // fails volume
+			expect(matchesRecordFilter(rec2, 50, filter)).toBe(true); // passes both
+			expect(matchesRecordFilter(rec3, 50, filter)).toBe(false); // fails price
+		});
+
+		it("formats filtered range indicator matching task specification", () => {
+			expect(formatFilteredRangeIndicator(12, 40)).toBe(
+				"Filtered: 12 matching of 40 visible in window",
+			);
+			expect(formatFilteredRangeIndicator(0, 0)).toBe(
+				"Filtered: 0 matching of 0 visible in window",
+			);
+			expect(formatRangeIndicator(1, 40, 5166909)).toBe(
+				"Showing 1 - 40 of 5,166,909",
+			);
+		});
+	});
+
+	describe("Instant Teleportation & Jump Navigation", () => {
+		it("snaps to index 0 on Top navigation", () => {
+			const totalRecords = 5_166_909;
+			const viewportHeight = 600;
+			const targetScroll = indexToScrollTop(0, viewportHeight, totalRecords);
+			expect(targetScroll).toBe(0);
+			expect(scrollTopToIndex(targetScroll, viewportHeight, totalRecords)).toBe(
+				0,
+			);
+		});
+
+		it("snaps to maximum scroll offset on Tail navigation", () => {
+			const totalRecords = 5_166_909;
+			const viewportHeight = 600;
+			const metrics = calculateVirtualScrollMetrics(totalRecords);
+			const maxScrollTop = Math.max(
+				0,
+				metrics.totalVirtualHeight - viewportHeight,
+			);
+			const targetIndex = scrollTopToIndex(
+				maxScrollTop,
+				viewportHeight,
+				totalRecords,
+			);
+			const visibleRows = Math.ceil(viewportHeight / ROW_HEIGHT);
+			expect(targetIndex).toBe(totalRecords - visibleRows);
+		});
+
+		it("teleports to arbitrary jump indices with coordinate clamping", () => {
+			const totalRecords = 5_166_909;
+			const viewportHeight = 600;
+
+			// Negative target clamps to 0
+			expect(indexToScrollTop(-100, viewportHeight, totalRecords)).toBe(0);
+
+			// Target beyond total records clamps to max index
+			const maxScrollTop =
+				calculateVirtualScrollMetrics(totalRecords).totalVirtualHeight -
+				viewportHeight;
+			expect(indexToScrollTop(10_000_000, viewportHeight, totalRecords)).toBe(
+				maxScrollTop,
+			);
+
+			// Middle jump (e.g. index 2,500,000) calculates scaled offset
+			const midScroll = indexToScrollTop(
+				2_500_000,
+				viewportHeight,
+				totalRecords,
+			);
+			expect(midScroll).toBeGreaterThan(0);
+			expect(midScroll).toBeLessThan(maxScrollTop);
+			const roundTripIndex = scrollTopToIndex(
+				midScroll,
+				viewportHeight,
+				totalRecords,
+			);
+			expect(Math.abs(roundTripIndex - 2_500_000)).toBeLessThan(5);
+		});
+	});
+
+	describe("5M+ Real SCID Fixture Verification (WINV26-2026-10-06.scid)", () => {
+		const fixturePath = path.resolve(
+			process.cwd(),
+			"data/scid/WINV26/WINV26-2026-10-06.scid",
+		);
+		const fixtureExists = fs.existsSync(fixturePath);
+
+		it("loads 5M+ fixture summary in under 500ms", async () => {
+			if (!fixtureExists) return;
+
+			const program = Effect.gen(function* () {
+				const reader = yield* ScidReader;
+				const t0 = performance.now();
+				const summary = yield* reader.getSummary(fixturePath);
+				const duration = performance.now() - t0;
+
+				expect(duration).toBeLessThan(500);
+				expect(summary.totalRecords).toBeGreaterThan(5_000_000);
+				expect(summary.fileSize).toBeGreaterThan(200_000_000);
+				expect(summary.header.fileType).toBe("SCID");
+				expect(summary.firstRecordIsoUtc).toContain("2026-10-06");
+				expect(summary.lastRecordIsoUtc).toContain("2026-10-06");
+			}).pipe(Effect.provide(ScidReaderLive));
+
+			await Effect.runPromise(program);
+		});
+
+		it("verifies virtual metrics and coordinate scaling for 5M+ records", async () => {
+			if (!fixtureExists) return;
+
+			const program = Effect.gen(function* () {
+				const reader = yield* ScidReader;
+				const summary = yield* reader.getSummary(fixturePath);
+				const metrics = calculateVirtualScrollMetrics(summary.totalRecords);
+
+				expect(metrics.isScaled).toBe(true);
+				expect(metrics.totalVirtualHeight).toBe(MAX_CONTAINER_HEIGHT);
+				expect(metrics.scaleRatio).toBeLessThan(1);
+			}).pipe(Effect.provide(ScidReaderLive));
+
+			await Effect.runPromise(program);
+		});
+
+		it("executes random seeks to head, middle (2.5M), and tail instantaneously", async () => {
+			if (!fixtureExists) return;
+
+			const program = Effect.gen(function* () {
+				const reader = yield* ScidReader;
+				const summary = yield* reader.getSummary(fixturePath);
+
+				// Head slice
+				const t0 = performance.now();
+				const headSlice = yield* reader.readSlice(fixturePath, 0, 50);
+				const headDur = performance.now() - t0;
+				expect(headDur).toBeLessThan(1000);
+				expect(headSlice.length).toBe(50);
+				expect(headSlice[0]?.index).toBe(0);
+
+				// Middle slice
+				const midIdx = Math.floor(summary.totalRecords / 2);
+				const t1 = performance.now();
+				const midSlice = yield* reader.readSlice(fixturePath, midIdx, 50);
+				const midDur = performance.now() - t1;
+				expect(midDur).toBeLessThan(1000);
+				expect(midSlice.length).toBe(50);
+				expect(midSlice[0]?.index).toBe(midIdx);
+
+				// Tail slice
+				const tailIdx = summary.totalRecords - 50;
+				const t2 = performance.now();
+				const tailSlice = yield* reader.readSlice(fixturePath, tailIdx, 50);
+				const tailDur = performance.now() - t2;
+				expect(tailDur).toBeLessThan(1000);
+				expect(tailSlice.length).toBe(50);
+				expect(tailSlice[tailSlice.length - 1]?.index).toBe(
+					summary.totalRecords - 1,
+				);
+			}).pipe(Effect.provide(ScidReaderLive));
+
+			await Effect.runPromise(program);
 		});
 	});
 });
