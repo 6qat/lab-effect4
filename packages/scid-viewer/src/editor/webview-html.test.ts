@@ -1,0 +1,166 @@
+import { describe, expect, it } from "bun:test";
+import type { FormattedScidRecord } from "../reader/scid-reader.js";
+import type {
+	InitMessage,
+	PageDataMessage,
+	RequestPageMessage,
+} from "./protocol.js";
+import {
+	escapeHtml,
+	formatFileSize,
+	renderTableRows,
+	renderWebviewHtml,
+} from "./webview-html.js";
+
+describe("Webview HTML & Messaging Protocol", () => {
+	describe("String & Number Formatting Helpers", () => {
+		it("escapes HTML special characters", () => {
+			expect(escapeHtml("<script>alert('xss')&\"test\"</script>")).toBe(
+				"&lt;script&gt;alert(&#039;xss&#039;)&amp;&quot;test&quot;&lt;/script&gt;",
+			);
+		});
+
+		it("formats file size in human-readable units", () => {
+			expect(formatFileSize(56)).toBe("56 B");
+			expect(formatFileSize(1024)).toBe("1.0 KB");
+			expect(formatFileSize(1024 * 512)).toBe("512.0 KB");
+			expect(formatFileSize(1024 * 1024 * 4.5)).toBe("4.50 MB");
+			expect(formatFileSize(1024 * 1024 * 1024 * 2.1)).toBe("2.10 GB");
+		});
+	});
+
+	describe("Table Rows Rendering", () => {
+		it("renders empty state placeholder when records array is empty", () => {
+			const html = renderTableRows([]);
+			expect(html).toContain("No records available");
+			expect(html).toContain('colspan="7"');
+		});
+
+		it("renders formatted records with color-coded side badges", () => {
+			const records: FormattedScidRecord[] = [
+				{
+					index: 0,
+					dateTimeRaw: 1000n,
+					isoUtc: "2026-10-06T12:00:00.000000Z",
+					localFormatted: "2026-10-06 09:00:00.000000",
+					open: 125430,
+					high: 125430,
+					low: 125430,
+					close: 125430,
+					price: 125430,
+					numTrades: 1,
+					totalVolume: 50,
+					bidVolume: 0,
+					askVolume: 50,
+					side: "BUY",
+				},
+				{
+					index: 1,
+					dateTimeRaw: 2000n,
+					isoUtc: "2026-10-06T12:00:01.000000Z",
+					localFormatted: "2026-10-06 09:00:01.000000",
+					open: 125425,
+					high: 125425,
+					low: 125425,
+					close: 125425,
+					price: 125425,
+					numTrades: 1,
+					totalVolume: 25,
+					bidVolume: 25,
+					askVolume: 0,
+					side: "SELL",
+				},
+				{
+					index: 2,
+					dateTimeRaw: 3000n,
+					isoUtc: "2026-10-06T12:00:02.000000Z",
+					localFormatted: "2026-10-06 09:00:02.000000",
+					open: 125425,
+					high: 125425,
+					low: 125425,
+					close: 125425,
+					price: 125425,
+					numTrades: 1,
+					totalVolume: 10,
+					bidVolume: 0,
+					askVolume: 0,
+					side: "NEUTRAL",
+				},
+			];
+
+			const html = renderTableRows(records);
+			expect(html).toContain("col-index");
+			expect(html).toContain("125430.00");
+			expect(html).toContain("badge badge-buy");
+			expect(html).toContain("badge badge-sell");
+			expect(html).toContain("badge badge-neutral");
+			expect(html).toContain("BUY");
+			expect(html).toContain("SELL");
+			expect(html).toContain("NEUTRAL");
+		});
+	});
+
+	describe("Full Webview HTML Generation", () => {
+		it("generates full HTML with summary card and navigation toolbar", () => {
+			const initMessage: InitMessage = {
+				type: "INIT",
+				fileName: "WINV26-2026-10-06.scid",
+				summary: {
+					fileType: "SCID",
+					headerSize: 56,
+					recordSize: 40,
+					version: 1,
+					totalRecords: 124530,
+					fileSize: 56 + 124530 * 40,
+					firstRecordIsoUtc: "2026-10-06T12:00:00.000000Z",
+					lastRecordIsoUtc: "2026-10-06T20:55:00.000000Z",
+				},
+				offsetIndex: 124030,
+				pageSize: 500,
+				records: [],
+			};
+
+			const html = renderWebviewHtml("WINV26-2026-10-06.scid", initMessage);
+
+			expect(html).toContain("<!DOCTYPE html>");
+			expect(html).toContain("WINV26-2026-10-06.scid");
+			expect(html).toContain("124,530");
+			expect(html).toContain("SCID Binary");
+			expect(html).toContain("First Trade");
+			expect(html).toContain("Last Trade");
+			expect(html).toContain("btnFirst");
+			expect(html).toContain("btnPrev");
+			expect(html).toContain("btnNext");
+			expect(html).toContain("btnLast");
+			expect(html).toContain("btnTail");
+			expect(html).toContain("jumpIndexInput");
+			expect(html).toContain("pageSizeSelect");
+			expect(html).toContain("acquireVsCodeApi()");
+			expect(html).toContain("REQUEST_PAGE");
+			expect(html).toContain("PAGE_DATA");
+		});
+	});
+
+	describe("IPC Protocol Typing", () => {
+		it("validates protocol message payloads", () => {
+			const req: RequestPageMessage = {
+				type: "REQUEST_PAGE",
+				offsetIndex: 500,
+				pageSize: 250,
+			};
+			expect(req.type).toBe("REQUEST_PAGE");
+			expect(req.offsetIndex).toBe(500);
+			expect(req.pageSize).toBe(250);
+
+			const pageData: PageDataMessage = {
+				type: "PAGE_DATA",
+				offsetIndex: 500,
+				pageSize: 250,
+				totalRecords: 10000,
+				records: [],
+			};
+			expect(pageData.type).toBe("PAGE_DATA");
+			expect(pageData.totalRecords).toBe(10000);
+		});
+	});
+});

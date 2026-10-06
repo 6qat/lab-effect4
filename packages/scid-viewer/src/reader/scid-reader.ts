@@ -27,6 +27,7 @@ export interface FormattedScidRecord {
 	readonly high: number;
 	readonly low: number;
 	readonly close: number;
+	readonly price: number;
 	readonly numTrades: number;
 	readonly totalVolume: number;
 	readonly bidVolume: number;
@@ -341,6 +342,7 @@ export const makeScidReader = (): ScidReaderShape => ({
 						high: rawRecord.high,
 						low: rawRecord.low,
 						close: rawRecord.close,
+						price: rawRecord.close,
 						numTrades: rawRecord.numTrades,
 						totalVolume: rawRecord.totalVolume,
 						bidVolume: rawRecord.bidVolume,

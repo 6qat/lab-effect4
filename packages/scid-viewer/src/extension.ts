@@ -1,9 +1,25 @@
-import type * as vscode from "vscode";
+import * as vscode from "vscode";
+import { ScidEditorProvider } from "./editor/scid-editor-provider.js";
+import { makeScidReader } from "./reader/scid-reader.js";
 
-export function activate(_context: vscode.ExtensionContext) {
-	// Extension activation entry point (wired in Ticket 17 & 19)
+export function activate(context: vscode.ExtensionContext) {
+	const reader = makeScidReader();
+	const provider = new ScidEditorProvider(reader);
+
+	context.subscriptions.push(
+		vscode.window.registerCustomEditorProvider(
+			ScidEditorProvider.viewType,
+			provider,
+			{
+				webviewOptions: {
+					retainContextWhenHidden: true,
+				},
+				supportsMultipleEditorsPerDocument: false,
+			},
+		),
+	);
 }
 
 export function deactivate() {
-	// Extension deactivation entry point
+	// Clean up resources on extension deactivation
 }

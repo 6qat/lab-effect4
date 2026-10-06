@@ -10,6 +10,23 @@
 		"vscode": "^1.90.0"
 	},
 	"main": "./dist/extension.js",
+	"activationEvents": [
+		"onCustomEditor:scidViewer.editor"
+	],
+	"contributes": {
+		"customEditors": [
+			{
+				"viewType": "scidViewer.editor",
+				"displayName": "SCID Data Viewer",
+				"selector": [
+					{
+						"filenamePattern": "*.scid"
+					}
+				],
+				"priority": "default"
+			}
+		]
+	},
 	"scripts": {
 		"build": "bun esbuild.config.mjs",
 		"test": "bun test ./src",
