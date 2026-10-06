@@ -8,10 +8,18 @@ import type {
 	ToggleLiveTailMessage,
 } from "./protocol.js";
 import {
+	calculateSpacerHeights,
+	calculateVirtualScrollMetrics,
 	escapeHtml,
 	formatFileSize,
+	indexToScrollTop,
+	MAX_CONTAINER_HEIGHT,
+	OVERSCAN_ROWS,
+	ROW_HEIGHT,
+	renderSkeletonRows,
 	renderTableRows,
 	renderWebviewHtml,
+	scrollTopToIndex,
 } from "./webview-html.js";
 
 describe("Webview HTML & Messaging Protocol", () => {
@@ -130,13 +138,9 @@ describe("Webview HTML & Messaging Protocol", () => {
 			expect(html).toContain("SCID Binary");
 			expect(html).toContain("First Trade");
 			expect(html).toContain("Last Trade");
-			expect(html).toContain("btnFirst");
-			expect(html).toContain("btnPrev");
-			expect(html).toContain("btnNext");
-			expect(html).toContain("btnLast");
+			expect(html).toContain("btnTop");
 			expect(html).toContain("btnTail");
 			expect(html).toContain("jumpIndexInput");
-			expect(html).toContain("pageSizeSelect");
 			expect(html).toContain("acquireVsCodeApi()");
 			expect(html).toContain("REQUEST_PAGE");
 			expect(html).toContain("PAGE_DATA");
@@ -220,6 +224,110 @@ describe("Webview HTML & Messaging Protocol", () => {
 			};
 			expect(toggleMsg.type).toBe("TOGGLE_LIVE_TAIL");
 			expect(toggleMsg.enabled).toBe(true);
+		});
+	});
+
+	describe("Virtual Scrolling & Coordinate Scaling Engine", () => {
+		it("defines default layout constants matching the specification", () => {
+			expect(ROW_HEIGHT).toBe(28);
+			expect(MAX_CONTAINER_HEIGHT).toBe(5_000_000);
+			expect(OVERSCAN_ROWS).toBe(15);
+		});
+
+		it("calculates unscaled virtual height for normal files under 5M px", () => {
+			const metrics = calculateVirtualScrollMetrics(
+				1000,
+				ROW_HEIGHT,
+				MAX_CONTAINER_HEIGHT,
+			);
+			expect(metrics.totalVirtualHeight).toBe(28000);
+			expect(metrics.isScaled).toBe(false);
+			expect(metrics.scaleRatio).toBe(1);
+		});
+
+		it("caps virtual height at 5M px and calculates scaling ratio for massive files (5M+ rows)", () => {
+			const totalRecords = 5_166_909;
+			const metrics = calculateVirtualScrollMetrics(
+				totalRecords,
+				ROW_HEIGHT,
+				MAX_CONTAINER_HEIGHT,
+			);
+			expect(metrics.totalVirtualHeight).toBe(MAX_CONTAINER_HEIGHT);
+			expect(metrics.isScaled).toBe(true);
+			expect(metrics.scaleRatio).toBeCloseTo(
+				MAX_CONTAINER_HEIGHT / (totalRecords * ROW_HEIGHT),
+				5,
+			);
+		});
+
+		it("maps scrollTop to continuous record indices accurately without scaling", () => {
+			const viewportHeight = 560; // 20 visible rows
+			const totalRecords = 1000;
+			expect(scrollTopToIndex(0, viewportHeight, totalRecords)).toBe(0);
+			expect(scrollTopToIndex(280, viewportHeight, totalRecords)).toBe(10);
+			const maxScroll = 1000 * ROW_HEIGHT - viewportHeight;
+			expect(scrollTopToIndex(maxScroll, viewportHeight, totalRecords)).toBe(
+				1000 - 20,
+			);
+		});
+
+		it("maps scrollTop to record indices with virtual ratio for scaled massive files", () => {
+			const viewportHeight = 700; // 25 visible rows
+			const totalRecords = 5_000_000;
+			expect(scrollTopToIndex(0, viewportHeight, totalRecords)).toBe(0);
+			const maxScroll = MAX_CONTAINER_HEIGHT - viewportHeight;
+			// At half scroll, should map to approximately half total records
+			const midIndex = scrollTopToIndex(
+				maxScroll / 2,
+				viewportHeight,
+				totalRecords,
+			);
+			expect(midIndex).toBeGreaterThan(2_400_000);
+			expect(midIndex).toBeLessThan(2_600_000);
+			// At max scroll, maps to end
+			expect(scrollTopToIndex(maxScroll, viewportHeight, totalRecords)).toBe(
+				totalRecords - 25,
+			);
+		});
+
+		it("maps index to scrollTop bidirectionally", () => {
+			const viewportHeight = 560;
+			const totalRecords = 1000;
+			const scroll = indexToScrollTop(100, viewportHeight, totalRecords);
+			expect(scroll).toBe(100 * ROW_HEIGHT);
+			expect(scrollTopToIndex(scroll, viewportHeight, totalRecords)).toBe(100);
+		});
+
+		it("calculates top and bottom spacer heights correctly", () => {
+			const totalRecords = 1000;
+			const startIndex = 100;
+			const renderedCount = 50;
+			const spacers = calculateSpacerHeights(
+				startIndex,
+				renderedCount,
+				totalRecords,
+			);
+			expect(spacers.topSpacerHeight).toBe(100 * ROW_HEIGHT);
+			expect(spacers.bottomSpacerHeight).toBe((1000 - 150) * ROW_HEIGHT);
+		});
+
+		it("renders skeleton placeholder rows for unloaded ranges", () => {
+			const html = renderSkeletonRows(1000, 3);
+			expect(html).toContain('col-index">#1,000</td>');
+			expect(html).toContain('col-index">#1,001</td>');
+			expect(html).toContain('col-index">#1,002</td>');
+			expect(html).toContain("skeleton-cell");
+		});
+
+		it("streamlines toolbar by including Top and Tail buttons and excluding page buttons", () => {
+			const html = renderWebviewHtml("test.scid");
+			expect(html).toContain('id="btnTop"');
+			expect(html).toContain('id="btnTail"');
+			expect(html).not.toContain('id="btnFirst"');
+			expect(html).not.toContain('id="btnPrev"');
+			expect(html).not.toContain('id="btnNext"');
+			expect(html).not.toContain('id="btnLast"');
+			expect(html).not.toContain('id="pageSizeSelect"');
 		});
 	});
 });

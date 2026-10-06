@@ -9,6 +9,138 @@ export const formatFileSize = (bytes: number): string => {
 	return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 };
 
+export const ROW_HEIGHT = 28;
+export const MAX_CONTAINER_HEIGHT = 5_000_000;
+export const OVERSCAN_ROWS = 15;
+
+export interface VirtualScrollMetrics {
+	readonly totalVirtualHeight: number;
+	readonly isScaled: boolean;
+	readonly scaleRatio: number;
+}
+
+export const calculateVirtualScrollMetrics = (
+	totalRecords: number,
+	rowHeight = ROW_HEIGHT,
+	maxContainerHeight = MAX_CONTAINER_HEIGHT,
+): VirtualScrollMetrics => {
+	const rawHeight = totalRecords * rowHeight;
+	if (rawHeight <= maxContainerHeight) {
+		return {
+			totalVirtualHeight: rawHeight,
+			isScaled: false,
+			scaleRatio: 1,
+		};
+	}
+	return {
+		totalVirtualHeight: maxContainerHeight,
+		isScaled: true,
+		scaleRatio: maxContainerHeight / rawHeight,
+	};
+};
+
+export const scrollTopToIndex = (
+	scrollTop: number,
+	viewportHeight: number,
+	totalRecords: number,
+	rowHeight = ROW_HEIGHT,
+	maxContainerHeight = MAX_CONTAINER_HEIGHT,
+): number => {
+	if (totalRecords <= 0) return 0;
+	const visibleRows = Math.ceil(viewportHeight / rowHeight);
+	const maxStartIndex = Math.max(0, totalRecords - visibleRows);
+	const metrics = calculateVirtualScrollMetrics(
+		totalRecords,
+		rowHeight,
+		maxContainerHeight,
+	);
+	const maxScrollTop = Math.max(1, metrics.totalVirtualHeight - viewportHeight);
+	const clampedScrollTop = Math.max(0, Math.min(maxScrollTop, scrollTop));
+
+	if (!metrics.isScaled) {
+		return Math.min(maxStartIndex, Math.floor(clampedScrollTop / rowHeight));
+	}
+	return Math.min(
+		maxStartIndex,
+		Math.round((clampedScrollTop / maxScrollTop) * maxStartIndex),
+	);
+};
+
+export const indexToScrollTop = (
+	index: number,
+	viewportHeight: number,
+	totalRecords: number,
+	rowHeight = ROW_HEIGHT,
+	maxContainerHeight = MAX_CONTAINER_HEIGHT,
+): number => {
+	if (totalRecords <= 0) return 0;
+	const visibleRows = Math.ceil(viewportHeight / rowHeight);
+	const maxStartIndex = Math.max(0, totalRecords - visibleRows);
+	const clampedIndex = Math.max(0, Math.min(maxStartIndex, index));
+	const metrics = calculateVirtualScrollMetrics(
+		totalRecords,
+		rowHeight,
+		maxContainerHeight,
+	);
+	const maxScrollTop = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
+
+	if (!metrics.isScaled) {
+		return clampedIndex * rowHeight;
+	}
+	return maxStartIndex === 0
+		? 0
+		: Math.round((clampedIndex / maxStartIndex) * maxScrollTop);
+};
+
+export const calculateSpacerHeights = (
+	startIndex: number,
+	renderedCount: number,
+	totalRecords: number,
+	rowHeight = ROW_HEIGHT,
+	maxContainerHeight = MAX_CONTAINER_HEIGHT,
+): { topSpacerHeight: number; bottomSpacerHeight: number } => {
+	const metrics = calculateVirtualScrollMetrics(
+		totalRecords,
+		rowHeight,
+		maxContainerHeight,
+	);
+	if (!metrics.isScaled) {
+		const topSpacerHeight = startIndex * rowHeight;
+		const remaining = Math.max(0, totalRecords - (startIndex + renderedCount));
+		const bottomSpacerHeight = remaining * rowHeight;
+		return { topSpacerHeight, bottomSpacerHeight };
+	}
+	const topSpacerHeight = Math.round(
+		startIndex * rowHeight * metrics.scaleRatio,
+	);
+	const remaining = Math.max(0, totalRecords - (startIndex + renderedCount));
+	const bottomSpacerHeight = Math.max(
+		0,
+		Math.round(remaining * rowHeight * metrics.scaleRatio),
+	);
+	return { topSpacerHeight, bottomSpacerHeight };
+};
+
+export const renderSkeletonRows = (
+	startIndex: number,
+	count: number,
+): string => {
+	const rows: string[] = [];
+	for (let i = 0; i < count; i++) {
+		const idx = startIndex + i;
+		rows.push(`<tr>
+			<td class="col-index">#${idx.toLocaleString()}</td>
+			<td class="col-time skeleton-cell"><span class="skeleton-bar" style="width: 140px;"></span></td>
+			<td class="col-price skeleton-cell"><span class="skeleton-bar" style="width: 60px;"></span></td>
+			<td class="col-qty skeleton-cell"><span class="skeleton-bar" style="width: 40px;"></span></td>
+			<td class="col-side skeleton-cell"><span class="skeleton-bar" style="width: 30px;"></span></td>
+			<td class="col-volume skeleton-cell"><span class="skeleton-bar" style="width: 50px;"></span></td>
+			<td class="col-volume skeleton-cell"><span class="skeleton-bar" style="width: 50px;"></span></td>
+		</tr>`);
+	}
+	return rows.join("\n");
+};
+
 export const escapeHtml = (str: string): string =>
 	str
 		.replace(/&/g, "&amp;")
@@ -64,6 +196,11 @@ export const renderWebviewHtml = (
 	const pageSize = initialData?.pageSize ?? 500;
 	const records = initialData?.records ?? [];
 	const rowsHtml = renderTableRows(records, "UTC");
+	const initialSpacers = calculateSpacerHeights(
+		offsetIndex,
+		records.length,
+		totalRecords,
+	);
 
 	const initialJson = initialData
 		? JSON.stringify(initialData, (_key, value) =>
@@ -368,6 +505,32 @@ export const renderWebviewHtml = (
 			color: var(--vscode-descriptionForeground, #888888);
 			font-style: italic;
 		}
+
+		#spacerTop td, #spacerBottom td {
+			padding: 0 !important;
+			border: none !important;
+			background: transparent !important;
+			height: inherit;
+		}
+
+		.skeleton-cell {
+			background: linear-gradient(90deg, rgba(255, 255, 255, 0.03) 25%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.03) 75%);
+			background-size: 200% 100%;
+			animation: shimmer 1.5s infinite;
+			color: rgba(255, 255, 255, 0.2);
+		}
+
+		.skeleton-bar {
+			display: inline-block;
+			height: 12px;
+			background-color: rgba(255, 255, 255, 0.08);
+			border-radius: 2px;
+		}
+
+		@keyframes shimmer {
+			0% { background-position: -200% 0; }
+			100% { background-position: 200% 0; }
+		}
 	</style>
 </head>
 <body>
@@ -401,11 +564,9 @@ export const renderWebviewHtml = (
 
 	<div class="toolbar">
 		<div class="pagination-group">
-			<button id="btnFirst" title="Go to first records">⏮ First</button>
-			<button id="btnPrev" title="Previous page">◀ Prev</button>
+			<button id="btnTop" title="Go to beginning of file">⏮ Top</button>
+			<button id="btnTail" class="btn-primary" title="Jump to most recent trades">Latest (Tail) ⏭</button>
 			<span class="range-indicator" id="rangeIndicator">Loading...</span>
-			<button id="btnNext" title="Next page">Next ▶</button>
-			<button id="btnLast" title="Go to last records">Last ⏭</button>
 		</div>
 
 		<div class="jump-group">
@@ -414,14 +575,6 @@ export const renderWebviewHtml = (
 			<label for="jumpIndexInput" style="font-size: 11px; color: var(--vscode-descriptionForeground);">Jump #:</label>
 			<input type="number" id="jumpIndexInput" min="0" placeholder="Index">
 			<button id="btnGo">Go</button>
-			<label for="pageSizeSelect" style="font-size: 11px; color: var(--vscode-descriptionForeground); margin-left: 4px;">Page:</label>
-			<select id="pageSizeSelect">
-				<option value="100">100</option>
-				<option value="250">250</option>
-				<option value="500" selected>500</option>
-				<option value="1000">1000</option>
-			</select>
-			<button id="btnTail" class="btn-primary" title="Jump to most recent trades" style="margin-left: 4px;">Latest (Tail)</button>
 		</div>
 
 		<div class="filter-group">
@@ -447,7 +600,9 @@ export const renderWebviewHtml = (
 				</tr>
 			</thead>
 			<tbody id="tableBody">
+				<tr id="spacerTop" style="height: ${initialSpacers.topSpacerHeight}px;"><td colspan="7"></td></tr>
 				${rowsHtml}
+				<tr id="spacerBottom" style="height: ${initialSpacers.bottomSpacerHeight}px;"><td colspan="7"></td></tr>
 			</tbody>
 		</table>
 	</div>
@@ -455,6 +610,10 @@ export const renderWebviewHtml = (
 	<script>
 		(function() {
 			const vscode = acquireVsCodeApi();
+			const ROW_HEIGHT = 28;
+			const MAX_CONTAINER_HEIGHT = 5000000;
+			const OVERSCAN_ROWS = 15;
+
 			let state = {
 				offsetIndex: ${offsetIndex},
 				pageSize: ${pageSize},
@@ -464,20 +623,17 @@ export const renderWebviewHtml = (
 				minVolume: 0,
 				priceFilterOp: null,
 				priceFilterVal: null,
-				records: []
+				records: [],
+				inFlight: false
 			};
 
 			// DOM Elements
-			const btnFirst = document.getElementById('btnFirst');
-			const btnPrev = document.getElementById('btnPrev');
-			const btnNext = document.getElementById('btnNext');
-			const btnLast = document.getElementById('btnLast');
-			const btnGo = document.getElementById('btnGo');
+			const btnTop = document.getElementById('btnTop');
 			const btnTail = document.getElementById('btnTail');
+			const btnGo = document.getElementById('btnGo');
 			const btnLiveTail = document.getElementById('btnLiveTail');
 			const btnToggleTime = document.getElementById('btnToggleTime');
 			const jumpIndexInput = document.getElementById('jumpIndexInput');
-			const pageSizeSelect = document.getElementById('pageSizeSelect');
 			const rangeIndicator = document.getElementById('rangeIndicator');
 			const filterMinVol = document.getElementById('filterMinVol');
 			const filterPrice = document.getElementById('filterPrice');
@@ -488,8 +644,6 @@ export const renderWebviewHtml = (
 			const statTotalRecords = document.getElementById('statTotalRecords');
 			const statFileSize = document.getElementById('statFileSize');
 			const statLastTime = document.getElementById('statLastTime');
-
-			pageSizeSelect.value = String(state.pageSize);
 
 			function formatBytes(bytes) {
 				if (bytes < 1024) return bytes + ' B';
@@ -519,15 +673,73 @@ export const renderWebviewHtml = (
 				}
 			}
 
-			function updateControls() {
-				const start = state.totalRecords === 0 ? 0 : state.offsetIndex + 1;
-				const end = Math.min(state.totalRecords, state.offsetIndex + state.pageSize);
-				rangeIndicator.textContent = \`Showing \${start.toLocaleString()} - \${end.toLocaleString()} of \${state.totalRecords.toLocaleString()}\`;
+			function calculateVirtualMetrics(totalRecords) {
+				const rawHeight = totalRecords * ROW_HEIGHT;
+				if (rawHeight <= MAX_CONTAINER_HEIGHT) {
+					return { totalVirtualHeight: rawHeight, isScaled: false, scaleRatio: 1 };
+				}
+				return {
+					totalVirtualHeight: MAX_CONTAINER_HEIGHT,
+					isScaled: true,
+					scaleRatio: MAX_CONTAINER_HEIGHT / rawHeight
+				};
+			}
 
-				btnFirst.disabled = state.offsetIndex <= 0;
-				btnPrev.disabled = state.offsetIndex <= 0;
-				btnNext.disabled = state.offsetIndex + state.pageSize >= state.totalRecords;
-				btnLast.disabled = state.offsetIndex + state.pageSize >= state.totalRecords;
+			function scrollTopToIndex(scrollTop, viewportHeight, totalRecords) {
+				if (totalRecords <= 0) return 0;
+				const visibleRows = Math.ceil(viewportHeight / ROW_HEIGHT);
+				const maxStartIndex = Math.max(0, totalRecords - visibleRows);
+				const metrics = calculateVirtualMetrics(totalRecords);
+				const maxScrollTop = Math.max(1, metrics.totalVirtualHeight - viewportHeight);
+				const clampedScrollTop = Math.max(0, Math.min(maxScrollTop, scrollTop));
+				if (!metrics.isScaled) {
+					return Math.min(maxStartIndex, Math.floor(clampedScrollTop / ROW_HEIGHT));
+				}
+				return Math.min(maxStartIndex, Math.round((clampedScrollTop / maxScrollTop) * maxStartIndex));
+			}
+
+			function indexToScrollTop(index, viewportHeight, totalRecords) {
+				if (totalRecords <= 0) return 0;
+				const visibleRows = Math.ceil(viewportHeight / ROW_HEIGHT);
+				const maxStartIndex = Math.max(0, totalRecords - visibleRows);
+				const clampedIndex = Math.max(0, Math.min(maxStartIndex, index));
+				const metrics = calculateVirtualMetrics(totalRecords);
+				const maxScrollTop = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
+				if (!metrics.isScaled) {
+					return clampedIndex * ROW_HEIGHT;
+				}
+				return maxStartIndex === 0 ? 0 : Math.round((clampedIndex / maxStartIndex) * maxScrollTop);
+			}
+
+			function calculateSpacerHeights(startIndex, renderedCount, totalRecords) {
+				const metrics = calculateVirtualMetrics(totalRecords);
+				if (!metrics.isScaled) {
+					const topSpacerHeight = startIndex * ROW_HEIGHT;
+					const remaining = Math.max(0, totalRecords - (startIndex + renderedCount));
+					const bottomSpacerHeight = remaining * ROW_HEIGHT;
+					return { topSpacerHeight, bottomSpacerHeight };
+				}
+				const topSpacerHeight = Math.round(startIndex * ROW_HEIGHT * metrics.scaleRatio);
+				const remaining = Math.max(0, totalRecords - (startIndex + renderedCount));
+				const bottomSpacerHeight = Math.max(0, Math.round(remaining * ROW_HEIGHT * metrics.scaleRatio));
+				return { topSpacerHeight, bottomSpacerHeight };
+			}
+
+			function renderSkeletonRows(startIndex, count) {
+				let rows = '';
+				for (let i = 0; i < count; i++) {
+					const idx = startIndex + i;
+					rows += '<tr>' +
+						'<td class="col-index">#' + idx.toLocaleString() + '</td>' +
+						'<td class="col-time skeleton-cell"><span class="skeleton-bar" style="width: 140px;"></span></td>' +
+						'<td class="col-price skeleton-cell"><span class="skeleton-bar" style="width: 60px;"></span></td>' +
+						'<td class="col-qty skeleton-cell"><span class="skeleton-bar" style="width: 40px;"></span></td>' +
+						'<td class="col-side skeleton-cell"><span class="skeleton-bar" style="width: 30px;"></span></td>' +
+						'<td class="col-volume skeleton-cell"><span class="skeleton-bar" style="width: 50px;"></span></td>' +
+						'<td class="col-volume skeleton-cell"><span class="skeleton-bar" style="width: 50px;"></span></td>' +
+					'</tr>';
+				}
+				return rows;
 			}
 
 			function parsePriceFilter(raw) {
@@ -537,7 +749,7 @@ export const renderWebviewHtml = (
 					return;
 				}
 				const trimmed = raw.trim();
-				const match = trimmed.match(/^([><]=?|=)?s*([0-9]+(?:\\.[0-9]+)?)$/);
+				const match = trimmed.match(/^([><]=?|=)?\\s*([0-9]+(?:\\.[0-9]+)?)$/);
 				if (match) {
 					state.priceFilterOp = match[1] || '=';
 					state.priceFilterVal = parseFloat(match[2]);
@@ -568,80 +780,113 @@ export const renderWebviewHtml = (
 				return true;
 			}
 
-			function renderRows() {
-				const isFiltered = state.minVolume > 0 || state.priceFilterVal !== null;
-				const visible = isFiltered ? state.records.filter(matchesFilter) : state.records;
+			function renderRecordRow(rec) {
+				const sideClass = rec.side === 'BUY' ? 'badge-buy' : rec.side === 'SELL' ? 'badge-sell' : 'badge-neutral';
+				const isLocal = state.timeMode === 'LOCAL';
+				const timeStr = isLocal ? (rec.localFormatted || rec.isoUtc) : rec.isoUtc;
+				const priceVal = typeof rec.price === 'number' ? rec.price : (rec.close || 0);
+				return '<tr>' +
+					'<td class="col-index">' + rec.index.toLocaleString() + '</td>' +
+					'<td class="col-time">' + escapeHtml(timeStr) + '</td>' +
+					'<td class="col-price">' + priceVal.toFixed(2) + '</td>' +
+					'<td class="col-qty">' + rec.totalVolume.toLocaleString() + '</td>' +
+					'<td class="col-side"><span class="badge ' + sideClass + '">' + rec.side + '</span></td>' +
+					'<td class="col-volume">' + rec.bidVolume.toLocaleString() + '</td>' +
+					'<td class="col-volume">' + rec.askVolume.toLocaleString() + '</td>' +
+				'</tr>';
+			}
 
-				if (visible.length === 0) {
-					tableBody.innerHTML = '<tr><td colspan="7" class="empty-cell">No matching records</td></tr>';
-					if (isFiltered) {
-						rangeIndicator.textContent = \`Filtered: 0 matching of \${state.records.length.toLocaleString()}\`;
-					} else {
-						updateControls();
-					}
+			function renderVirtualWindow() {
+				if (state.totalRecords === 0) {
+					tableBody.innerHTML =
+						'<tr id="spacerTop" style="height: 0px;"><td colspan="7"></td></tr>' +
+						'<tr><td colspan="7" class="empty-cell">No records available</td></tr>' +
+						'<tr id="spacerBottom" style="height: 0px;"><td colspan="7"></td></tr>';
+					rangeIndicator.textContent = 'Showing 0 of 0';
 					return;
 				}
 
-				let html = '';
-				const isLocal = state.timeMode === 'LOCAL';
-				for (const rec of visible) {
-					const sideClass = rec.side === 'BUY' ? 'badge-buy' : rec.side === 'SELL' ? 'badge-sell' : 'badge-neutral';
-					const timeStr = isLocal ? (rec.localFormatted || rec.isoUtc) : rec.isoUtc;
-					const priceVal = typeof rec.price === 'number' ? rec.price : (rec.close || 0);
-					html += \`<tr>
-						<td class="col-index">\${rec.index.toLocaleString()}</td>
-						<td class="col-time">\${escapeHtml(timeStr)}</td>
-						<td class="col-price">\${priceVal.toFixed(2)}</td>
-						<td class="col-qty">\${rec.totalVolume.toLocaleString()}</td>
-						<td class="col-side"><span class="badge \${sideClass}">\${rec.side}</span></td>
-						<td class="col-volume">\${rec.bidVolume.toLocaleString()}</td>
-						<td class="col-volume">\${rec.askVolume.toLocaleString()}</td>
-					</tr>\`;
-				}
-				tableBody.innerHTML = html;
+				const viewportHeight = tableWrapper.clientHeight || 600;
+				const scrollTop = tableWrapper.scrollTop;
+				const firstVisible = scrollTopToIndex(scrollTop, viewportHeight, state.totalRecords);
+				const visibleCount = Math.ceil(viewportHeight / ROW_HEIGHT);
+				const startIndex = Math.max(0, firstVisible - OVERSCAN_ROWS);
+				const endIndex = Math.min(state.totalRecords, firstVisible + visibleCount + OVERSCAN_ROWS);
+				const renderedCount = Math.max(0, endIndex - startIndex);
 
-				if (isFiltered) {
-					rangeIndicator.textContent = \`Filtered: \${visible.length.toLocaleString()} matching of \${state.records.length.toLocaleString()}\`;
+				const spacers = calculateSpacerHeights(startIndex, renderedCount, state.totalRecords);
+
+				let rowsHtml = '';
+				const isLoaded = state.records.length > 0 &&
+					startIndex >= state.offsetIndex &&
+					endIndex <= state.offsetIndex + state.records.length;
+
+				if (isLoaded) {
+					const sliceStart = startIndex - state.offsetIndex;
+					const sliceEnd = endIndex - state.offsetIndex;
+					const slice = state.records.slice(sliceStart, sliceEnd);
+					const isFiltered = state.minVolume > 0 || state.priceFilterVal !== null;
+					for (let i = 0; i < slice.length; i++) {
+						const rec = slice[i];
+						if (!isFiltered || matchesFilter(rec)) {
+							rowsHtml += renderRecordRow(rec);
+						}
+					}
+					if (rowsHtml === '' && isFiltered) {
+						rowsHtml = '<tr><td colspan="7" class="empty-cell">No matching records</td></tr>';
+					}
 				} else {
-					updateControls();
+					rowsHtml = renderSkeletonRows(startIndex, renderedCount);
+					if (!state.inFlight) {
+						state.inFlight = true;
+						vscode.postMessage({
+							type: 'REQUEST_PAGE',
+							offsetIndex: Math.max(0, startIndex - 200),
+							pageSize: Math.max(500, renderedCount + 400)
+						});
+					}
 				}
+
+				tableBody.innerHTML =
+					'<tr id="spacerTop" style="height: ' + spacers.topSpacerHeight + 'px;"><td colspan="7"></td></tr>' +
+					rowsHtml +
+					'<tr id="spacerBottom" style="height: ' + spacers.bottomSpacerHeight + 'px;"><td colspan="7"></td></tr>';
+
+				const dispStart = state.totalRecords === 0 ? 0 : startIndex + 1;
+				rangeIndicator.textContent =
+					'Showing ' + dispStart.toLocaleString() + ' - ' + endIndex.toLocaleString() + ' of ' + state.totalRecords.toLocaleString();
 			}
 
-			function requestPage(newOffset) {
-				const clampedOffset = Math.max(0, Math.min(Math.max(0, state.totalRecords - state.pageSize), newOffset));
-				state.offsetIndex = clampedOffset;
+			let scrollRafId = null;
+			tableWrapper.addEventListener('scroll', () => {
+				if (scrollRafId !== null) return;
+				scrollRafId = requestAnimationFrame(() => {
+					scrollRafId = null;
+					renderVirtualWindow();
+				});
+			});
+
+			btnTop.addEventListener('click', () => {
+				disableLiveTailIfActive();
+				tableWrapper.scrollTop = 0;
 				vscode.postMessage({
 					type: 'REQUEST_PAGE',
-					offsetIndex: clampedOffset,
-					pageSize: state.pageSize
+					offsetIndex: 0,
+					pageSize: 500
 				});
-				rangeIndicator.textContent = 'Loading...';
-				btnFirst.disabled = true;
-				btnPrev.disabled = true;
-				btnNext.disabled = true;
-				btnLast.disabled = true;
-			}
+			});
 
-			btnFirst.addEventListener('click', () => {
-				disableLiveTailIfActive();
-				requestPage(0);
-			});
-			btnPrev.addEventListener('click', () => {
-				disableLiveTailIfActive();
-				requestPage(state.offsetIndex - state.pageSize);
-			});
-			btnNext.addEventListener('click', () => {
-				disableLiveTailIfActive();
-				requestPage(state.offsetIndex + state.pageSize);
-			});
-			btnLast.addEventListener('click', () => {
-				disableLiveTailIfActive();
-				const lastOffset = Math.max(0, state.totalRecords - state.pageSize);
-				requestPage(lastOffset);
-			});
 			btnTail.addEventListener('click', () => {
-				const lastOffset = Math.max(0, state.totalRecords - state.pageSize);
-				requestPage(lastOffset);
+				const metrics = calculateVirtualMetrics(state.totalRecords);
+				const viewportHeight = tableWrapper.clientHeight || 600;
+				const maxScroll = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
+				tableWrapper.scrollTop = maxScroll;
+				const tailOffset = Math.max(0, state.totalRecords - 500);
+				vscode.postMessage({
+					type: 'REQUEST_PAGE',
+					offsetIndex: tailOffset,
+					pageSize: 500
+				});
 			});
 
 			btnLiveTail.addEventListener('click', () => {
@@ -652,9 +897,16 @@ export const renderWebviewHtml = (
 					enabled: state.liveTail
 				});
 				if (state.liveTail) {
-					const lastOffset = Math.max(0, state.totalRecords - state.pageSize);
-					if (state.offsetIndex < lastOffset) {
-						requestPage(lastOffset);
+					const metrics = calculateVirtualMetrics(state.totalRecords);
+					const viewportHeight = tableWrapper.clientHeight || 600;
+					tableWrapper.scrollTop = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
+					const tailOffset = Math.max(0, state.totalRecords - 500);
+					if (state.offsetIndex < tailOffset) {
+						vscode.postMessage({
+							type: 'REQUEST_PAGE',
+							offsetIndex: tailOffset,
+							pageSize: 500
+						});
 					}
 				}
 			});
@@ -663,17 +915,17 @@ export const renderWebviewHtml = (
 				state.timeMode = state.timeMode === 'UTC' ? 'LOCAL' : 'UTC';
 				btnToggleTime.textContent = 'Time: ' + state.timeMode;
 				thTime.textContent = state.timeMode === 'UTC' ? 'Time (UTC)' : 'Time (Local)';
-				renderRows();
+				renderVirtualWindow();
 			});
 
 			filterMinVol.addEventListener('input', () => {
 				state.minVolume = parseInt(filterMinVol.value, 10) || 0;
-				renderRows();
+				renderVirtualWindow();
 			});
 
 			filterPrice.addEventListener('input', () => {
 				parsePriceFilter(filterPrice.value);
-				renderRows();
+				renderVirtualWindow();
 			});
 
 			btnClearFilters.addEventListener('click', () => {
@@ -682,14 +934,21 @@ export const renderWebviewHtml = (
 				state.minVolume = 0;
 				state.priceFilterOp = null;
 				state.priceFilterVal = null;
-				renderRows();
+				renderVirtualWindow();
 			});
 
 			btnGo.addEventListener('click', () => {
 				disableLiveTailIfActive();
 				const target = parseInt(jumpIndexInput.value, 10);
 				if (!isNaN(target)) {
-					requestPage(target);
+					const viewportHeight = tableWrapper.clientHeight || 600;
+					const targetScroll = indexToScrollTop(target, viewportHeight, state.totalRecords);
+					tableWrapper.scrollTop = targetScroll;
+					vscode.postMessage({
+						type: 'REQUEST_PAGE',
+						offsetIndex: Math.max(0, target - 250),
+						pageSize: 500
+					});
 				}
 			});
 
@@ -699,16 +958,12 @@ export const renderWebviewHtml = (
 				}
 			});
 
-			pageSizeSelect.addEventListener('change', () => {
-				state.pageSize = parseInt(pageSizeSelect.value, 10);
-				requestPage(state.offsetIndex);
-			});
-
 			window.addEventListener('message', (event) => {
 				const msg = event.data;
 				if (!msg) return;
 
 				if (msg.type === 'PAGE_DATA' || msg.type === 'INIT') {
+					state.inFlight = false;
 					state.offsetIndex = msg.offsetIndex;
 					state.pageSize = msg.pageSize;
 					if (msg.totalRecords !== undefined) {
@@ -716,10 +971,8 @@ export const renderWebviewHtml = (
 					} else if (msg.summary && msg.summary.totalRecords !== undefined) {
 						state.totalRecords = msg.summary.totalRecords;
 					}
-
 					state.records = msg.records ? msg.records.slice() : [];
-					renderRows();
-					tableWrapper.scrollTop = 0;
+					renderVirtualWindow();
 				} else if (msg.type === 'APPEND_RECORDS') {
 					state.totalRecords = msg.totalRecords;
 					if (statTotalRecords) statTotalRecords.textContent = msg.totalRecords.toLocaleString();
@@ -727,15 +980,17 @@ export const renderWebviewHtml = (
 					if (msg.lastRecordIsoUtc && statLastTime) statLastTime.textContent = msg.lastRecordIsoUtc;
 
 					if (state.liveTail && msg.records && msg.records.length > 0) {
-						for (const r of msg.records) {
-							state.records.push(r);
+						for (let i = 0; i < msg.records.length; i++) {
+							state.records.push(msg.records[i]);
 						}
 						if (state.records.length > 1000) {
 							state.records = state.records.slice(state.records.length - 1000);
 						}
 						state.offsetIndex = Math.max(0, state.totalRecords - state.records.length);
-						renderRows();
-						tableWrapper.scrollTop = tableWrapper.scrollHeight;
+						renderVirtualWindow();
+						const metrics = calculateVirtualMetrics(state.totalRecords);
+						const viewportHeight = tableWrapper.clientHeight || 600;
+						tableWrapper.scrollTop = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
 					}
 				}
 			});
@@ -751,11 +1006,13 @@ export const renderWebviewHtml = (
 				state.pageSize = initial.pageSize;
 				state.totalRecords = initial.summary ? initial.summary.totalRecords : 0;
 				state.records = initial.records ? initial.records.slice() : [];
-				pageSizeSelect.value = String(state.pageSize);
-				renderRows();
+				renderVirtualWindow();
+				if (state.offsetIndex > 0) {
+					const viewportHeight = tableWrapper.clientHeight || 600;
+					tableWrapper.scrollTop = indexToScrollTop(state.offsetIndex, viewportHeight, state.totalRecords);
+				}
 			} else {
-				pageSizeSelect.value = String(state.pageSize);
-				updateControls();
+				renderVirtualWindow();
 			}
 		})();
 	</script>
