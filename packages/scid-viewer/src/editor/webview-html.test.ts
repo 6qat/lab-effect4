@@ -1,9 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import type { FormattedScidRecord } from "../reader/scid-reader.js";
 import type {
+	AppendRecordsMessage,
 	InitMessage,
 	PageDataMessage,
 	RequestPageMessage,
+	ToggleLiveTailMessage,
 } from "./protocol.js";
 import {
 	escapeHtml,
@@ -138,6 +140,45 @@ describe("Webview HTML & Messaging Protocol", () => {
 			expect(html).toContain("acquireVsCodeApi()");
 			expect(html).toContain("REQUEST_PAGE");
 			expect(html).toContain("PAGE_DATA");
+			expect(html).toContain("APPEND_RECORDS");
+			expect(html).toContain("TOGGLE_LIVE_TAIL");
+			expect(html).toContain("btnLiveTail");
+			expect(html).toContain("btnToggleTime");
+			expect(html).toContain("filterMinVol");
+			expect(html).toContain("filterPrice");
+			expect(html).toContain("btnClearFilters");
+			expect(html).toContain("thTime");
+		});
+	});
+
+	describe("Time Mode Switching", () => {
+		const sampleRecord: FormattedScidRecord = {
+			index: 0,
+			dateTimeRaw: 1000n,
+			isoUtc: "2026-10-06T12:00:00.000000Z",
+			localFormatted: "2026-10-06 09:00:00.000000",
+			open: 125430,
+			high: 125430,
+			low: 125430,
+			close: 125430,
+			price: 125430,
+			numTrades: 1,
+			totalVolume: 50,
+			bidVolume: 0,
+			askVolume: 50,
+			side: "BUY",
+		};
+
+		it("renders UTC timestamps when timeMode is UTC", () => {
+			const html = renderTableRows([sampleRecord], "UTC");
+			expect(html).toContain("2026-10-06T12:00:00.000000Z");
+			expect(html).not.toContain("2026-10-06 09:00:00.000000");
+		});
+
+		it("renders local timestamps when timeMode is LOCAL", () => {
+			const html = renderTableRows([sampleRecord], "LOCAL");
+			expect(html).toContain("2026-10-06 09:00:00.000000");
+			expect(html).not.toContain("2026-10-06T12:00:00.000000Z");
 		});
 	});
 
@@ -161,6 +202,24 @@ describe("Webview HTML & Messaging Protocol", () => {
 			};
 			expect(pageData.type).toBe("PAGE_DATA");
 			expect(pageData.totalRecords).toBe(10000);
+
+			const appendMsg: AppendRecordsMessage = {
+				type: "APPEND_RECORDS",
+				records: [],
+				totalRecords: 10005,
+				fileSize: 56 + 10005 * 40,
+				lastRecordIsoUtc: "2026-10-06T12:00:05.000000Z",
+			};
+			expect(appendMsg.type).toBe("APPEND_RECORDS");
+			expect(appendMsg.totalRecords).toBe(10005);
+			expect(appendMsg.fileSize).toBe(400256);
+
+			const toggleMsg: ToggleLiveTailMessage = {
+				type: "TOGGLE_LIVE_TAIL",
+				enabled: true,
+			};
+			expect(toggleMsg.type).toBe("TOGGLE_LIVE_TAIL");
+			expect(toggleMsg.enabled).toBe(true);
 		});
 	});
 });

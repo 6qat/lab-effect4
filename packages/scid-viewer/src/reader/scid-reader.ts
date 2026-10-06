@@ -9,7 +9,6 @@ import {
 	SCID_MAGIC,
 	SCID_RECORD_SIZE,
 	type ScidHeader,
-	type ScidRecord,
 } from "tcp/scid-format";
 import {
 	InvalidScidHeaderError,
@@ -105,6 +104,17 @@ export interface ScidReaderShape {
 		offsetIndex: number,
 		limit: number,
 	) => Effect.Effect<ReadonlyArray<FormattedScidRecord>, ScidReaderError>;
+
+	readonly readAppends: (
+		filePath: string,
+		fromIndex: number,
+	) => Effect.Effect<
+		{
+			readonly records: ReadonlyArray<FormattedScidRecord>;
+			readonly totalRecords: number;
+		},
+		ScidReaderError
+	>;
 }
 
 export class ScidReader extends Context.Service<ScidReader, ScidReaderShape>()(
@@ -182,6 +192,36 @@ const readHeaderInternal = (
 			});
 		},
 	});
+
+const parseRecordsFromBuffer = (
+	buf: Buffer,
+	offsetIndex: number,
+	count: number,
+): FormattedScidRecord[] => {
+	const records: FormattedScidRecord[] = [];
+	for (let i = 0; i < count; i++) {
+		const recordOffset = i * SCID_RECORD_SIZE;
+		const rawRecord = deserializeScidRecord(buf, recordOffset);
+		const currentIndex = offsetIndex + i;
+		records.push({
+			index: currentIndex,
+			dateTimeRaw: rawRecord.dateTime,
+			isoUtc: scDateTimeMSToIsoUtc(rawRecord.dateTime),
+			localFormatted: scDateTimeMSToLocal(rawRecord.dateTime),
+			open: rawRecord.open,
+			high: rawRecord.high,
+			low: rawRecord.low,
+			close: rawRecord.close,
+			price: rawRecord.close,
+			numTrades: rawRecord.numTrades,
+			totalVolume: rawRecord.totalVolume,
+			bidVolume: rawRecord.bidVolume,
+			askVolume: rawRecord.askVolume,
+			side: determineAggressorSide(rawRecord.bidVolume, rawRecord.askVolume),
+		});
+	}
+	return records;
+};
 
 export const makeScidReader = (): ScidReaderShape => ({
 	getHeader: (filePath: string) =>
@@ -325,36 +365,59 @@ export const makeScidReader = (): ScidReaderShape => ({
 					);
 				}
 
-				const records: FormattedScidRecord[] = [];
-				for (let i = 0; i < actualCount; i++) {
-					const recordOffset = i * SCID_RECORD_SIZE;
-					const rawRecord: ScidRecord = deserializeScidRecord(
-						buf,
-						recordOffset,
-					);
-					const currentIndex = offsetIndex + i;
-					records.push({
-						index: currentIndex,
-						dateTimeRaw: rawRecord.dateTime,
-						isoUtc: scDateTimeMSToIsoUtc(rawRecord.dateTime),
-						localFormatted: scDateTimeMSToLocal(rawRecord.dateTime),
-						open: rawRecord.open,
-						high: rawRecord.high,
-						low: rawRecord.low,
-						close: rawRecord.close,
-						price: rawRecord.close,
-						numTrades: rawRecord.numTrades,
-						totalVolume: rawRecord.totalVolume,
-						bidVolume: rawRecord.bidVolume,
-						askVolume: rawRecord.askVolume,
-						side: determineAggressorSide(
-							rawRecord.bidVolume,
-							rawRecord.askVolume,
-						),
-					});
+				return parseRecordsFromBuffer(buf, offsetIndex, actualCount);
+			}),
+		),
+
+	readAppends: (filePath: string, fromIndex: number) =>
+		withFileHandle(filePath, (handle) =>
+			Effect.gen(function* () {
+				const stat = yield* Effect.tryPromise({
+					try: () => handle.stat(),
+					catch: (e) =>
+						new ScidReadCorruptedError({
+							filePath,
+							offset: 0,
+							reason: e instanceof Error ? e.message : String(e),
+						}),
+				});
+
+				const totalRecords = Math.max(
+					0,
+					Math.floor((stat.size - SCID_HEADER_SIZE) / SCID_RECORD_SIZE),
+				);
+
+				if (totalRecords <= fromIndex || fromIndex < 0) {
+					return { records: [], totalRecords };
 				}
 
-				return records;
+				const actualCount = totalRecords - fromIndex;
+				const byteOffset = SCID_HEADER_SIZE + fromIndex * SCID_RECORD_SIZE;
+				const byteLength = actualCount * SCID_RECORD_SIZE;
+				const buf = Buffer.alloc(byteLength);
+
+				const { bytesRead } = yield* Effect.tryPromise({
+					try: () => handle.read(buf, 0, byteLength, byteOffset),
+					catch: (e) =>
+						new ScidReadCorruptedError({
+							filePath,
+							offset: byteOffset,
+							reason: e instanceof Error ? e.message : String(e),
+						}),
+				});
+
+				if (bytesRead < byteLength) {
+					yield* Effect.fail(
+						new ScidReadCorruptedError({
+							filePath,
+							offset: byteOffset,
+							reason: `Expected ${byteLength} bytes for ${actualCount} records, got ${bytesRead}`,
+						}),
+					);
+				}
+
+				const records = parseRecordsFromBuffer(buf, fromIndex, actualCount);
+				return { records, totalRecords };
 			}),
 		),
 });

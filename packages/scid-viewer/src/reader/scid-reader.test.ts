@@ -234,6 +234,57 @@ describe("ScidReader Effect Service", () => {
 		});
 	});
 
+	describe("Append Slicing (readAppends)", () => {
+		it("returns empty when fromIndex equals or exceeds totalRecords", async () => {
+			const filePath = await createTempScidFile(10);
+			const program = Effect.gen(function* () {
+				const reader = yield* ScidReader;
+				return yield* reader.readAppends(filePath, 10);
+			}).pipe(Effect.provide(ScidReaderLive));
+
+			const result = await Effect.runPromise(program);
+			expect(result.totalRecords).toBe(10);
+			expect(result.records).toEqual([]);
+		});
+
+		it("reads newly appended records starting from fromIndex", async () => {
+			const filePath = await createTempScidFile(10);
+			// Append 3 more records
+			const fd = await fs.open(filePath, "a");
+			try {
+				for (let i = 10; i < 13; i++) {
+					const record: ScidRecord = {
+						dateTime: BigInt(i * 1000),
+						open: 125000 + i * 5,
+						high: 125000 + i * 5,
+						low: 125000 + i * 5,
+						close: 125000 + i * 5,
+						numTrades: 1,
+						totalVolume: 10,
+						bidVolume: 0,
+						askVolume: 10,
+					};
+					const buf = serializeScidRecord(record);
+					await fd.write(buf);
+				}
+			} finally {
+				await fd.close();
+			}
+
+			const program = Effect.gen(function* () {
+				const reader = yield* ScidReader;
+				return yield* reader.readAppends(filePath, 10);
+			}).pipe(Effect.provide(ScidReaderLive));
+
+			const result = await Effect.runPromise(program);
+			expect(result.totalRecords).toBe(13);
+			expect(result.records.length).toBe(3);
+			expect(result.records[0]?.index).toBe(10);
+			expect(result.records[0]?.open).toBe(125050);
+			expect(result.records[2]?.index).toBe(12);
+		});
+	});
+
 	describe("Epoch & Aggressor Helpers", () => {
 		it("converts SCDateTimeMS to valid ISO UTC and local strings", () => {
 			// 2026-10-06 12:00:00 UTC

@@ -26,6 +26,14 @@ export interface PageDataMessage {
 	readonly records: ReadonlyArray<FormattedScidRecord>;
 }
 
+export interface AppendRecordsMessage {
+	readonly type: "APPEND_RECORDS";
+	readonly records: ReadonlyArray<FormattedScidRecord>;
+	readonly totalRecords: number;
+	readonly fileSize: number;
+	readonly lastRecordIsoUtc?: string | undefined;
+}
+
 export interface ErrorMessage {
 	readonly type: "ERROR";
 	readonly message: string;
@@ -34,6 +42,7 @@ export interface ErrorMessage {
 export type ExtensionToWebviewMessage =
 	| InitMessage
 	| PageDataMessage
+	| AppendRecordsMessage
 	| ErrorMessage;
 
 export interface RequestPageMessage {
@@ -42,4 +51,11 @@ export interface RequestPageMessage {
 	readonly pageSize: number;
 }
 
-export type WebviewToExtensionMessage = RequestPageMessage;
+export interface ToggleLiveTailMessage {
+	readonly type: "TOGGLE_LIVE_TAIL";
+	readonly enabled: boolean;
+}
+
+export type WebviewToExtensionMessage =
+	| RequestPageMessage
+	| ToggleLiveTailMessage;

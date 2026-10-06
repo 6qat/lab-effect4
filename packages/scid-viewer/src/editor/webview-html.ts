@@ -19,10 +19,13 @@ export const escapeHtml = (str: string): string =>
 
 export const renderTableRows = (
 	records: ReadonlyArray<FormattedScidRecord>,
+	timeMode: "UTC" | "LOCAL" = "UTC",
 ): string => {
 	if (records.length === 0) {
 		return `<tr><td colspan="7" class="empty-cell">No records available</td></tr>`;
 	}
+
+	const isLocal = timeMode === "LOCAL";
 
 	return records
 		.map((rec) => {
@@ -34,9 +37,10 @@ export const renderTableRows = (
 						: "badge-neutral";
 			const priceVal =
 				typeof rec.price === "number" ? rec.price : (rec.close ?? 0);
+			const timeStr = isLocal ? rec.localFormatted || rec.isoUtc : rec.isoUtc;
 			return `<tr>
 				<td class="col-index">${rec.index.toLocaleString()}</td>
-				<td class="col-time">${escapeHtml(rec.isoUtc)}</td>
+				<td class="col-time">${escapeHtml(timeStr)}</td>
 				<td class="col-price">${priceVal.toFixed(2)}</td>
 				<td class="col-qty">${rec.totalVolume.toLocaleString()}</td>
 				<td class="col-side"><span class="badge ${sideClass}">${rec.side}</span></td>
@@ -59,7 +63,7 @@ export const renderWebviewHtml = (
 	const offsetIndex = initialData?.offsetIndex ?? 0;
 	const pageSize = initialData?.pageSize ?? 500;
 	const records = initialData?.records ?? [];
-	const rowsHtml = renderTableRows(records);
+	const rowsHtml = renderTableRows(records, "UTC");
 
 	const initialJson = initialData ? JSON.stringify(initialData) : "null";
 
@@ -197,7 +201,7 @@ export const renderWebviewHtml = (
 			display: inline-flex;
 			align-items: center;
 			justify-content: center;
-			transition: background 0.15s;
+			transition: background 0.15s, border-color 0.15s, color 0.15s;
 		}
 
 		button:hover:not(:disabled) {
@@ -218,6 +222,29 @@ export const renderWebviewHtml = (
 			background-color: var(--vscode-button-hoverBackground, #1177bb);
 		}
 
+		button.btn-live-active {
+			background-color: rgba(78, 201, 176, 0.25);
+			color: #4ec9b0;
+			border-color: #4ec9b0;
+			font-weight: 600;
+		}
+
+		.pulse-dot {
+			display: inline-block;
+			width: 7px;
+			height: 7px;
+			background-color: #4ec9b0;
+			border-radius: 50%;
+			margin-right: 5px;
+			animation: pulse 1.5s infinite;
+		}
+
+		@keyframes pulse {
+			0% { opacity: 1; transform: scale(1); }
+			50% { opacity: 0.3; transform: scale(0.85); }
+			100% { opacity: 1; transform: scale(1); }
+		}
+
 		.range-indicator {
 			font-size: 12px;
 			color: var(--vscode-descriptionForeground, #999999);
@@ -231,7 +258,13 @@ export const renderWebviewHtml = (
 			gap: 6px;
 		}
 
-		input[type="number"], select {
+		.filter-group {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+		}
+
+		input[type="text"], input[type="number"], select {
 			background-color: var(--vscode-input-background, #3c3c3c);
 			color: var(--vscode-input-foreground, #cccccc);
 			border: 1px solid var(--vscode-input-border, #555555);
@@ -242,7 +275,7 @@ export const renderWebviewHtml = (
 		}
 
 		input[type="number"] {
-			width: 90px;
+			width: 80px;
 		}
 
 		/* Data Table */
@@ -372,17 +405,27 @@ export const renderWebviewHtml = (
 		</div>
 
 		<div class="jump-group">
-			<label for="jumpIndexInput" style="font-size: 11px; color: var(--vscode-descriptionForeground);">Jump to #:</label>
+			<button id="btnLiveTail" title="Toggle real-time live follow mode">Live Tail: OFF</button>
+			<button id="btnToggleTime" title="Toggle UTC vs Local Time">Time: UTC</button>
+			<label for="jumpIndexInput" style="font-size: 11px; color: var(--vscode-descriptionForeground);">Jump #:</label>
 			<input type="number" id="jumpIndexInput" min="0" placeholder="Index">
 			<button id="btnGo">Go</button>
-			<label for="pageSizeSelect" style="font-size: 11px; color: var(--vscode-descriptionForeground); margin-left: 8px;">Page Size:</label>
+			<label for="pageSizeSelect" style="font-size: 11px; color: var(--vscode-descriptionForeground); margin-left: 4px;">Page:</label>
 			<select id="pageSizeSelect">
 				<option value="100">100</option>
 				<option value="250">250</option>
 				<option value="500" selected>500</option>
 				<option value="1000">1000</option>
 			</select>
-			<button id="btnTail" class="btn-primary" title="Jump to most recent trades" style="margin-left: 8px;">Latest Trades (Tail)</button>
+			<button id="btnTail" class="btn-primary" title="Jump to most recent trades" style="margin-left: 4px;">Latest (Tail)</button>
+		</div>
+
+		<div class="filter-group">
+			<label for="filterMinVol" style="font-size: 11px; color: var(--vscode-descriptionForeground);">Min Vol:</label>
+			<input type="number" id="filterMinVol" min="0" placeholder="0" style="width: 65px;" title="Filter trades with minimum volume threshold">
+			<label for="filterPrice" style="font-size: 11px; color: var(--vscode-descriptionForeground); margin-left: 4px;">Price:</label>
+			<input type="text" id="filterPrice" placeholder="e.g. 125000, >=125000" style="width: 140px;" title="Filter by price (number, >=, <=, >, <)">
+			<button id="btnClearFilters" title="Clear search and volume filters">Clear</button>
 		</div>
 	</div>
 
@@ -391,7 +434,7 @@ export const renderWebviewHtml = (
 			<thead>
 				<tr>
 					<th class="col-index">#</th>
-					<th class="col-time">Time (UTC)</th>
+					<th class="col-time" id="thTime">Time (UTC)</th>
 					<th class="col-price">Price</th>
 					<th class="col-qty">Quantity</th>
 					<th class="col-side">Side</th>
@@ -411,7 +454,13 @@ export const renderWebviewHtml = (
 			let state = {
 				offsetIndex: ${offsetIndex},
 				pageSize: ${pageSize},
-				totalRecords: ${totalRecords}
+				totalRecords: ${totalRecords},
+				timeMode: 'UTC',
+				liveTail: false,
+				minVolume: 0,
+				priceFilterOp: null,
+				priceFilterVal: null,
+				records: []
 			};
 
 			const initial = ${initialJson};
@@ -419,6 +468,7 @@ export const renderWebviewHtml = (
 				state.offsetIndex = initial.offsetIndex;
 				state.pageSize = initial.pageSize;
 				state.totalRecords = initial.summary.totalRecords;
+				state.records = initial.records ? initial.records.slice() : [];
 				updateControls();
 			}
 
@@ -429,13 +479,50 @@ export const renderWebviewHtml = (
 			const btnLast = document.getElementById('btnLast');
 			const btnGo = document.getElementById('btnGo');
 			const btnTail = document.getElementById('btnTail');
+			const btnLiveTail = document.getElementById('btnLiveTail');
+			const btnToggleTime = document.getElementById('btnToggleTime');
 			const jumpIndexInput = document.getElementById('jumpIndexInput');
 			const pageSizeSelect = document.getElementById('pageSizeSelect');
 			const rangeIndicator = document.getElementById('rangeIndicator');
+			const filterMinVol = document.getElementById('filterMinVol');
+			const filterPrice = document.getElementById('filterPrice');
+			const btnClearFilters = document.getElementById('btnClearFilters');
 			const tableBody = document.getElementById('tableBody');
 			const tableWrapper = document.getElementById('tableWrapper');
+			const thTime = document.getElementById('thTime');
+			const statTotalRecords = document.getElementById('statTotalRecords');
+			const statFileSize = document.getElementById('statFileSize');
+			const statLastTime = document.getElementById('statLastTime');
 
 			pageSizeSelect.value = String(state.pageSize);
+
+			function formatBytes(bytes) {
+				if (bytes < 1024) return bytes + ' B';
+				if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+				if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+				return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+			}
+
+			function updateLiveTailButton() {
+				if (state.liveTail) {
+					btnLiveTail.classList.add('btn-live-active');
+					btnLiveTail.innerHTML = '<span class="pulse-dot"></span>Live Tail: ON';
+				} else {
+					btnLiveTail.classList.remove('btn-live-active');
+					btnLiveTail.textContent = 'Live Tail: OFF';
+				}
+			}
+
+			function disableLiveTailIfActive() {
+				if (state.liveTail) {
+					state.liveTail = false;
+					updateLiveTailButton();
+					vscode.postMessage({
+						type: 'TOGGLE_LIVE_TAIL',
+						enabled: false
+					});
+				}
+			}
 
 			function updateControls() {
 				const start = state.totalRecords === 0 ? 0 : state.offsetIndex + 1;
@@ -446,6 +533,83 @@ export const renderWebviewHtml = (
 				btnPrev.disabled = state.offsetIndex <= 0;
 				btnNext.disabled = state.offsetIndex + state.pageSize >= state.totalRecords;
 				btnLast.disabled = state.offsetIndex + state.pageSize >= state.totalRecords;
+			}
+
+			function parsePriceFilter(raw) {
+				if (!raw || !raw.trim()) {
+					state.priceFilterOp = null;
+					state.priceFilterVal = null;
+					return;
+				}
+				const trimmed = raw.trim();
+				const match = trimmed.match(/^([><]=?|=)?s*([0-9]+(?:\\.[0-9]+)?)$/);
+				if (match) {
+					state.priceFilterOp = match[1] || '=';
+					state.priceFilterVal = parseFloat(match[2]);
+				} else {
+					state.priceFilterOp = null;
+					state.priceFilterVal = null;
+				}
+			}
+
+			function matchesFilter(rec) {
+				if (state.minVolume > 0 && rec.totalVolume < state.minVolume) {
+					return false;
+				}
+				if (state.priceFilterVal !== null) {
+					const price = typeof rec.price === 'number' ? rec.price : (rec.close || 0);
+					const target = state.priceFilterVal;
+					switch (state.priceFilterOp) {
+						case '>=': if (!(price >= target)) return false; break;
+						case '<=': if (!(price <= target)) return false; break;
+						case '>':  if (!(price > target)) return false; break;
+						case '<':  if (!(price < target)) return false; break;
+						case '=':
+						default:
+							if (Math.abs(price - target) > 0.001) return false;
+							break;
+					}
+				}
+				return true;
+			}
+
+			function renderRows() {
+				const isFiltered = state.minVolume > 0 || state.priceFilterVal !== null;
+				const visible = isFiltered ? state.records.filter(matchesFilter) : state.records;
+
+				if (visible.length === 0) {
+					tableBody.innerHTML = '<tr><td colspan="7" class="empty-cell">No matching records</td></tr>';
+					if (isFiltered) {
+						rangeIndicator.textContent = \`Filtered: 0 matching of \${state.records.length.toLocaleString()}\`;
+					} else {
+						updateControls();
+					}
+					return;
+				}
+
+				let html = '';
+				const isLocal = state.timeMode === 'LOCAL';
+				for (const rec of visible) {
+					const sideClass = rec.side === 'BUY' ? 'badge-buy' : rec.side === 'SELL' ? 'badge-sell' : 'badge-neutral';
+					const timeStr = isLocal ? (rec.localFormatted || rec.isoUtc) : rec.isoUtc;
+					const priceVal = typeof rec.price === 'number' ? rec.price : (rec.close || 0);
+					html += \`<tr>
+						<td class="col-index">\${rec.index.toLocaleString()}</td>
+						<td class="col-time">\${escape(timeStr)}</td>
+						<td class="col-price">\${priceVal.toFixed(2)}</td>
+						<td class="col-qty">\${rec.totalVolume.toLocaleString()}</td>
+						<td class="col-side"><span class="badge \${sideClass}">\${rec.side}</span></td>
+						<td class="col-volume">\${rec.bidVolume.toLocaleString()}</td>
+						<td class="col-volume">\${rec.askVolume.toLocaleString()}</td>
+					</tr>\`;
+				}
+				tableBody.innerHTML = html;
+
+				if (isFiltered) {
+					rangeIndicator.textContent = \`Filtered: \${visible.length.toLocaleString()} matching of \${state.records.length.toLocaleString()}\`;
+				} else {
+					updateControls();
+				}
 			}
 
 			function requestPage(newOffset) {
@@ -463,10 +627,20 @@ export const renderWebviewHtml = (
 				btnLast.disabled = true;
 			}
 
-			btnFirst.addEventListener('click', () => requestPage(0));
-			btnPrev.addEventListener('click', () => requestPage(state.offsetIndex - state.pageSize));
-			btnNext.addEventListener('click', () => requestPage(state.offsetIndex + state.pageSize));
+			btnFirst.addEventListener('click', () => {
+				disableLiveTailIfActive();
+				requestPage(0);
+			});
+			btnPrev.addEventListener('click', () => {
+				disableLiveTailIfActive();
+				requestPage(state.offsetIndex - state.pageSize);
+			});
+			btnNext.addEventListener('click', () => {
+				disableLiveTailIfActive();
+				requestPage(state.offsetIndex + state.pageSize);
+			});
 			btnLast.addEventListener('click', () => {
+				disableLiveTailIfActive();
 				const lastOffset = Math.max(0, state.totalRecords - state.pageSize);
 				requestPage(lastOffset);
 			});
@@ -475,7 +649,49 @@ export const renderWebviewHtml = (
 				requestPage(lastOffset);
 			});
 
+			btnLiveTail.addEventListener('click', () => {
+				state.liveTail = !state.liveTail;
+				updateLiveTailButton();
+				vscode.postMessage({
+					type: 'TOGGLE_LIVE_TAIL',
+					enabled: state.liveTail
+				});
+				if (state.liveTail) {
+					const lastOffset = Math.max(0, state.totalRecords - state.pageSize);
+					if (state.offsetIndex < lastOffset) {
+						requestPage(lastOffset);
+					}
+				}
+			});
+
+			btnToggleTime.addEventListener('click', () => {
+				state.timeMode = state.timeMode === 'UTC' ? 'LOCAL' : 'UTC';
+				btnToggleTime.textContent = 'Time: ' + state.timeMode;
+				thTime.textContent = state.timeMode === 'UTC' ? 'Time (UTC)' : 'Time (Local)';
+				renderRows();
+			});
+
+			filterMinVol.addEventListener('input', () => {
+				state.minVolume = parseInt(filterMinVol.value, 10) || 0;
+				renderRows();
+			});
+
+			filterPrice.addEventListener('input', () => {
+				parsePriceFilter(filterPrice.value);
+				renderRows();
+			});
+
+			btnClearFilters.addEventListener('click', () => {
+				filterMinVol.value = '';
+				filterPrice.value = '';
+				state.minVolume = 0;
+				state.priceFilterOp = null;
+				state.priceFilterVal = null;
+				renderRows();
+			});
+
 			btnGo.addEventListener('click', () => {
+				disableLiveTailIfActive();
 				const target = parseInt(jumpIndexInput.value, 10);
 				if (!isNaN(target)) {
 					requestPage(target);
@@ -506,33 +722,28 @@ export const renderWebviewHtml = (
 						state.totalRecords = msg.summary.totalRecords;
 					}
 
-					renderRows(msg.records);
-					updateControls();
+					state.records = msg.records ? msg.records.slice() : [];
+					renderRows();
 					tableWrapper.scrollTop = 0;
+				} else if (msg.type === 'APPEND_RECORDS') {
+					state.totalRecords = msg.totalRecords;
+					if (statTotalRecords) statTotalRecords.textContent = msg.totalRecords.toLocaleString();
+					if (msg.fileSize && statFileSize) statFileSize.textContent = formatBytes(msg.fileSize);
+					if (msg.lastRecordIsoUtc && statLastTime) statLastTime.textContent = msg.lastRecordIsoUtc;
+
+					if (state.liveTail && msg.records && msg.records.length > 0) {
+						for (const r of msg.records) {
+							state.records.push(r);
+						}
+						if (state.records.length > 1000) {
+							state.records = state.records.slice(state.records.length - 1000);
+						}
+						state.offsetIndex = Math.max(0, state.totalRecords - state.records.length);
+						renderRows();
+						tableWrapper.scrollTop = tableWrapper.scrollHeight;
+					}
 				}
 			});
-
-			function renderRows(records) {
-				if (!records || records.length === 0) {
-					tableBody.innerHTML = '<tr><td colspan="7" class="empty-cell">No records in this window</td></tr>';
-					return;
-				}
-
-				let html = '';
-				for (const rec of records) {
-					const sideClass = rec.side === 'BUY' ? 'badge-buy' : rec.side === 'SELL' ? 'badge-sell' : 'badge-neutral';
-					html += \`<tr>
-						<td class="col-index">\${rec.index.toLocaleString()}</td>
-						<td class="col-time">\${escape(rec.isoUtc)}</td>
-						<td class="col-price">\${rec.price.toFixed(2)}</td>
-						<td class="col-qty">\${rec.totalVolume.toLocaleString()}</td>
-						<td class="col-side"><span class="badge \${sideClass}">\${rec.side}</span></td>
-						<td class="col-volume">\${rec.bidVolume.toLocaleString()}</td>
-						<td class="col-volume">\${rec.askVolume.toLocaleString()}</td>
-					</tr>\`;
-				}
-				tableBody.innerHTML = html;
-			}
 
 			function escape(s) {
 				return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

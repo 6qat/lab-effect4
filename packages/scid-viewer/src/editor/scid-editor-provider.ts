@@ -1,8 +1,9 @@
 import * as path from "node:path";
-import { Effect } from "effect";
+import { Effect, Fiber } from "effect";
 import type * as vscode from "vscode";
 import type { ScidReaderShape } from "../reader/scid-reader.js";
 import type {
+	AppendRecordsMessage,
 	InitMessage,
 	PageDataMessage,
 	WebviewToExtensionMessage,
@@ -43,8 +44,12 @@ export class ScidEditorProvider
 
 		const reader = this.reader;
 
+		let lastKnownRecordCount = 0;
+		let liveTailFiber: Fiber.Fiber<void, unknown> | undefined;
+
 		const initProgram = Effect.gen(function* () {
 			const summary = yield* reader.getSummary(filePath);
+			lastKnownRecordCount = summary.totalRecords;
 			const pageSize = 500;
 			const initialOffset = Math.max(0, summary.totalRecords - pageSize);
 			const records = yield* reader.readSlice(
@@ -88,10 +93,60 @@ export class ScidEditorProvider
 			return;
 		}
 
+		const stopLiveTail = (): Promise<void> => {
+			if (liveTailFiber) {
+				const f = liveTailFiber;
+				liveTailFiber = undefined;
+				return Effect.runPromise(Fiber.interrupt(f))
+					.then(() => {})
+					.catch(() => {});
+			}
+			return Promise.resolve();
+		};
+
+		const startLiveTail = (): void => {
+			if (liveTailFiber) return;
+
+			const pollLoop = Effect.gen(function* () {
+				while (true) {
+					yield* Effect.sleep("250 millis");
+					const appendResult = yield* reader
+						.readAppends(filePath, lastKnownRecordCount)
+						.pipe(
+							Effect.catch(() =>
+								Effect.succeed({
+									records: [],
+									totalRecords: lastKnownRecordCount,
+								}),
+							),
+						);
+
+					if (appendResult.records.length > 0) {
+						lastKnownRecordCount = appendResult.totalRecords;
+						const lastRec =
+							appendResult.records[appendResult.records.length - 1];
+						const appendMsg: AppendRecordsMessage = {
+							type: "APPEND_RECORDS",
+							records: appendResult.records,
+							totalRecords: appendResult.totalRecords,
+							fileSize: 56 + appendResult.totalRecords * 40,
+							lastRecordIsoUtc: lastRec?.isoUtc,
+						};
+						yield* Effect.promise(() => webview.postMessage(appendMsg));
+					}
+				}
+			});
+
+			liveTailFiber = Effect.runFork(pollLoop);
+		};
+
 		webview.onDidReceiveMessage(async (message: WebviewToExtensionMessage) => {
 			if (message.type === "REQUEST_PAGE") {
 				const pageProgram = Effect.gen(function* () {
 					const totalRecords = yield* reader.getRecordCount(filePath);
+					if (totalRecords > lastKnownRecordCount) {
+						lastKnownRecordCount = totalRecords;
+					}
 					const records = yield* reader.readSlice(
 						filePath,
 						message.offsetIndex,
@@ -116,7 +171,17 @@ export class ScidEditorProvider
 						message: `Failed to load page: ${String(err)}`,
 					});
 				}
+			} else if (message.type === "TOGGLE_LIVE_TAIL") {
+				if (message.enabled) {
+					startLiveTail();
+				} else {
+					await stopLiveTail();
+				}
 			}
+		});
+
+		webviewPanel.onDidDispose(async () => {
+			await stopLiveTail();
 		});
 	}
 }
