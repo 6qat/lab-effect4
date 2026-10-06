@@ -19,7 +19,7 @@ import {
 
 export interface FormattedScidRecord {
 	readonly index: number;
-	readonly dateTimeRaw: bigint;
+	readonly dateTimeRaw: bigint | string;
 	readonly isoUtc: string;
 	readonly localFormatted: string;
 	readonly open: number;
@@ -205,7 +205,7 @@ const parseRecordsFromBuffer = (
 		const currentIndex = offsetIndex + i;
 		records.push({
 			index: currentIndex,
-			dateTimeRaw: rawRecord.dateTime,
+			dateTimeRaw: rawRecord.dateTime.toString(),
 			isoUtc: scDateTimeMSToIsoUtc(rawRecord.dateTime),
 			localFormatted: scDateTimeMSToLocal(rawRecord.dateTime),
 			open: rawRecord.open,

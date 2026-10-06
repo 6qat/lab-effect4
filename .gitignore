@@ -4,3 +4,4 @@ node_modules/
 example.txt
 dist/
 data/
+*.vsix

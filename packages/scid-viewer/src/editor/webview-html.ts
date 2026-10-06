@@ -65,7 +65,11 @@ export const renderWebviewHtml = (
 	const records = initialData?.records ?? [];
 	const rowsHtml = renderTableRows(records, "UTC");
 
-	const initialJson = initialData ? JSON.stringify(initialData) : "null";
+	const initialJson = initialData
+		? JSON.stringify(initialData, (_key, value) =>
+				typeof value === "bigint" ? value.toString() : value,
+			)
+		: "null";
 
 	return `<!DOCTYPE html>
 <html lang="en">
@@ -467,9 +471,9 @@ export const renderWebviewHtml = (
 			if (initial) {
 				state.offsetIndex = initial.offsetIndex;
 				state.pageSize = initial.pageSize;
-				state.totalRecords = initial.summary.totalRecords;
+				state.totalRecords = initial.summary ? initial.summary.totalRecords : 0;
 				state.records = initial.records ? initial.records.slice() : [];
-				updateControls();
+				renderRows();
 			}
 
 			// DOM Elements
@@ -595,7 +599,7 @@ export const renderWebviewHtml = (
 					const priceVal = typeof rec.price === 'number' ? rec.price : (rec.close || 0);
 					html += \`<tr>
 						<td class="col-index">\${rec.index.toLocaleString()}</td>
-						<td class="col-time">\${escape(timeStr)}</td>
+						<td class="col-time">\${escapeHtml(timeStr)}</td>
 						<td class="col-price">\${priceVal.toFixed(2)}</td>
 						<td class="col-qty">\${rec.totalVolume.toLocaleString()}</td>
 						<td class="col-side"><span class="badge \${sideClass}">\${rec.side}</span></td>
@@ -745,7 +749,7 @@ export const renderWebviewHtml = (
 				}
 			});
 
-			function escape(s) {
+			function escapeHtml(s) {
 				return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 			}
 		})();
