@@ -8,13 +8,18 @@ import type {
 	ToggleLiveTailMessage,
 } from "./protocol.js";
 import {
+	CHUNK_SIZE,
+	calculatePrefetchChunkIndices,
 	calculateSpacerHeights,
 	calculateVirtualScrollMetrics,
 	escapeHtml,
 	formatFileSize,
 	indexToScrollTop,
+	LruChunkCache,
+	MAX_CACHED_CHUNKS,
 	MAX_CONTAINER_HEIGHT,
 	OVERSCAN_ROWS,
+	PREFETCH_MARGIN,
 	ROW_HEIGHT,
 	renderSkeletonRows,
 	renderTableRows,
@@ -328,6 +333,115 @@ describe("Webview HTML & Messaging Protocol", () => {
 			expect(html).not.toContain('id="btnNext"');
 			expect(html).not.toContain('id="btnLast"');
 			expect(html).not.toContain('id="pageSizeSelect"');
+		});
+	});
+
+	describe("LRU Chunk Cache & Scroll Prefetch Engine", () => {
+		it("defines default cache and prefetch parameters", () => {
+			expect(CHUNK_SIZE).toBe(500);
+			expect(MAX_CACHED_CHUNKS).toBe(20);
+			expect(PREFETCH_MARGIN).toBe(250);
+		});
+
+		it("stores and retrieves chunks by chunkIndex", () => {
+			const cache = new LruChunkCache<string>(5, 10);
+			cache.put(0, ["a", "b"]);
+			expect(cache.has(0)).toBe(true);
+			expect(cache.has(1)).toBe(false);
+			expect(cache.get(0)).toEqual(["a", "b"]);
+			expect(cache.size).toBe(1);
+		});
+
+		it("evicts least recently used chunk when capacity exceeds maxChunks", () => {
+			const cache = new LruChunkCache<number>(3, 10);
+			cache.put(0, [0]);
+			cache.put(1, [1]);
+			cache.put(2, [2]);
+			expect(cache.size).toBe(3);
+
+			// Access chunk 0 to make it most recently used (order becomes: 1, 2, 0)
+			expect(cache.get(0)).toEqual([0]);
+
+			// Insert chunk 3 -> should evict chunk 1
+			cache.put(3, [3]);
+			expect(cache.size).toBe(3);
+			expect(cache.has(1)).toBe(false);
+			expect(cache.has(0)).toBe(true);
+			expect(cache.has(2)).toBe(true);
+			expect(cache.has(3)).toBe(true);
+		});
+
+		it("retrieves individual records by global record index", () => {
+			const cache = new LruChunkCache<string>(5, 100);
+			cache.put(
+				0,
+				Array.from({ length: 100 }, (_, i) => `rec_${i}`),
+			);
+			cache.put(
+				1,
+				Array.from({ length: 100 }, (_, i) => `rec_${100 + i}`),
+			);
+
+			expect(cache.getRecord(5)).toBe("rec_5");
+			expect(cache.getRecord(150)).toBe("rec_150");
+			expect(cache.getRecord(250)).toBeUndefined();
+		});
+
+		it("retrieves sliced records and identifies missing chunk indices", () => {
+			const cache = new LruChunkCache<number>(5, 10);
+			cache.put(0, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+			cache.put(2, [20, 21, 22, 23, 24, 25, 26, 27, 28, 29]);
+
+			const slice = cache.getSlice(5, 20); // records 5..24: chunk 0 (5..9), chunk 1 (10..19 missing), chunk 2 (20..24)
+			expect(slice.missingChunkIndices).toEqual([1]);
+			expect(slice.records.length).toBe(20);
+			expect(slice.records[0]).toBe(5);
+			expect(slice.records[4]).toBe(9);
+			expect(slice.records[5]).toBeUndefined();
+			expect(slice.records[14]).toBeUndefined();
+			expect(slice.records[15]).toBe(20);
+			expect(slice.records[19]).toBe(24);
+		});
+
+		it("calculates forward prefetch chunks when within 250 records of forward boundary", () => {
+			// Window [300, 349] within total 10,000 records. Forward +250 is 599 -> chunk 1
+			const result = calculatePrefetchChunkIndices(300, 50, 10000, 500, 250);
+			expect(result.visibleChunkIndices).toEqual([0]);
+			expect(result.prefetchChunkIndices).toEqual([1]);
+		});
+
+		it("calculates backward prefetch chunks when within 250 records of backward boundary", () => {
+			// Window [600, 649]. Backward -250 is 350 -> chunk 0
+			const result = calculatePrefetchChunkIndices(600, 50, 10000, 500, 250);
+			expect(result.visibleChunkIndices).toEqual([1]);
+			expect(result.prefetchChunkIndices).toEqual([0]);
+		});
+
+		it("does not prefetch beyond file boundaries", () => {
+			// At file start [0, 49]
+			const startResult = calculatePrefetchChunkIndices(0, 50, 10000, 500, 250);
+			expect(startResult.visibleChunkIndices).toEqual([0]);
+			expect(startResult.prefetchChunkIndices).toEqual([]);
+
+			// At file end [9950, 9999]
+			const endResult = calculatePrefetchChunkIndices(
+				9950,
+				50,
+				10000,
+				500,
+				250,
+			);
+			expect(endResult.visibleChunkIndices).toEqual([19]);
+			expect(endResult.prefetchChunkIndices).toEqual([]);
+		});
+
+		it("clears cached chunks cleanly on clear()", () => {
+			const cache = new LruChunkCache<number>(5, 10);
+			cache.put(0, [1, 2, 3]);
+			expect(cache.size).toBe(1);
+			cache.clear();
+			expect(cache.size).toBe(0);
+			expect(cache.has(0)).toBe(false);
 		});
 	});
 });

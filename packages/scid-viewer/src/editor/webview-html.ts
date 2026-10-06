@@ -12,6 +12,9 @@ export const formatFileSize = (bytes: number): string => {
 export const ROW_HEIGHT = 28;
 export const MAX_CONTAINER_HEIGHT = 5_000_000;
 export const OVERSCAN_ROWS = 15;
+export const CHUNK_SIZE = 500;
+export const MAX_CACHED_CHUNKS = 20;
+export const PREFETCH_MARGIN = 250;
 
 export interface VirtualScrollMetrics {
 	readonly totalVirtualHeight: number;
@@ -141,6 +144,133 @@ export const renderSkeletonRows = (
 	return rows.join("\n");
 };
 
+export interface ChunkSliceResult<T> {
+	readonly records: ReadonlyArray<T | undefined>;
+	readonly missingChunkIndices: ReadonlyArray<number>;
+}
+
+export class LruChunkCache<T> {
+	private readonly chunks = new Map<number, ReadonlyArray<T>>();
+
+	constructor(
+		public readonly maxChunks: number = MAX_CACHED_CHUNKS,
+		public readonly chunkSize: number = CHUNK_SIZE,
+	) {}
+
+	get size(): number {
+		return this.chunks.size;
+	}
+
+	has(chunkIndex: number): boolean {
+		return this.chunks.has(chunkIndex);
+	}
+
+	get(chunkIndex: number): ReadonlyArray<T> | undefined {
+		const chunk = this.chunks.get(chunkIndex);
+		if (chunk === undefined) {
+			return undefined;
+		}
+		// Refresh recency
+		this.chunks.delete(chunkIndex);
+		this.chunks.set(chunkIndex, chunk);
+		return chunk;
+	}
+
+	put(chunkIndex: number, records: ReadonlyArray<T>): void {
+		if (this.chunks.has(chunkIndex)) {
+			this.chunks.delete(chunkIndex);
+		} else if (this.chunks.size >= this.maxChunks) {
+			const oldestKey = this.chunks.keys().next().value;
+			if (oldestKey !== undefined) {
+				this.chunks.delete(oldestKey);
+			}
+		}
+		this.chunks.set(chunkIndex, records);
+	}
+
+	getRecord(recordIndex: number): T | undefined {
+		const chunkIndex = Math.floor(recordIndex / this.chunkSize);
+		const chunk = this.get(chunkIndex);
+		if (!chunk) return undefined;
+		const offsetInChunk = recordIndex - chunkIndex * this.chunkSize;
+		return chunk[offsetInChunk];
+	}
+
+	getSlice(startIndex: number, count: number): ChunkSliceResult<T> {
+		const records: (T | undefined)[] = [];
+		const missingChunks = new Set<number>();
+
+		for (let i = 0; i < count; i++) {
+			const recIdx = startIndex + i;
+			const chunkIdx = Math.floor(recIdx / this.chunkSize);
+			const chunk = this.get(chunkIdx);
+			if (!chunk) {
+				missingChunks.add(chunkIdx);
+				records.push(undefined);
+			} else {
+				const offsetInChunk = recIdx - chunkIdx * this.chunkSize;
+				records.push(chunk[offsetInChunk]);
+			}
+		}
+
+		return {
+			records,
+			missingChunkIndices: Array.from(missingChunks),
+		};
+	}
+
+	getCachedChunkIndices(): number[] {
+		return Array.from(this.chunks.keys());
+	}
+
+	clear(): void {
+		this.chunks.clear();
+	}
+}
+
+export const calculatePrefetchChunkIndices = (
+	startIndex: number,
+	count: number,
+	totalRecords: number,
+	chunkSize = CHUNK_SIZE,
+	prefetchMargin = PREFETCH_MARGIN,
+): { visibleChunkIndices: number[]; prefetchChunkIndices: number[] } => {
+	if (totalRecords <= 0 || count <= 0) {
+		return { visibleChunkIndices: [], prefetchChunkIndices: [] };
+	}
+
+	const maxIndex = totalRecords - 1;
+	const clampedStart = Math.max(0, Math.min(maxIndex, startIndex));
+	const clampedEnd = Math.max(0, Math.min(maxIndex, startIndex + count - 1));
+
+	const startChunk = Math.floor(clampedStart / chunkSize);
+	const endChunk = Math.floor(clampedEnd / chunkSize);
+
+	const visibleChunkIndices: number[] = [];
+	for (let c = startChunk; c <= endChunk; c++) {
+		visibleChunkIndices.push(c);
+	}
+
+	const prefetchChunkIndices: number[] = [];
+	if (clampedStart > 0) {
+		const backwardIndex = Math.max(0, clampedStart - prefetchMargin);
+		const backwardChunk = Math.floor(backwardIndex / chunkSize);
+		if (backwardChunk < startChunk) {
+			prefetchChunkIndices.push(backwardChunk);
+		}
+	}
+
+	if (clampedEnd < maxIndex) {
+		const forwardIndex = Math.min(maxIndex, clampedEnd + prefetchMargin);
+		const forwardChunk = Math.floor(forwardIndex / chunkSize);
+		if (forwardChunk > endChunk) {
+			prefetchChunkIndices.push(forwardChunk);
+		}
+	}
+
+	return { visibleChunkIndices, prefetchChunkIndices };
+};
+
 export const escapeHtml = (str: string): string =>
 	str
 		.replace(/&/g, "&amp;")
@@ -193,7 +323,6 @@ export const renderWebviewHtml = (
 	const firstTime = summary?.firstRecordIsoUtc ?? "N/A";
 	const lastTime = summary?.lastRecordIsoUtc ?? "N/A";
 	const offsetIndex = initialData?.offsetIndex ?? 0;
-	const pageSize = initialData?.pageSize ?? 500;
 	const records = initialData?.records ?? [];
 	const rowsHtml = renderTableRows(records, "UTC");
 	const initialSpacers = calculateSpacerHeights(
@@ -613,19 +742,98 @@ export const renderWebviewHtml = (
 			const ROW_HEIGHT = 28;
 			const MAX_CONTAINER_HEIGHT = 5000000;
 			const OVERSCAN_ROWS = 15;
+			const CHUNK_SIZE = 500;
+			const MAX_CACHED_CHUNKS = 20;
+			const PREFETCH_MARGIN = 250;
 
 			let state = {
-				offsetIndex: ${offsetIndex},
-				pageSize: ${pageSize},
 				totalRecords: ${totalRecords},
 				timeMode: 'UTC',
 				liveTail: false,
 				minVolume: 0,
 				priceFilterOp: null,
-				priceFilterVal: null,
-				records: [],
-				inFlight: false
+				priceFilterVal: null
 			};
+
+			class WebviewChunkCache {
+				constructor(maxChunks = MAX_CACHED_CHUNKS, chunkSize = CHUNK_SIZE) {
+					this.maxChunks = maxChunks;
+					this.chunkSize = chunkSize;
+					this.chunks = new Map();
+				}
+				get size() { return this.chunks.size; }
+				has(chunkIndex) { return this.chunks.has(chunkIndex); }
+				get(chunkIndex) {
+					const chunk = this.chunks.get(chunkIndex);
+					if (chunk === undefined) return undefined;
+					this.chunks.delete(chunkIndex);
+					this.chunks.set(chunkIndex, chunk);
+					return chunk;
+				}
+				put(chunkIndex, records) {
+					if (this.chunks.has(chunkIndex)) {
+						this.chunks.delete(chunkIndex);
+					} else if (this.chunks.size >= this.maxChunks) {
+						const oldestKey = this.chunks.keys().next().value;
+						if (oldestKey !== undefined) this.chunks.delete(oldestKey);
+					}
+					this.chunks.set(chunkIndex, records);
+				}
+				getSlice(startIndex, count) {
+					const records = [];
+					const missing = new Set();
+					for (let i = 0; i < count; i++) {
+						const idx = startIndex + i;
+						const cIdx = Math.floor(idx / this.chunkSize);
+						const chunk = this.get(cIdx);
+						if (!chunk) {
+							missing.add(cIdx);
+							records.push(undefined);
+						} else {
+							const offset = idx - cIdx * this.chunkSize;
+							records.push(chunk[offset]);
+						}
+					}
+					return { records, missingChunkIndices: Array.from(missing) };
+				}
+				clear() { this.chunks.clear(); }
+			}
+
+			function calculatePrefetchChunkIndices(startIndex, count, totalRecords) {
+				if (totalRecords <= 0 || count <= 0) return { visibleChunkIndices: [], prefetchChunkIndices: [] };
+				const maxIndex = totalRecords - 1;
+				const clampedStart = Math.max(0, Math.min(maxIndex, startIndex));
+				const clampedEnd = Math.max(0, Math.min(maxIndex, startIndex + count - 1));
+				const startChunk = Math.floor(clampedStart / CHUNK_SIZE);
+				const endChunk = Math.floor(clampedEnd / CHUNK_SIZE);
+				const visibleChunkIndices = [];
+				for (let c = startChunk; c <= endChunk; c++) visibleChunkIndices.push(c);
+				const prefetchChunkIndices = [];
+				if (clampedStart > 0) {
+					const backwardIndex = Math.max(0, clampedStart - PREFETCH_MARGIN);
+					const backwardChunk = Math.floor(backwardIndex / CHUNK_SIZE);
+					if (backwardChunk < startChunk) prefetchChunkIndices.push(backwardChunk);
+				}
+				if (clampedEnd < maxIndex) {
+					const forwardIndex = Math.min(maxIndex, clampedEnd + PREFETCH_MARGIN);
+					const forwardChunk = Math.floor(forwardIndex / CHUNK_SIZE);
+					if (forwardChunk > endChunk) prefetchChunkIndices.push(forwardChunk);
+				}
+				return { visibleChunkIndices, prefetchChunkIndices };
+			}
+
+			const cache = new WebviewChunkCache();
+			const inFlightChunks = new Set();
+
+			function requestChunk(chunkIndex) {
+				if (cache.has(chunkIndex) || inFlightChunks.has(chunkIndex)) return;
+				inFlightChunks.add(chunkIndex);
+				vscode.postMessage({
+					type: 'REQUEST_PAGE',
+					offsetIndex: chunkIndex * CHUNK_SIZE,
+					pageSize: CHUNK_SIZE
+				});
+			}
 
 			// DOM Elements
 			const btnTop = document.getElementById('btnTop');
@@ -816,35 +1024,37 @@ export const renderWebviewHtml = (
 
 				const spacers = calculateSpacerHeights(startIndex, renderedCount, state.totalRecords);
 
-				let rowsHtml = '';
-				const isLoaded = state.records.length > 0 &&
-					startIndex >= state.offsetIndex &&
-					endIndex <= state.offsetIndex + state.records.length;
+				// Retrieve visible slice from LRU cache
+				const slice = cache.getSlice(startIndex, renderedCount);
 
-				if (isLoaded) {
-					const sliceStart = startIndex - state.offsetIndex;
-					const sliceEnd = endIndex - state.offsetIndex;
-					const slice = state.records.slice(sliceStart, sliceEnd);
-					const isFiltered = state.minVolume > 0 || state.priceFilterVal !== null;
-					for (let i = 0; i < slice.length; i++) {
-						const rec = slice[i];
-						if (!isFiltered || matchesFilter(rec)) {
-							rowsHtml += renderRecordRow(rec);
-						}
+				// Dispatch immediate request for missing visible chunks
+				for (let i = 0; i < slice.missingChunkIndices.length; i++) {
+					requestChunk(slice.missingChunkIndices[i]);
+				}
+
+				// Dispatch predictive prefetch requests within 250 records
+				const prefetch = calculatePrefetchChunkIndices(startIndex, renderedCount, state.totalRecords);
+				for (let i = 0; i < prefetch.prefetchChunkIndices.length; i++) {
+					requestChunk(prefetch.prefetchChunkIndices[i]);
+				}
+
+				let rowsHtml = '';
+				const isFiltered = state.minVolume > 0 || state.priceFilterVal !== null;
+				let matchCount = 0;
+
+				for (let i = 0; i < slice.records.length; i++) {
+					const rec = slice.records[i];
+					const rowIdx = startIndex + i;
+					if (rec === undefined) {
+						rowsHtml += renderSkeletonRows(rowIdx, 1);
+					} else if (!isFiltered || matchesFilter(rec)) {
+						rowsHtml += renderRecordRow(rec);
+						matchCount++;
 					}
-					if (rowsHtml === '' && isFiltered) {
-						rowsHtml = '<tr><td colspan="7" class="empty-cell">No matching records</td></tr>';
-					}
-				} else {
-					rowsHtml = renderSkeletonRows(startIndex, renderedCount);
-					if (!state.inFlight) {
-						state.inFlight = true;
-						vscode.postMessage({
-							type: 'REQUEST_PAGE',
-							offsetIndex: Math.max(0, startIndex - 200),
-							pageSize: Math.max(500, renderedCount + 400)
-						});
-					}
+				}
+
+				if (rowsHtml === '' && isFiltered) {
+					rowsHtml = '<tr><td colspan="7" class="empty-cell">No matching records</td></tr>';
 				}
 
 				tableBody.innerHTML =
@@ -853,8 +1063,12 @@ export const renderWebviewHtml = (
 					'<tr id="spacerBottom" style="height: ' + spacers.bottomSpacerHeight + 'px;"><td colspan="7"></td></tr>';
 
 				const dispStart = state.totalRecords === 0 ? 0 : startIndex + 1;
-				rangeIndicator.textContent =
-					'Showing ' + dispStart.toLocaleString() + ' - ' + endIndex.toLocaleString() + ' of ' + state.totalRecords.toLocaleString();
+				if (isFiltered) {
+					rangeIndicator.textContent = 'Filtered: ' + matchCount.toLocaleString() + ' matching of ' + state.totalRecords.toLocaleString();
+				} else {
+					rangeIndicator.textContent =
+						'Showing ' + dispStart.toLocaleString() + ' - ' + endIndex.toLocaleString() + ' of ' + state.totalRecords.toLocaleString();
+				}
 			}
 
 			let scrollRafId = null;
@@ -869,11 +1083,7 @@ export const renderWebviewHtml = (
 			btnTop.addEventListener('click', () => {
 				disableLiveTailIfActive();
 				tableWrapper.scrollTop = 0;
-				vscode.postMessage({
-					type: 'REQUEST_PAGE',
-					offsetIndex: 0,
-					pageSize: 500
-				});
+				renderVirtualWindow();
 			});
 
 			btnTail.addEventListener('click', () => {
@@ -881,12 +1091,7 @@ export const renderWebviewHtml = (
 				const viewportHeight = tableWrapper.clientHeight || 600;
 				const maxScroll = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
 				tableWrapper.scrollTop = maxScroll;
-				const tailOffset = Math.max(0, state.totalRecords - 500);
-				vscode.postMessage({
-					type: 'REQUEST_PAGE',
-					offsetIndex: tailOffset,
-					pageSize: 500
-				});
+				renderVirtualWindow();
 			});
 
 			btnLiveTail.addEventListener('click', () => {
@@ -900,14 +1105,7 @@ export const renderWebviewHtml = (
 					const metrics = calculateVirtualMetrics(state.totalRecords);
 					const viewportHeight = tableWrapper.clientHeight || 600;
 					tableWrapper.scrollTop = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
-					const tailOffset = Math.max(0, state.totalRecords - 500);
-					if (state.offsetIndex < tailOffset) {
-						vscode.postMessage({
-							type: 'REQUEST_PAGE',
-							offsetIndex: tailOffset,
-							pageSize: 500
-						});
-					}
+					renderVirtualWindow();
 				}
 			});
 
@@ -944,11 +1142,7 @@ export const renderWebviewHtml = (
 					const viewportHeight = tableWrapper.clientHeight || 600;
 					const targetScroll = indexToScrollTop(target, viewportHeight, state.totalRecords);
 					tableWrapper.scrollTop = targetScroll;
-					vscode.postMessage({
-						type: 'REQUEST_PAGE',
-						offsetIndex: Math.max(0, target - 250),
-						pageSize: 500
-					});
+					renderVirtualWindow();
 				}
 			});
 
@@ -963,15 +1157,25 @@ export const renderWebviewHtml = (
 				if (!msg) return;
 
 				if (msg.type === 'PAGE_DATA' || msg.type === 'INIT') {
-					state.inFlight = false;
-					state.offsetIndex = msg.offsetIndex;
-					state.pageSize = msg.pageSize;
 					if (msg.totalRecords !== undefined) {
 						state.totalRecords = msg.totalRecords;
 					} else if (msg.summary && msg.summary.totalRecords !== undefined) {
 						state.totalRecords = msg.summary.totalRecords;
 					}
-					state.records = msg.records ? msg.records.slice() : [];
+
+					if (msg.records && msg.records.length > 0) {
+						const baseOffset = msg.offsetIndex;
+						let currentOffset = baseOffset;
+						while (currentOffset < baseOffset + msg.records.length) {
+							const chunkIdx = Math.floor(currentOffset / CHUNK_SIZE);
+							const chunkStartInRecords = currentOffset - baseOffset;
+							const chunkEndInRecords = Math.min(msg.records.length, chunkStartInRecords + CHUNK_SIZE);
+							const chunkRecords = msg.records.slice(chunkStartInRecords, chunkEndInRecords);
+							cache.put(chunkIdx, chunkRecords);
+							inFlightChunks.delete(chunkIdx);
+							currentOffset += CHUNK_SIZE;
+						}
+					}
 					renderVirtualWindow();
 				} else if (msg.type === 'APPEND_RECORDS') {
 					state.totalRecords = msg.totalRecords;
@@ -979,19 +1183,28 @@ export const renderWebviewHtml = (
 					if (msg.fileSize && statFileSize) statFileSize.textContent = formatBytes(msg.fileSize);
 					if (msg.lastRecordIsoUtc && statLastTime) statLastTime.textContent = msg.lastRecordIsoUtc;
 
-					if (state.liveTail && msg.records && msg.records.length > 0) {
+					if (msg.records && msg.records.length > 0) {
 						for (let i = 0; i < msg.records.length; i++) {
-							state.records.push(msg.records[i]);
+							const rec = msg.records[i];
+							const cIdx = Math.floor(rec.index / CHUNK_SIZE);
+							const existing = cache.get(cIdx);
+							if (existing) {
+								const updated = existing.slice();
+								const offsetInChunk = rec.index - cIdx * CHUNK_SIZE;
+								updated[offsetInChunk] = rec;
+								cache.put(cIdx, updated);
+							} else {
+								cache.put(cIdx, [rec]);
+							}
 						}
-						if (state.records.length > 1000) {
-							state.records = state.records.slice(state.records.length - 1000);
-						}
-						state.offsetIndex = Math.max(0, state.totalRecords - state.records.length);
-						renderVirtualWindow();
+					}
+
+					if (state.liveTail) {
 						const metrics = calculateVirtualMetrics(state.totalRecords);
 						const viewportHeight = tableWrapper.clientHeight || 600;
 						tableWrapper.scrollTop = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
 					}
+					renderVirtualWindow();
 				}
 			});
 
@@ -1002,14 +1215,23 @@ export const renderWebviewHtml = (
 			// Initial state hydration & render
 			const initial = ${initialJson};
 			if (initial) {
-				state.offsetIndex = initial.offsetIndex;
-				state.pageSize = initial.pageSize;
 				state.totalRecords = initial.summary ? initial.summary.totalRecords : 0;
-				state.records = initial.records ? initial.records.slice() : [];
+				if (initial.records && initial.records.length > 0) {
+					const baseOffset = initial.offsetIndex;
+					let currentOffset = baseOffset;
+					while (currentOffset < baseOffset + initial.records.length) {
+						const chunkIdx = Math.floor(currentOffset / CHUNK_SIZE);
+						const chunkStartInRecords = currentOffset - baseOffset;
+						const chunkEndInRecords = Math.min(initial.records.length, chunkStartInRecords + CHUNK_SIZE);
+						const chunkRecords = initial.records.slice(chunkStartInRecords, chunkEndInRecords);
+						cache.put(chunkIdx, chunkRecords);
+						currentOffset += CHUNK_SIZE;
+					}
+				}
 				renderVirtualWindow();
-				if (state.offsetIndex > 0) {
+				if (initial.offsetIndex > 0) {
 					const viewportHeight = tableWrapper.clientHeight || 600;
-					tableWrapper.scrollTop = indexToScrollTop(state.offsetIndex, viewportHeight, state.totalRecords);
+					tableWrapper.scrollTop = indexToScrollTop(initial.offsetIndex, viewportHeight, state.totalRecords);
 				}
 			} else {
 				renderVirtualWindow();
