@@ -467,15 +467,6 @@ export const renderWebviewHtml = (
 				records: []
 			};
 
-			const initial = ${initialJson};
-			if (initial) {
-				state.offsetIndex = initial.offsetIndex;
-				state.pageSize = initial.pageSize;
-				state.totalRecords = initial.summary ? initial.summary.totalRecords : 0;
-				state.records = initial.records ? initial.records.slice() : [];
-				renderRows();
-			}
-
 			// DOM Elements
 			const btnFirst = document.getElementById('btnFirst');
 			const btnPrev = document.getElementById('btnPrev');
@@ -751,6 +742,20 @@ export const renderWebviewHtml = (
 
 			function escapeHtml(s) {
 				return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+			}
+
+			// Initial state hydration & render
+			const initial = ${initialJson};
+			if (initial) {
+				state.offsetIndex = initial.offsetIndex;
+				state.pageSize = initial.pageSize;
+				state.totalRecords = initial.summary ? initial.summary.totalRecords : 0;
+				state.records = initial.records ? initial.records.slice() : [];
+				pageSizeSelect.value = String(state.pageSize);
+				renderRows();
+			} else {
+				pageSizeSelect.value = String(state.pageSize);
+				updateControls();
 			}
 		})();
 	</script>
