@@ -5,7 +5,11 @@
 	"description": "Effect v4 TCP connections, protocols, and demonstrations",
 	"type": "module",
 	"license": "ISC",
+	"exports": {
+		"./scid-format": "./src/scid-format.ts"
+	},
 	"scripts": {
+		"cedro": "bun src/cedro-client.ts",
 		"test": "bun test ./src",
 		"typecheck": "tsc --noEmit -p tsconfig.json",
 		"format": "biome format --write ./src && biome check --write ./src",

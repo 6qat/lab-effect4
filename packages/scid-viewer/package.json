@@ -1,0 +1,29 @@
+{
+	"name": "scid-viewer",
+	"displayName": "SCID Data Viewer",
+	"description": "VS Code extension to visualize binary Sierra Chart Intraday Data (.scid) files",
+	"version": "0.1.0",
+	"publisher": "6qat",
+	"private": true,
+	"type": "module",
+	"engines": {
+		"vscode": "^1.90.0"
+	},
+	"main": "./dist/extension.js",
+	"scripts": {
+		"build": "bun esbuild.config.mjs",
+		"test": "bun test ./src",
+		"typecheck": "tsc --noEmit -p tsconfig.json",
+		"format": "biome format --write ./src && biome check --write ./src",
+		"format:check": "biome format ./src",
+		"lint": "biome lint ."
+	},
+	"dependencies": {
+		"effect": "4.0.0-rc.109",
+		"tcp": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/vscode": "^1.90.0",
+		"esbuild": "^0.25.0"
+	}
+}

@@ -1,4 +1,8 @@
 {
 	"extends": "./tsconfig.base.json",
-	"include": ["packages/lab/src/**/*.ts", "packages/tcp/src/**/*.ts"]
+	"include": [
+		"packages/lab/src/**/*.ts",
+		"packages/tcp/src/**/*.ts",
+		"packages/scid-viewer/src/**/*.ts"
+	]
 }
