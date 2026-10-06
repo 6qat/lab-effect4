@@ -13,8 +13,13 @@ import {
 	calculateSpacerHeights,
 	calculateVirtualScrollMetrics,
 	escapeHtml,
+	FOLLOW_THRESHOLD_PX,
 	formatFileSize,
+	formatUnreadPillText,
+	handleFollowAppend,
+	handleFollowScroll,
 	indexToScrollTop,
+	isScrolledToBottom,
 	LruChunkCache,
 	MAX_CACHED_CHUNKS,
 	MAX_CONTAINER_HEIGHT,
@@ -24,6 +29,7 @@ import {
 	renderSkeletonRows,
 	renderTableRows,
 	renderWebviewHtml,
+	resumeFollow,
 	scrollTopToIndex,
 } from "./webview-html.js";
 
@@ -442,6 +448,125 @@ describe("Webview HTML & Messaging Protocol", () => {
 			cache.clear();
 			expect(cache.size).toBe(0);
 			expect(cache.has(0)).toBe(false);
+		});
+	});
+
+	describe("Smart Live Tail Follow Mode & Floating Pill", () => {
+		it("defines default follow threshold matching 50px", () => {
+			expect(FOLLOW_THRESHOLD_PX).toBe(50);
+		});
+
+		it("detects whether viewport is scrolled to bottom edge", () => {
+			const viewportHeight = 500;
+			const totalVirtualHeight = 1500; // maxScroll = 1000
+
+			// Exactly at bottom
+			expect(
+				isScrolledToBottom(1000, viewportHeight, totalVirtualHeight, 50),
+			).toBe(true);
+
+			// Within 50px threshold (at 960px -> 40px away)
+			expect(
+				isScrolledToBottom(960, viewportHeight, totalVirtualHeight, 50),
+			).toBe(true);
+
+			// Scrolled up beyond 50px threshold (at 940px -> 60px away)
+			expect(
+				isScrolledToBottom(940, viewportHeight, totalVirtualHeight, 50),
+			).toBe(false);
+		});
+
+		it("detaches follow mode when user scrolls up >50px away without turning Live Tail OFF", () => {
+			const initialState = {
+				liveTail: true,
+				isFollowing: true,
+				unreadCount: 0,
+			};
+			const nextState = handleFollowScroll(
+				initialState,
+				900, // 100px away from bottom
+				500,
+				1500,
+				50,
+			);
+
+			expect(nextState.liveTail).toBe(true);
+			expect(nextState.isFollowing).toBe(false);
+			expect(nextState.unreadCount).toBe(0);
+		});
+
+		it("re-engages follow mode when user scrolls back down within 50px of bottom and clears unread count", () => {
+			const detachedState = {
+				liveTail: true,
+				isFollowing: false,
+				unreadCount: 25,
+			};
+			const nextState = handleFollowScroll(
+				detachedState,
+				980, // 20px away from bottom
+				500,
+				1500,
+				50,
+			);
+
+			expect(nextState.liveTail).toBe(true);
+			expect(nextState.isFollowing).toBe(true);
+			expect(nextState.unreadCount).toBe(0);
+		});
+
+		it("accumulates unread count and suppresses snap-to-bottom on APPEND_RECORDS when detached", () => {
+			const detachedState = {
+				liveTail: true,
+				isFollowing: false,
+				unreadCount: 5,
+			};
+			const result = handleFollowAppend(detachedState, 15);
+
+			expect(result.shouldSnapToBottom).toBe(false);
+			expect(result.nextState.liveTail).toBe(true);
+			expect(result.nextState.isFollowing).toBe(false);
+			expect(result.nextState.unreadCount).toBe(20);
+		});
+
+		it("snaps to bottom and keeps unread count 0 on APPEND_RECORDS when actively following", () => {
+			const followingState = {
+				liveTail: true,
+				isFollowing: true,
+				unreadCount: 0,
+			};
+			const result = handleFollowAppend(followingState, 15);
+
+			expect(result.shouldSnapToBottom).toBe(true);
+			expect(result.nextState.liveTail).toBe(true);
+			expect(result.nextState.isFollowing).toBe(true);
+			expect(result.nextState.unreadCount).toBe(0);
+		});
+
+		it("resumes follow mode and clears unread count on resumeFollow()", () => {
+			const detachedState = {
+				liveTail: true,
+				isFollowing: false,
+				unreadCount: 42,
+			};
+			const resumed = resumeFollow(detachedState);
+
+			expect(resumed.liveTail).toBe(true);
+			expect(resumed.isFollowing).toBe(true);
+			expect(resumed.unreadCount).toBe(0);
+		});
+
+		it("formats floating pill badge text correctly", () => {
+			expect(formatUnreadPillText(1240)).toBe(
+				"↓ 1,240 new trades — Resume Live Tail",
+			);
+			expect(formatUnreadPillText(1)).toBe("↓ 1 new trades — Resume Live Tail");
+		});
+
+		it("renders floating follow pill in webview HTML markup and defaults Live Tail to OFF", () => {
+			const html = renderWebviewHtml("test.scid");
+			expect(html).toContain('id="floatingFollowPill"');
+			expect(html).toContain('id="pillText"');
+			expect(html).toContain("Live Tail: OFF");
 		});
 	});
 });

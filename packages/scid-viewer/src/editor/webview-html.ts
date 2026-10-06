@@ -15,6 +15,7 @@ export const OVERSCAN_ROWS = 15;
 export const CHUNK_SIZE = 500;
 export const MAX_CACHED_CHUNKS = 20;
 export const PREFETCH_MARGIN = 250;
+export const FOLLOW_THRESHOLD_PX = 50;
 
 export interface VirtualScrollMetrics {
 	readonly totalVirtualHeight: number;
@@ -270,6 +271,103 @@ export const calculatePrefetchChunkIndices = (
 
 	return { visibleChunkIndices, prefetchChunkIndices };
 };
+
+export const isScrolledToBottom = (
+	scrollTop: number,
+	viewportHeight: number,
+	totalVirtualHeight: number,
+	thresholdPx = FOLLOW_THRESHOLD_PX,
+): boolean => {
+	const maxScroll = Math.max(0, totalVirtualHeight - viewportHeight);
+	return maxScroll - scrollTop <= thresholdPx;
+};
+
+export interface FollowScrollState {
+	readonly liveTail: boolean;
+	readonly isFollowing: boolean;
+	readonly unreadCount: number;
+}
+
+export const handleFollowScroll = (
+	currentState: FollowScrollState,
+	scrollTop: number,
+	viewportHeight: number,
+	totalVirtualHeight: number,
+	thresholdPx = FOLLOW_THRESHOLD_PX,
+): FollowScrollState => {
+	if (!currentState.liveTail) {
+		return currentState;
+	}
+
+	const atBottom = isScrolledToBottom(
+		scrollTop,
+		viewportHeight,
+		totalVirtualHeight,
+		thresholdPx,
+	);
+
+	if (atBottom) {
+		return {
+			liveTail: true,
+			isFollowing: true,
+			unreadCount: 0,
+		};
+	}
+
+	return {
+		liveTail: true,
+		isFollowing: false,
+		unreadCount: currentState.unreadCount,
+	};
+};
+
+export interface AppendFollowResult {
+	readonly nextState: FollowScrollState;
+	readonly shouldSnapToBottom: boolean;
+}
+
+export const handleFollowAppend = (
+	currentState: FollowScrollState,
+	newRecordCount: number,
+): AppendFollowResult => {
+	if (!currentState.liveTail) {
+		return {
+			nextState: currentState,
+			shouldSnapToBottom: false,
+		};
+	}
+
+	if (currentState.isFollowing) {
+		return {
+			nextState: {
+				liveTail: true,
+				isFollowing: true,
+				unreadCount: 0,
+			},
+			shouldSnapToBottom: true,
+		};
+	}
+
+	return {
+		nextState: {
+			liveTail: true,
+			isFollowing: false,
+			unreadCount: currentState.unreadCount + newRecordCount,
+		},
+		shouldSnapToBottom: false,
+	};
+};
+
+export const resumeFollow = (
+	_currentState: FollowScrollState,
+): FollowScrollState => ({
+	liveTail: true,
+	isFollowing: true,
+	unreadCount: 0,
+});
+
+export const formatUnreadPillText = (unreadCount: number): string =>
+	`↓ ${unreadCount.toLocaleString()} new trades — Resume Live Tail`;
 
 export const escapeHtml = (str: string): string =>
 	str
@@ -660,6 +758,53 @@ export const renderWebviewHtml = (
 			0% { background-position: -200% 0; }
 			100% { background-position: 200% 0; }
 		}
+
+		/* Floating Follow Pill */
+		.floating-follow-pill {
+			position: fixed;
+			bottom: 24px;
+			right: 24px;
+			z-index: 100;
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 8px 16px;
+			border-radius: 20px;
+			background-color: var(--vscode-button-background, #0e639c);
+			color: var(--vscode-button-foreground, #ffffff);
+			border: 1px solid var(--vscode-button-border, rgba(255, 255, 255, 0.2));
+			box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+			cursor: pointer;
+			font-size: 12px;
+			font-weight: 600;
+			transition: transform 0.15s ease, background-color 0.15s ease, opacity 0.2s ease;
+			animation: pillSlideUp 0.25s ease-out;
+		}
+
+		.floating-follow-pill:hover {
+			background-color: var(--vscode-button-hoverBackground, #1177bb);
+			transform: translateY(-2px);
+			box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+		}
+
+		.floating-follow-pill:active {
+			transform: translateY(0);
+		}
+
+		.floating-follow-pill .pill-icon {
+			font-size: 14px;
+			animation: bounceDown 1.5s infinite;
+		}
+
+		@keyframes pillSlideUp {
+			from { opacity: 0; transform: translateY(16px); }
+			to { opacity: 1; transform: translateY(0); }
+		}
+
+		@keyframes bounceDown {
+			0%, 100% { transform: translateY(0); }
+			50% { transform: translateY(3px); }
+		}
 	</style>
 </head>
 <body>
@@ -734,6 +879,10 @@ export const renderWebviewHtml = (
 				<tr id="spacerBottom" style="height: ${initialSpacers.bottomSpacerHeight}px;"><td colspan="7"></td></tr>
 			</tbody>
 		</table>
+		<button id="floatingFollowPill" class="floating-follow-pill" style="display: none;" title="Resume Live Tail follow mode">
+			<span class="pill-icon">↓</span>
+			<span id="pillText">0 new trades — Resume Live Tail</span>
+		</button>
 	</div>
 
 	<script>
@@ -750,6 +899,8 @@ export const renderWebviewHtml = (
 				totalRecords: ${totalRecords},
 				timeMode: 'UTC',
 				liveTail: false,
+				isFollowing: false,
+				unreadCount: 0,
 				minVolume: 0,
 				priceFilterOp: null,
 				priceFilterVal: null
@@ -852,6 +1003,8 @@ export const renderWebviewHtml = (
 			const statTotalRecords = document.getElementById('statTotalRecords');
 			const statFileSize = document.getElementById('statFileSize');
 			const statLastTime = document.getElementById('statLastTime');
+			const floatingFollowPill = document.getElementById('floatingFollowPill');
+			const pillText = document.getElementById('pillText');
 
 			function formatBytes(bytes) {
 				if (bytes < 1024) return bytes + ' B';
@@ -870,10 +1023,47 @@ export const renderWebviewHtml = (
 				}
 			}
 
+			const FOLLOW_THRESHOLD_PX = 50;
+
+			function updateFollowPill() {
+				if (!floatingFollowPill || !pillText) return;
+				if (state.liveTail && !state.isFollowing && state.unreadCount > 0) {
+					pillText.textContent = '↓ ' + state.unreadCount.toLocaleString() + ' new trades — Resume Live Tail';
+					floatingFollowPill.style.display = 'flex';
+				} else {
+					floatingFollowPill.style.display = 'none';
+				}
+			}
+
+			function checkFollowScroll() {
+				if (!state.liveTail) return;
+				const metrics = calculateVirtualMetrics(state.totalRecords);
+				const viewportHeight = tableWrapper.clientHeight || 600;
+				const maxScroll = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
+				const distanceFromBottom = maxScroll - tableWrapper.scrollTop;
+				const atBottom = distanceFromBottom <= FOLLOW_THRESHOLD_PX;
+
+				if (atBottom) {
+					if (!state.isFollowing || state.unreadCount > 0) {
+						state.isFollowing = true;
+						state.unreadCount = 0;
+						updateFollowPill();
+					}
+				} else {
+					if (state.isFollowing) {
+						state.isFollowing = false;
+						updateFollowPill();
+					}
+				}
+			}
+
 			function disableLiveTailIfActive() {
 				if (state.liveTail) {
 					state.liveTail = false;
+					state.isFollowing = false;
+					state.unreadCount = 0;
 					updateLiveTailButton();
+					updateFollowPill();
 					vscode.postMessage({
 						type: 'TOGGLE_LIVE_TAIL',
 						enabled: false
@@ -1073,6 +1263,7 @@ export const renderWebviewHtml = (
 
 			let scrollRafId = null;
 			tableWrapper.addEventListener('scroll', () => {
+				checkFollowScroll();
 				if (scrollRafId !== null) return;
 				scrollRafId = requestAnimationFrame(() => {
 					scrollRafId = null;
@@ -1091,12 +1282,20 @@ export const renderWebviewHtml = (
 				const viewportHeight = tableWrapper.clientHeight || 600;
 				const maxScroll = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
 				tableWrapper.scrollTop = maxScroll;
+				if (state.liveTail) {
+					state.isFollowing = true;
+					state.unreadCount = 0;
+					updateFollowPill();
+				}
 				renderVirtualWindow();
 			});
 
 			btnLiveTail.addEventListener('click', () => {
 				state.liveTail = !state.liveTail;
+				state.isFollowing = state.liveTail;
+				state.unreadCount = 0;
 				updateLiveTailButton();
+				updateFollowPill();
 				vscode.postMessage({
 					type: 'TOGGLE_LIVE_TAIL',
 					enabled: state.liveTail
@@ -1108,6 +1307,18 @@ export const renderWebviewHtml = (
 					renderVirtualWindow();
 				}
 			});
+
+			if (floatingFollowPill) {
+				floatingFollowPill.addEventListener('click', () => {
+					state.isFollowing = true;
+					state.unreadCount = 0;
+					updateFollowPill();
+					const metrics = calculateVirtualMetrics(state.totalRecords);
+					const viewportHeight = tableWrapper.clientHeight || 600;
+					tableWrapper.scrollTop = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
+					renderVirtualWindow();
+				});
+			}
 
 			btnToggleTime.addEventListener('click', () => {
 				state.timeMode = state.timeMode === 'UTC' ? 'LOCAL' : 'UTC';
@@ -1200,9 +1411,15 @@ export const renderWebviewHtml = (
 					}
 
 					if (state.liveTail) {
-						const metrics = calculateVirtualMetrics(state.totalRecords);
-						const viewportHeight = tableWrapper.clientHeight || 600;
-						tableWrapper.scrollTop = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
+						if (state.isFollowing) {
+							const metrics = calculateVirtualMetrics(state.totalRecords);
+							const viewportHeight = tableWrapper.clientHeight || 600;
+							tableWrapper.scrollTop = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
+						} else {
+							const incomingCount = msg.records ? msg.records.length : 0;
+							state.unreadCount += incomingCount;
+							updateFollowPill();
+						}
 					}
 					renderVirtualWindow();
 				}
