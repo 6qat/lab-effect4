@@ -11,9 +11,47 @@
 	},
 	"main": "./dist/extension.js",
 	"activationEvents": [
-		"onCustomEditor:scidViewer.editor"
+		"onCustomEditor:scidViewer.editor",
+		"onView:scidExplorer"
 	],
 	"contributes": {
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "scid-explorer-container",
+					"title": "SCID Explorer",
+					"icon": "$(database)"
+				}
+			]
+		},
+		"views": {
+			"scid-explorer-container": [
+				{
+					"id": "scidExplorer",
+					"name": "Market Data Files"
+				}
+			]
+		},
+		"commands": [
+			{
+				"command": "scidExplorer.refresh",
+				"title": "Refresh Market Data",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "scidExplorer.openFile",
+				"title": "Open SCID File"
+			}
+		],
+		"menus": {
+			"view/title": [
+				{
+					"command": "scidExplorer.refresh",
+					"when": "view == scidExplorer",
+					"group": "navigation"
+				}
+			]
+		},
 		"customEditors": [
 			{
 				"viewType": "scidViewer.editor",

@@ -1,15 +1,17 @@
 import * as vscode from "vscode";
 import { ScidEditorProvider } from "./editor/scid-editor-provider.js";
 import { makeScidReader } from "./reader/scid-reader.js";
+import { ScidTreeDataProvider } from "./tree/tree-data-provider.js";
 
 export function activate(context: vscode.ExtensionContext) {
 	const reader = makeScidReader();
-	const provider = new ScidEditorProvider(reader);
+	const editorProvider = new ScidEditorProvider(reader);
+	const treeDataProvider = new ScidTreeDataProvider(reader);
 
 	context.subscriptions.push(
 		vscode.window.registerCustomEditorProvider(
 			ScidEditorProvider.viewType,
-			provider,
+			editorProvider,
 			{
 				webviewOptions: {
 					retainContextWhenHidden: true,
@@ -17,6 +19,21 @@ export function activate(context: vscode.ExtensionContext) {
 				supportsMultipleEditorsPerDocument: false,
 			},
 		),
+		vscode.window.registerTreeDataProvider("scidExplorer", treeDataProvider),
+		vscode.commands.registerCommand("scidExplorer.refresh", () => {
+			treeDataProvider.refresh();
+		}),
+		vscode.commands.registerCommand(
+			"scidExplorer.openFile",
+			(uri: vscode.Uri) => {
+				vscode.commands.executeCommand(
+					"vscode.openWith",
+					uri,
+					ScidEditorProvider.viewType,
+				);
+			},
+		),
+		treeDataProvider,
 	);
 }
 
