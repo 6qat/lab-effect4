@@ -743,10 +743,17 @@ export const renderWebviewHtml = (
 			border-bottom: 1px solid var(--border-color);
 		}
 
+		tbody tr {
+			height: 28px;
+			box-sizing: border-box;
+		}
+
 		td {
-			padding: 5px 12px;
+			padding: 4px 12px;
 			border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 			white-space: nowrap;
+			height: 28px;
+			box-sizing: border-box;
 		}
 
 		tbody tr:nth-child(even) {
@@ -1103,10 +1110,16 @@ export const renderWebviewHtml = (
 
 			function checkFollowScroll() {
 				if (!state.liveTail) return;
-				const metrics = calculateVirtualMetrics(state.totalRecords);
-				const viewportHeight = tableWrapper.clientHeight || 600;
-				const maxScroll = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
-				const distanceFromBottom = maxScroll - tableWrapper.scrollTop;
+				const maxScroll = tableWrapper.scrollHeight - tableWrapper.clientHeight;
+				if (maxScroll <= 0) {
+					if (!state.isFollowing || state.unreadCount > 0) {
+						state.isFollowing = true;
+						state.unreadCount = 0;
+						updateFollowPill();
+					}
+					return;
+				}
+				const distanceFromBottom = Math.max(0, maxScroll - tableWrapper.scrollTop);
 				const atBottom = distanceFromBottom <= FOLLOW_THRESHOLD_PX;
 
 				if (atBottom) {
@@ -1121,6 +1134,17 @@ export const renderWebviewHtml = (
 						updateFollowPill();
 					}
 				}
+			}
+
+			function scrollToBottom() {
+				const viewportHeight = tableWrapper.clientHeight || 600;
+				const metrics = calculateVirtualMetrics(state.totalRecords);
+				tableWrapper.scrollTop = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
+				renderVirtualWindow();
+				tableWrapper.scrollTop = tableWrapper.scrollHeight;
+				requestAnimationFrame(() => {
+					tableWrapper.scrollTop = tableWrapper.scrollHeight;
+				});
 			}
 
 			function disableLiveTailIfActive() {
@@ -1271,7 +1295,11 @@ export const renderWebviewHtml = (
 				}
 
 				const viewportHeight = tableWrapper.clientHeight || 600;
-				const scrollTop = tableWrapper.scrollTop;
+				let scrollTop = tableWrapper.scrollTop;
+				if (state.liveTail && state.isFollowing) {
+					const metrics = calculateVirtualMetrics(state.totalRecords);
+					scrollTop = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
+				}
 				const firstVisible = scrollTopToIndex(scrollTop, viewportHeight, state.totalRecords);
 				const visibleCount = Math.ceil(viewportHeight / ROW_HEIGHT);
 				const startIndex = Math.max(0, firstVisible - OVERSCAN_ROWS);
@@ -1318,6 +1346,10 @@ export const renderWebviewHtml = (
 					rowsHtml +
 					'<tr id="spacerBottom" style="height: ' + spacers.bottomSpacerHeight + 'px;"><td colspan="7"></td></tr>';
 
+				if (state.liveTail && state.isFollowing) {
+					tableWrapper.scrollTop = tableWrapper.scrollHeight;
+				}
+
 				const dispStart = state.totalRecords === 0 ? 0 : startIndex + 1;
 				if (isFiltered) {
 					rangeIndicator.textContent =
@@ -1345,16 +1377,12 @@ export const renderWebviewHtml = (
 			});
 
 			btnTail.addEventListener('click', () => {
-				const metrics = calculateVirtualMetrics(state.totalRecords);
-				const viewportHeight = tableWrapper.clientHeight || 600;
-				const maxScroll = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
-				tableWrapper.scrollTop = maxScroll;
 				if (state.liveTail) {
 					state.isFollowing = true;
 					state.unreadCount = 0;
 					updateFollowPill();
 				}
-				renderVirtualWindow();
+				scrollToBottom();
 			});
 
 			btnLiveTail.addEventListener('click', () => {
@@ -1368,10 +1396,7 @@ export const renderWebviewHtml = (
 					enabled: state.liveTail
 				});
 				if (state.liveTail) {
-					const metrics = calculateVirtualMetrics(state.totalRecords);
-					const viewportHeight = tableWrapper.clientHeight || 600;
-					tableWrapper.scrollTop = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
-					renderVirtualWindow();
+					scrollToBottom();
 				}
 			});
 
@@ -1380,10 +1405,7 @@ export const renderWebviewHtml = (
 					state.isFollowing = true;
 					state.unreadCount = 0;
 					updateFollowPill();
-					const metrics = calculateVirtualMetrics(state.totalRecords);
-					const viewportHeight = tableWrapper.clientHeight || 600;
-					tableWrapper.scrollTop = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
-					renderVirtualWindow();
+					scrollToBottom();
 				});
 			}
 
@@ -1479,9 +1501,7 @@ export const renderWebviewHtml = (
 
 					if (state.liveTail) {
 						if (state.isFollowing) {
-							const metrics = calculateVirtualMetrics(state.totalRecords);
-							const viewportHeight = tableWrapper.clientHeight || 600;
-							tableWrapper.scrollTop = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
+							scrollToBottom();
 						} else {
 							const incomingCount = msg.records ? msg.records.length : 0;
 							const isFiltered = state.minVolume > 0 || state.priceFilterVal !== null;
@@ -1493,9 +1513,11 @@ export const renderWebviewHtml = (
 								state.unreadCount += matchingIncoming;
 								updateFollowPill();
 							}
+							renderVirtualWindow();
 						}
+					} else {
+						renderVirtualWindow();
 					}
-					renderVirtualWindow();
 				}
 			});
 
@@ -1519,10 +1541,10 @@ export const renderWebviewHtml = (
 						currentOffset += CHUNK_SIZE;
 					}
 				}
-				renderVirtualWindow();
-				if (initial.offsetIndex > 0) {
-					const viewportHeight = tableWrapper.clientHeight || 600;
-					tableWrapper.scrollTop = indexToScrollTop(initial.offsetIndex, viewportHeight, state.totalRecords);
+				if (state.totalRecords > 0) {
+					scrollToBottom();
+				} else {
+					renderVirtualWindow();
 				}
 			} else {
 				renderVirtualWindow();
