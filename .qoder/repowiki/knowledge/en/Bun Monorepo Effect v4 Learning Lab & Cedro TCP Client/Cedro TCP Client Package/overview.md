@@ -1,0 +1,1 @@
+Packages a layered Effect-based TCP client that composes platform-agnostic stream adapters with the Cedro wire protocol, exposing a unified TcpStream service over Bun and Node.js.

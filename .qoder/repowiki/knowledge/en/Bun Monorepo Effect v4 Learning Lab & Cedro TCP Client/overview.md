@@ -1,0 +1,1 @@
+Root of a Bun workspace that wires two Effect v4 packages (a learning lab and the Cedro TCP client) behind shared TypeScript, Biome linting, CI, editor configs, and agent skills.

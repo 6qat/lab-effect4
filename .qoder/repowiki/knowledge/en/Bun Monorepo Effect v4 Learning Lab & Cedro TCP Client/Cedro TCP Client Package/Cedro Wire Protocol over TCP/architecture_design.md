@@ -1,4 +1,4 @@
-Three-layer internal structure built on Effect:
+Three-layer internal structure with one-way dependencies:
 - `tcp-connection.ts` is a thin re-export shim that forwards to a concrete runtime implementation (`tcp-connection-bun.js`, with Node and common contracts also available), keeping this module runtime-agnostic.
 - `line-framing.ts` is a pure utility that turns a `Stream<Uint8Array>` into a `Stream<string>` via `Stream.decodeText` + `Stream.splitLines`, handling multi-packet reassembly and multiple delimiters.
 - `cedro-protocol.ts` composes the two above: it defines the `CedroConfig` and `CedroClient` Effect services (with `Context.Service`), builds pure command formatters returning `Result.Result` for validation, then lifts them into `Effect.gen` I/O pipelines that call `TcpStream.sendText`. The client exposes both raw bytes and framed lines via `Stream.Stream`.

@@ -1,0 +1,1 @@
+Implements the Cedro wire protocol on top of Effect Streams: line-framed TCP I/O, authentication and subscription command construction, and a runtime-agnostic TcpStream abstraction.

@@ -1,6 +1,6 @@
 schema_version: 1
 module_path: packages_tcp
-title: Effect v4 TCP Client Library
+title: Cedro TCP Client Package
 scope:
     - packages/tcp/
 source_files: []

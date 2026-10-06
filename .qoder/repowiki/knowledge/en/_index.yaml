@@ -3,11 +3,11 @@ schema_version: 1
 locale: en-US
 branch: master
 nodes_managed: true
-exported_at: "2026-09-30T15:55:31Z"
+exported_at: "2026-10-02T10:54:39Z"
 modules:
     "":
-        dir_name: Effect v4 Lab & TCP Networking Monorepo
-        title: Effect v4 Lab & TCP Networking Monorepo
+        dir_name: Bun Monorepo Effect v4 Learning Lab & Cedro TCP Client
+        title: 'Bun Monorepo: Effect v4 Learning Lab & Cedro TCP Client'
         scope:
             - AGENTS.md
             - CONTEXT.md
@@ -70,8 +70,8 @@ modules:
         depends_on: []
         related_to: []
     packages_tcp:
-        dir_name: Effect v4 TCP Client Library
-        title: Effect v4 TCP Client Library
+        dir_name: Cedro TCP Client Package
+        title: Cedro TCP Client Package
         scope:
             - packages/tcp/
         source_files: []
@@ -91,12 +91,10 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: packages_tcp/protocol_layer
-            - path: packages_tcp/stream_engine
+        related_to: []
     packages_tcp/protocol_layer:
-        dir_name: Cedro TCP Protocol Layer
-        title: Cedro TCP Protocol Layer
+        dir_name: Cedro Wire Protocol over TCP
+        title: Cedro Wire Protocol over TCP
         scope:
             - packages/tcp/src/cedro-protocol.ts
             - packages/tcp/src/line-framing.ts
@@ -104,9 +102,7 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: packages_tcp/platform_adapters
-            - path: packages_tcp/stream_engine
+        related_to: []
     packages_tcp/stream_engine:
         dir_name: TCP Stream Engine & Platform Adapter
         title: TCP Stream Engine & Platform Adapter
@@ -117,6 +113,4 @@ modules:
         source_files: []
         children: []
         depends_on: []
-        related_to:
-            - path: packages_tcp/platform_adapters
-            - path: packages_tcp/protocol_layer
+        related_to: []

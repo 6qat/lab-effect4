@@ -1,0 +1,1 @@
+Pure Markdown skills consumed by the agent platform; Bash templates use POSIX sh helpers (`tput`, `gh`, `xdg-open`, `wslview`, `open`) for cross-platform wizard UX; `caveman-compress` ships a small Python 3 CLI using `argparse` and `pathlib`.

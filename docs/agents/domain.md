@@ -6,6 +6,7 @@ How the engineering skills should consume this repo's domain documentation when 
 
 - **[`CONTEXT.md`](../../CONTEXT.md)** at the repo root defines the TCP domain vocabulary.
 - **[`docs/adr/`](../adr/)** at the repo root: read ADRs that touch the area you're about to work in, including workspace decisions.
+- **[`docs/research/`](../research/)**: protocol and API reference notes (e.g. [`cedro-times-and-trades.md`](../research/cedro-times-and-trades.md) for Cedro `V:` trade messages). Read the relevant note before parsing or emitting protocol messages.
 
 If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
 

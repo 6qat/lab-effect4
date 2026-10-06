@@ -1,0 +1,1 @@
+None — the module is imported as part of the `@effect-ts/tcp` package; runtime selection is done by swapping the re-export target in `tcp-connection.ts`.

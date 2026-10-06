@@ -7,6 +7,4 @@ scope:
     - packages/tcp/src/tcp-connection-http-example.ts
 source_files: []
 depends_on: []
-related_to:
-    - path: packages_tcp/protocol_layer
-    - path: packages_tcp/stream_engine
+related_to: []

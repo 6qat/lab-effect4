@@ -1,1 +1,0 @@
-A curated library of Markdown-based agent skills (interviews, TDD, code review, triage, prototyping, wizard setup) that compose into the Matt Pocock engineering workflow.

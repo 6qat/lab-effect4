@@ -1,1 +1,0 @@
-Run `/setup-matt-pocock-skills` before any engineering flow to configure issue tracker, triage labels, and doc layout; individual wizards are executed via `bash <generated-template>.sh` and write values into `.env` / GitHub secrets through the shared wizard library.

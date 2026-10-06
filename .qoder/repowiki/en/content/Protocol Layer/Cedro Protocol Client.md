@@ -13,9 +13,10 @@
 
 ## Update Summary
 **Changes Made**
-- Updated file paths to reflect the move of protocol client files to `packages/tcp/src/` directory
-- Maintained all existing functionality and architectural descriptions
-- Updated all file references and import paths throughout the documentation
+- Updated authentication protocol format from pipe-delimited to line-separated format
+- Enhanced credential validation to reject credentials containing line breaks
+- Made CedroConfig.tickers field optional
+- Updated examples and diagrams to reflect the new authentication message format
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -42,7 +43,7 @@ The Cedro client sits on top of a reusable TCP stream abstraction and a line-fra
 graph TB
 subgraph "Protocol Layer"
 A["CedroClient<br/>authenticate / subscribe"]
-B["CedroConfig<br/>magicToken, username, password, tickers"]
+B["CedroConfig<br/>magicToken, username, password, tickers?"]
 end
 subgraph "Transport Layer"
 C["TcpStreamEngine<br/>connect, events, retry, timeout"]
@@ -67,21 +68,21 @@ D --> F
 - [line-framing.ts:15-17](file://packages/tcp/src/line-framing.ts#L15-L17)
 
 **Section sources**
-- [cedro-protocol.ts:1-96](file://packages/tcp/src/cedro-protocol.ts#L1-L96)
+- [cedro-protocol.ts:1-106](file://packages/tcp/src/cedro-protocol.ts#L1-L106)
 - [tcp-stream-engine.ts:1-359](file://packages/tcp/src/tcp-stream-engine.ts#L1-L359)
 - [tcp-connection-bun.ts:1-145](file://packages/tcp/src/tcp-connection-bun.ts#L1-L145)
 - [tcp-connection-common.ts:1-101](file://packages/tcp/src/tcp-connection-common.ts#L1-L101)
 - [line-framing.ts:1-18](file://packages/tcp/src/line-framing.ts#L1-L18)
 
 ## Core Components
-- CedroConfig: Holds credentials and initial ticker list used to format messages.
+- CedroConfig: Holds credentials and optional initial ticker list used to format messages.
 - CedroClient: Exposes authenticate(), subscribe(tickers), rawStream, and lines.
 - TcpStream: Unified interface for send, sendText, stream, close; backed by Bun sockets via an engine.
 - TcpStreamEngine: Manages connection lifecycle, events, retries, timeouts, and backpressure.
 - frameLines: Transforms raw byte streams into UTF-8 lines for protocol framing.
 
 Key responsibilities:
-- Authentication: Build and send AUTH|... lines.
+- Authentication: Build and send line-separated AUTH credentials.
 - Subscription: Build and send SUB|... lines.
 - Streaming: Provide raw and framed line streams for incoming server messages.
 - Error handling: Propagate structured errors from transport and protocol layers.
@@ -107,45 +108,52 @@ participant Stream as "TcpStream"
 participant Engine as "TcpStreamEngine"
 participant Socket as "Bun Socket"
 App->>Cedro : authenticate()
-Cedro->>Cedro : format AUTH command
-Cedro->>Stream : sendText("AUTH|...\\n")
+Cedro->>Cedro : format AUTH credentials (line-separated)
+Cedro->>Stream : sendText("TOKEN\nusername\npassword\n")
 Stream->>Engine : write(chunk)
 Engine->>Socket : write + flush
 Socket-->>Engine : Data/Drain/Close/Error
 Engine-->>Stream : events queued
 Stream-->>App : stream emits chunks
 App->>Cedro : subscribe(["TICKER"])
-Cedro->>Stream : sendText("SUB|...\\n")
+Cedro->>Stream : sendText("SUB|TICKER\n")
 ```
 
 **Diagram sources**
-- [cedro-protocol.ts:40-89](file://packages/tcp/src/cedro-protocol.ts#L40-L89)
+- [cedro-protocol.ts:41-92](file://packages/tcp/src/cedro-protocol.ts#L41-L92)
 - [tcp-stream-engine.ts:89-178](file://packages/tcp/src/tcp-stream-engine.ts#L89-L178)
 - [tcp-connection-bun.ts:18-136](file://packages/tcp/src/tcp-connection-bun.ts#L18-L136)
 
 ## Detailed Component Analysis
 
 ### Authentication Flow and Credential Handling
-- Message formatting validates required fields and builds an AUTH line with magic token, username, and password.
-- Authentication sends the formatted line via the TCP stream. Errors during formatting are wrapped as protocol errors.
-- Tests demonstrate composing layers, sending AUTH, and reading the first response chunk.
+**Updated** Authentication now uses line-separated format instead of pipe-delimited format, with enhanced security validation.
+
+- Message formatting validates required fields and rejects credentials containing line breaks for security.
+- Authentication sends line-separated credentials: magic token, username, and password each on separate lines.
+- Authentication sends the formatted payload via the TCP stream. Errors during formatting are wrapped as protocol errors.
+- Tests demonstrate composing layers, sending AUTH credentials, and reading the first response chunk.
 
 ```mermaid
 flowchart TD
 Start([Start]) --> Validate["Validate credentials"]
 Validate --> Valid{"Valid?"}
 Valid --> |No| Fail["Fail with CedroProtocolError"]
-Valid --> |Yes| Format["Format 'AUTH|...'"]
+Valid --> CheckBreaks["Check for line breaks in credentials"]
+CheckBreaks --> NoBreaks{"Contains \\r\\n?"}
+NoBreaks --> |Yes| SecurityFail["Reject - credentials contain line breaks"]
+NoBreaks --> |No| Format["Format line-separated AUTH: TOKEN\\nusername\\npassword\\n"]
 Format --> Send["Send via TcpStream.sendText"]
 Send --> End([Done])
+SecurityFail --> End
 Fail --> End
 ```
 
 **Diagram sources**
-- [cedro-protocol.ts:44-65](file://packages/tcp/src/cedro-protocol.ts#L44-L65)
+- [cedro-protocol.ts:45-75](file://packages/tcp/src/cedro-protocol.ts#L45-L75)
 
 **Section sources**
-- [cedro-protocol.ts:44-65](file://packages/tcp/src/cedro-protocol.ts#L44-L65)
+- [cedro-protocol.ts:45-75](file://packages/tcp/src/cedro-protocol.ts#L45-L75)
 - [cedro-protocol.test.ts:11-64](file://packages/tcp/src/cedro-protocol.test.ts#L11-L64)
 - [cedro-protocol.test.ts:66-109](file://packages/tcp/src/cedro-protocol.test.ts#L66-L109)
 
@@ -166,16 +174,18 @@ Stream-->>App : stream emits server frames
 ```
 
 **Diagram sources**
-- [cedro-protocol.ts:67-82](file://packages/tcp/src/cedro-protocol.ts#L67-L82)
+- [cedro-protocol.ts:77-92](file://packages/tcp/src/cedro-protocol.ts#L77-L92)
 - [cedro-protocol.test.ts:11-64](file://packages/tcp/src/cedro-protocol.test.ts#L11-L64)
 
 **Section sources**
-- [cedro-protocol.ts:67-82](file://packages/tcp/src/cedro-protocol.ts#L67-L82)
+- [cedro-protocol.ts:77-92](file://packages/tcp/src/cedro-protocol.ts#L77-L92)
 - [cedro-protocol.test.ts:11-64](file://packages/tcp/src/cedro-protocol.test.ts#L11-L64)
 
 ### Message Formatting and Parsing Mechanisms
+**Updated** Authentication messages now use line-separated format while subscriptions maintain pipe-delimited format.
+
 - Outgoing messages:
-  - AUTH: pipe-delimited with magic token, username, password, terminated by newline.
+  - AUTH: line-separated format with magic token, username, password, terminated by newline.
   - SUB: pipe-delimited with comma-separated tickers, terminated by newline.
 - Incoming messages:
   - Raw bytes are exposed via rawStream.
@@ -208,7 +218,7 @@ CedroClient --> FrameLines : "uses"
 - [line-framing.ts:15-17](file://packages/tcp/src/line-framing.ts#L15-L17)
 
 **Section sources**
-- [cedro-protocol.ts:44-82](file://packages/tcp/src/cedro-protocol.ts#L44-L82)
+- [cedro-protocol.ts:45-92](file://packages/tcp/src/cedro-protocol.ts#L45-L92)
 - [line-framing.ts:1-18](file://packages/tcp/src/line-framing.ts#L1-L18)
 - [line-framing.test.ts:12-107](file://packages/tcp/src/line-framing.test.ts#L12-L107)
 
@@ -286,7 +296,7 @@ Example references:
 ## Dependency Analysis
 - CedroClient depends on:
   - TcpStream for I/O.
-  - CedroConfig for credentials and initial tickers.
+  - CedroConfig for credentials and optional initial tickers.
   - frameLines for inbound framing.
 - TcpStream depends on:
   - TcpStreamEngine for connection lifecycle and events.
@@ -304,13 +314,13 @@ TSE --> Bun["Bun Adapter"]
 ```
 
 **Diagram sources**
-- [cedro-protocol.ts:40-89](file://packages/tcp/src/cedro-protocol.ts#L40-L89)
+- [cedro-protocol.ts:41-92](file://packages/tcp/src/cedro-protocol.ts#L41-L92)
 - [tcp-stream-engine.ts:201-339](file://packages/tcp/src/tcp-stream-engine.ts#L201-L339)
 - [tcp-connection-bun.ts:18-136](file://packages/tcp/src/tcp-connection-bun.ts#L18-L136)
 - [tcp-connection-common.ts:45-57](file://packages/tcp/src/tcp-connection-common.ts#L45-L57)
 
 **Section sources**
-- [cedro-protocol.ts:40-89](file://packages/tcp/src/cedro-protocol.ts#L40-L89)
+- [cedro-protocol.ts:41-92](file://packages/tcp/src/cedro-protocol.ts#L41-L92)
 - [tcp-stream-engine.ts:201-339](file://packages/tcp/src/tcp-stream-engine.ts#L201-L339)
 - [tcp-connection-bun.ts:18-136](file://packages/tcp/src/tcp-connection-bun.ts#L18-L136)
 - [tcp-connection-common.ts:45-57](file://packages/tcp/src/tcp-connection-common.ts#L45-L57)
@@ -337,6 +347,8 @@ TSE --> Bun["Bun Adapter"]
 Common issues and strategies:
 - Missing credentials:
   - Authentication fails early with a protocol error when required fields are absent.
+- Invalid credentials format:
+  - Credentials containing line breaks are rejected for security reasons.
 - Network errors:
   - Connection failures raise TcpStreamError with operation context (connect/read/write) and cause details.
 - Timeouts:
@@ -352,13 +364,13 @@ Operational tips:
 - Disable retries in tests to simplify deterministic behavior.
 
 **Section sources**
-- [cedro-protocol.ts:44-65](file://packages/tcp/src/cedro-protocol.ts#L44-L65)
+- [cedro-protocol.ts:45-75](file://packages/tcp/src/cedro-protocol.ts#L45-L75)
 - [tcp-connection-common.ts:12-24](file://packages/tcp/src/tcp-connection-common.ts#L12-L24)
 - [tcp-stream-engine.ts:180-195](file://packages/tcp/src/tcp-stream-engine.ts#L180-L195)
 - [tcp-stream-engine.ts:295-339](file://packages/tcp/src/tcp-stream-engine.ts#L295-L339)
 
 ## Conclusion
-The Cedro protocol client provides a robust, layered implementation for authentication, subscription, and streaming over TCP. It leverages Effect's concurrency primitives and a pluggable engine to deliver reliable connectivity, clear error semantics, and efficient framing. With configurable retries, timeouts, and backpressure handling, it is well-suited for production scenarios including high-frequency trading where reliability and performance are critical.
+The Cedro protocol client provides a robust, layered implementation for authentication, subscription, and streaming over TCP. It leverages Effect's concurrency primitives and a pluggable engine to deliver reliable connectivity, clear error semantics, and efficient framing. With configurable retries, timeouts, and backpressure handling, it is well-suited for production scenarios including high-frequency trading where reliability and performance are critical. The enhanced security measures and flexible configuration options make it suitable for modern trading environments.
 
 [No sources needed since this section summarizes without analyzing specific files]
 
@@ -367,7 +379,7 @@ The Cedro protocol client provides a robust, layered implementation for authenti
 ### Appendix A: Example Workflows
 - Establish connection and authenticate:
   - Compose TcpStreamLive with ConnectionConfigLive.
-  - Provide CedroConfigLive with credentials.
+  - Provide CedroConfigLive with credentials (tickers are now optional).
   - Call authenticate() and consume the first response frame.
 - Subscribe to market data:
   - Call subscribe() with one or more tickers.
@@ -378,4 +390,4 @@ The Cedro protocol client provides a robust, layered implementation for authenti
 
 References:
 - [cedro-protocol.test.ts:11-64](file://packages/tcp/src/cedro-protocol.test.ts#L11-L64)
-- [cedro-protocol.ts:40-89](file://packages/tcp/src/cedro-protocol.ts#L40-L89)
+- [cedro-protocol.ts:41-92](file://packages/tcp/src/cedro-protocol.ts#L41-L92)

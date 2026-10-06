@@ -1,1 +1,0 @@
-Implements the Cedro wire protocol over TCP, providing line-framed streams, authentication/subscription commands, and a runtime-agnostic TcpStream abstraction.

@@ -1,12 +1,10 @@
 schema_version: 1
 module_path: packages_tcp/protocol_layer
-title: Cedro TCP Protocol Layer
+title: Cedro Wire Protocol over TCP
 scope:
     - packages/tcp/src/cedro-protocol.ts
     - packages/tcp/src/line-framing.ts
     - packages/tcp/src/tcp-connection.ts
 source_files: []
 depends_on: []
-related_to:
-    - path: packages_tcp/platform_adapters
-    - path: packages_tcp/stream_engine
+related_to: []

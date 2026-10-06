@@ -7,6 +7,4 @@ scope:
     - packages/tcp/src/tcp-connection-platform.ts
 source_files: []
 depends_on: []
-related_to:
-    - path: packages_tcp/platform_adapters
-    - path: packages_tcp/protocol_layer
+related_to: []

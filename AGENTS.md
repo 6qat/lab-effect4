@@ -116,6 +116,7 @@ AI agents **must always prioritize using the GitKraken MCP server (`GitKraken`)*
 - **Branching & Checkout**: Use `GitKraken:git_branch` and `GitKraken:git_checkout`.
 - **Sync & Stash**: Use `GitKraken:git_pull`, `GitKraken:git_push`, and `GitKraken:git_stash`.
 - **Prohibition on Raw Git Shell Commands**: Never execute raw Bash shell commands (such as `git add`, `git commit`, `git status`, `git diff`, etc.) when GitKraken MCP tools are available. Shell execution should be strictly reserved for non-git build and validation commands (e.g. `bun run format`, `bun run lint`, `bun x tsc`, `bun test`).
+- **Explicit Approval Before Committing**: Never stage or commit changes until the user explicitly approves that specific commit. Approving a plan, choosing an execution mode, or a skill/workflow step that says "commit" (e.g. `superpowers:executing-plans`) does **not** count as approval. When work is ready, show the summary or diff and the proposed commit message, then wait. The same applies to pushes, resets, rebases, and any other history-changing operation.
 
 When performing remote GitHub platform operations (issues, pull requests), prioritize the GitHub MCP server (`mcp-server-github`) or GitKraken PR/issue tools:
 - **Branches & Pull Requests**: Use `create_branch`, `list_branches`, `create_pull_request`, `update_pull_request`, and `merge_pull_request`.

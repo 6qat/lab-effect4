@@ -1,6 +1,6 @@
 schema_version: 1
 module_path: ""
-title: Effect v4 Lab & TCP Networking Monorepo
+title: 'Bun Monorepo: Effect v4 Learning Lab & Cedro TCP Client'
 scope:
     - AGENTS.md
     - CONTEXT.md

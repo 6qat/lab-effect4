@@ -1,1 +1,0 @@
-Bun monorepo wiring Effect v4 learning examples and a typed TCP client library behind shared tooling, CI, editor configs, and agent skills.
