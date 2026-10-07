@@ -40,9 +40,7 @@ export class ScidEditorProvider
 		const webview = webviewPanel.webview;
 		webview.options = {
 			enableScripts: true,
-			localResourceRoots: this.extensionUri
-				? [vscode.Uri.joinPath(this.extensionUri, "dist")]
-				: [],
+			localResourceRoots: this.extensionUri ? [this.extensionUri] : [],
 		};
 
 		const filePath = document.uri.fsPath;
@@ -196,6 +194,8 @@ export class ScidEditorProvider
 				} else {
 					await stopLiveTail();
 				}
+			} else if ((message as { type: string }).type === "WEBVIEW_ERROR") {
+				console.error("[SCID Webview Error]", message);
 			}
 		});
 

@@ -420,6 +420,58 @@ describe("Webview HTML & Messaging Protocol", () => {
 			expect(slice.records[19]).toBe(24);
 		});
 
+		it("populates multiple chunks cleanly across chunk boundaries using putRecords", () => {
+			const cache = new LruChunkCache<{ index: number; val: string }>(10, 500);
+			// 500 records starting at unaligned offset 52,249 through 52,748
+			const records = Array.from({ length: 500 }, (_, i) => ({
+				index: 52249 + i,
+				val: `rec_${52249 + i}`,
+			}));
+			cache.putRecords(records);
+
+			// Should have populated both Chunk 104 and Chunk 105
+			expect(cache.has(104)).toBe(true);
+			expect(cache.has(105)).toBe(true);
+
+			// Chunk 104 covers 52,000..52,499. Record 52,249 should be at offset 249
+			expect(cache.getRecord(52249)?.val).toBe("rec_52249");
+			expect(cache.getRecord(52499)?.val).toBe("rec_52499");
+			// Record 52,248 was NOT in the array -> undefined
+			expect(cache.getRecord(52248)).toBeUndefined();
+
+			// Chunk 105 covers 52,500..52,999. Record 52,500 should be at offset 0
+			expect(cache.getRecord(52500)?.val).toBe("rec_52500");
+			expect(cache.getRecord(52748)?.val).toBe("rec_52748");
+
+			// Viewport slice at the tail (52,712 to 52,748 - 37 rows) must have 0 missing records
+			const tailSlice = cache.getSlice(52712, 37);
+			expect(tailSlice.missingChunkIndices).toEqual([]);
+			expect(tailSlice.records.every((r) => r !== undefined)).toBe(true);
+			expect(tailSlice.records.length).toBe(37);
+		});
+
+		it("correctly identifies chunk completeness using isComplete", () => {
+			const cache = new LruChunkCache<{ index: number; val: string }>(10, 500);
+			const totalRecords = 52749;
+
+			// Put records 52,249 to 52,748
+			const records = Array.from({ length: 500 }, (_, i) => ({
+				index: 52249 + i,
+				val: `rec_${52249 + i}`,
+			}));
+			cache.putRecords(records);
+
+			// Chunk 104 has records 52,249..52,499 but lacks 52,000..52,248 -> incomplete
+			expect(cache.isComplete(104, totalRecords)).toBe(false);
+
+			// Chunk 105 covers 52,500..52,999, but totalRecords is 52,749.
+			// Records 52,500..52,748 all exist -> complete!
+			expect(cache.isComplete(105, totalRecords)).toBe(true);
+
+			// Uncached chunk 100 -> incomplete
+			expect(cache.isComplete(100, totalRecords)).toBe(false);
+		});
+
 		it("calculates forward prefetch chunks when within 250 records of forward boundary", () => {
 			// Window [300, 349] within total 10,000 records. Forward +250 is 599 -> chunk 1
 			const result = calculatePrefetchChunkIndices(300, 50, 10000, 500, 250);
@@ -843,7 +895,107 @@ describe("Webview HTML & Messaging Protocol", () => {
 			expect(html).toContain('role="columnheader"');
 			expect(html).toContain('id="spacerTop" class="spacer"');
 			expect(html).toContain('id="spacerBottom" class="spacer"');
+			expect(html).toContain("w.scrollTop = w.scrollHeight;");
 			expect(html).not.toContain("acquireVsCodeApi()");
+		});
+
+		it("verifies TanStack Virtual lifecycle, scroll proxy, and coordinate downscaling", async () => {
+			const { Virtualizer } = await import("@tanstack/virtual-core");
+			const totalRecords = 6_681_289;
+			const viewportHeight = 600;
+			const metrics = calculateVirtualScrollMetrics(totalRecords);
+			let domScrollTop = 0;
+
+			const realDomEl = {
+				clientWidth: 800,
+				clientHeight: viewportHeight,
+				get scrollHeight() {
+					return metrics.totalVirtualHeight;
+				},
+				get scrollTop() {
+					return domScrollTop;
+				},
+				set scrollTop(v: number) {
+					domScrollTop = v;
+				},
+			};
+
+			const proxyEl = new Proxy(realDomEl, {
+				get(target, prop) {
+					if (prop === "scrollHeight") {
+						return totalRecords * ROW_HEIGHT;
+					}
+					const v = Reflect.get(target, prop, target);
+					return typeof v === "function" ? v.bind(target) : v;
+				},
+			});
+
+			const unscaledTailOffset = Math.max(
+				0,
+				totalRecords * ROW_HEIGHT - viewportHeight,
+			);
+			const maxDomScroll = Math.max(
+				1,
+				metrics.totalVirtualHeight - viewportHeight,
+			);
+			const maxUnscaledScroll = Math.max(
+				1,
+				totalRecords * ROW_HEIGHT - viewportHeight,
+			);
+
+			type OffsetCallback = (offset: number, isScrolling: boolean) => void;
+			let registeredCallback: OffsetCallback | null = null;
+
+			const v = new Virtualizer({
+				count: totalRecords,
+				getScrollElement: () => proxyEl as unknown as Element,
+				estimateSize: () => ROW_HEIGHT,
+				overscan: 15,
+				initialOffset: unscaledTailOffset,
+				initialRect: { width: 800, height: viewportHeight },
+				scrollToFn: (unscaledOffset) => {
+					const targetDom = metrics.isScaled
+						? Math.round((unscaledOffset / maxUnscaledScroll) * maxDomScroll)
+						: unscaledOffset;
+					realDomEl.scrollTop = targetDom;
+					if (registeredCallback) {
+						const unscaled = metrics.isScaled
+							? (realDomEl.scrollTop / maxDomScroll) * maxUnscaledScroll
+							: realDomEl.scrollTop;
+						registeredCallback(unscaled, true);
+					}
+				},
+				observeElementOffset: (_inst, cb) => {
+					registeredCallback = cb;
+					return () => {};
+				},
+				observeElementRect: () => () => {},
+			});
+
+			// Verify lifecycle attachment
+			expect(v.scrollElement).toBeNull();
+			v._willUpdate();
+			expect(v.scrollElement).not.toBeNull();
+
+			// Verify initial tail calculation
+			const initialItems = v.getVirtualItems();
+			expect(initialItems.length).toBeGreaterThan(0);
+			expect(initialItems[initialItems.length - 1]?.index).toBe(
+				totalRecords - 1,
+			);
+			expect(realDomEl.scrollTop).toBe(maxDomScroll);
+
+			// Verify seek to top
+			v.scrollToIndex(0, { align: "start" });
+			const topItems = v.getVirtualItems();
+			expect(topItems[0]?.index).toBe(0);
+			expect(realDomEl.scrollTop).toBe(0);
+
+			// Verify seek back to tail
+			v.scrollToIndex(totalRecords - 1, { align: "end" });
+			const tailItems = v.getVirtualItems();
+			expect(tailItems[tailItems.length - 1]?.index).toBe(totalRecords - 1);
+			expect(realDomEl.scrollTop).toBe(maxDomScroll);
 		});
 	});
 });

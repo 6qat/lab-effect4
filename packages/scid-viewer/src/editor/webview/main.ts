@@ -23,7 +23,6 @@ import {
 	type PriceFilter,
 	parsePriceFilter,
 	ROW_HEIGHT,
-	renderSkeletonRows,
 } from "../webview-html.js";
 
 declare function acquireVsCodeApi(): {
@@ -43,7 +42,10 @@ interface WebviewState {
 }
 
 class WebviewChunkCache {
-	private readonly chunks = new Map<number, FormattedScidRecord[]>();
+	private readonly chunks = new Map<
+		number,
+		(FormattedScidRecord | undefined)[]
+	>();
 	constructor(
 		private readonly maxChunks = MAX_CACHED_CHUNKS,
 		private readonly chunkSize = CHUNK_SIZE,
@@ -57,7 +59,7 @@ class WebviewChunkCache {
 		return this.chunks.has(chunkIndex);
 	}
 
-	get(chunkIndex: number): FormattedScidRecord[] | undefined {
+	get(chunkIndex: number): (FormattedScidRecord | undefined)[] | undefined {
 		const chunk = this.chunks.get(chunkIndex);
 		if (chunk === undefined) return undefined;
 		this.chunks.delete(chunkIndex);
@@ -65,7 +67,7 @@ class WebviewChunkCache {
 		return chunk;
 	}
 
-	put(chunkIndex: number, records: FormattedScidRecord[]): void {
+	put(chunkIndex: number, records: (FormattedScidRecord | undefined)[]): void {
 		if (this.chunks.has(chunkIndex)) {
 			this.chunks.delete(chunkIndex);
 		} else if (this.chunks.size >= this.maxChunks) {
@@ -73,6 +75,38 @@ class WebviewChunkCache {
 			if (oldestKey !== undefined) this.chunks.delete(oldestKey);
 		}
 		this.chunks.set(chunkIndex, records);
+	}
+
+	putRecords(records: ReadonlyArray<FormattedScidRecord>): void {
+		for (let i = 0; i < records.length; i++) {
+			const rec = records[i];
+			if (!rec) continue;
+			const cIdx = Math.floor(rec.index / this.chunkSize);
+			let chunk = this.chunks.get(cIdx);
+			if (!chunk) {
+				if (this.chunks.size >= this.maxChunks) {
+					const oldestKey = this.chunks.keys().next().value;
+					if (oldestKey !== undefined) this.chunks.delete(oldestKey);
+				}
+				chunk = new Array(this.chunkSize);
+				this.chunks.set(cIdx, chunk);
+			}
+			const offset = rec.index - cIdx * this.chunkSize;
+			chunk[offset] = rec;
+		}
+	}
+
+	isComplete(chunkIndex: number, totalRecords: number): boolean {
+		const chunk = this.chunks.get(chunkIndex);
+		if (!chunk) return false;
+		const startIdx = chunkIndex * this.chunkSize;
+		if (startIdx >= totalRecords) return true;
+		const endIdx = Math.min(totalRecords, startIdx + this.chunkSize);
+		for (let idx = startIdx; idx < endIdx; idx++) {
+			const offset = idx - startIdx;
+			if (chunk[offset] === undefined) return false;
+		}
+		return true;
 	}
 
 	getSlice(
@@ -93,7 +127,11 @@ class WebviewChunkCache {
 				records.push(undefined);
 			} else {
 				const offset = idx - cIdx * this.chunkSize;
-				records.push(chunk[offset]);
+				const rec = chunk[offset];
+				if (rec === undefined) {
+					missing.add(cIdx);
+				}
+				records.push(rec);
 			}
 		}
 		return { records, missingChunkIndices: Array.from(missing) };
@@ -107,6 +145,21 @@ class WebviewChunkCache {
 // Bootstrap Webview
 (() => {
 	const vscode = acquireVsCodeApi();
+
+	window.addEventListener("error", (event) => {
+		try {
+			console.error(
+				"[scid-viewer webview error]",
+				event.error || event.message,
+			);
+			vscode.postMessage({
+				type: "WEBVIEW_ERROR",
+				message: event.message,
+				filename: event.filename,
+				lineno: event.lineno,
+			});
+		} catch (_) {}
+	});
 
 	// DOM Elements
 	const btnTop = document.getElementById("btnTop") as HTMLButtonElement | null;
@@ -168,7 +221,8 @@ class WebviewChunkCache {
 	const inFlightChunks = new Set<number>();
 
 	function requestChunk(chunkIndex: number) {
-		if (cache.has(chunkIndex) || inFlightChunks.has(chunkIndex)) return;
+		if (inFlightChunks.has(chunkIndex)) return;
+		if (cache.isComplete(chunkIndex, state.totalRecords)) return;
 		inFlightChunks.add(chunkIndex);
 		const req: RequestPageMessage = {
 			type: "REQUEST_PAGE",
@@ -201,7 +255,11 @@ class WebviewChunkCache {
 
 	function checkFollowScroll() {
 		if (!state.liveTail || !tableWrapper) return;
-		const maxScroll = tableWrapper.scrollHeight - tableWrapper.clientHeight;
+		const metrics = calculateVirtualScrollMetrics(state.totalRecords);
+		const maxScroll = Math.max(
+			0,
+			metrics.totalVirtualHeight - tableWrapper.clientHeight,
+		);
 		if (maxScroll <= 0) {
 			if (!state.isFollowing || state.unreadCount > 0) {
 				state.isFollowing = true;
@@ -231,15 +289,39 @@ class WebviewChunkCache {
 		return matchesRecordFilter(rec, state.minVolume, state.priceFilter);
 	}
 
+	const initialViewportHeight = tableWrapper.clientHeight || 600;
+	const initialUnscaledTailOffset = Math.max(
+		0,
+		state.totalRecords * ROW_HEIGHT - initialViewportHeight,
+	);
+
+	// Virtual Scroll Element Proxy:
+	// Maps `scrollHeight` to `state.totalRecords * ROW_HEIGHT` so TanStack Virtual
+	// computes true unscaled offsets without clamping to the downscaled DOM height.
+	// Binds native DOM methods to target element to prevent "Illegal invocation" errors in V8.
+	const virtualScrollElement = new Proxy(tableWrapper, {
+		get(target, prop) {
+			if (prop === "scrollHeight") {
+				return state.totalRecords * ROW_HEIGHT;
+			}
+			const val = Reflect.get(target, prop, target);
+			if (typeof val === "function") {
+				return val.bind(target);
+			}
+			return val;
+		},
+	});
+
 	// Initialize TanStack Virtual with Coordinate Downscaling Wrapper
 	const virtualizer = new Virtualizer({
 		count: state.totalRecords,
-		getScrollElement: () => tableWrapper,
+		getScrollElement: () => virtualScrollElement,
 		estimateSize: () => ROW_HEIGHT,
 		overscan: OVERSCAN_ROWS,
+		initialOffset: initialUnscaledTailOffset,
 		initialRect: {
 			width: tableWrapper.clientWidth || 800,
-			height: tableWrapper.clientHeight || 600,
+			height: initialViewportHeight,
 		},
 		scrollToFn: (unscaledOffset: number) => {
 			if (!tableWrapper) return;
@@ -259,29 +341,24 @@ class WebviewChunkCache {
 			tableWrapper.scrollTop = targetDomScroll;
 		},
 		observeElementOffset: (_instance, cb) => {
-			let rafId: number | null = null;
 			const onScroll = () => {
 				checkFollowScroll();
-				if (rafId !== null) return;
-				rafId = requestAnimationFrame(() => {
-					rafId = null;
-					if (!tableWrapper) return;
-					const metrics = calculateVirtualScrollMetrics(state.totalRecords);
-					const viewportHeight = tableWrapper.clientHeight || 600;
-					const maxDomScroll = Math.max(
-						1,
-						metrics.totalVirtualHeight - viewportHeight,
-					);
-					const maxUnscaledScroll = Math.max(
-						1,
-						state.totalRecords * ROW_HEIGHT - viewportHeight,
-					);
-					const domScroll = tableWrapper.scrollTop;
-					const unscaled = metrics.isScaled
-						? (domScroll / maxDomScroll) * maxUnscaledScroll
-						: domScroll;
-					cb(unscaled, true);
-				});
+				if (!tableWrapper) return;
+				const metrics = calculateVirtualScrollMetrics(state.totalRecords);
+				const viewportHeight = tableWrapper.clientHeight || 600;
+				const maxDomScroll = Math.max(
+					1,
+					metrics.totalVirtualHeight - viewportHeight,
+				);
+				const maxUnscaledScroll = Math.max(
+					1,
+					state.totalRecords * ROW_HEIGHT - viewportHeight,
+				);
+				const domScroll = tableWrapper.scrollTop;
+				const unscaled = metrics.isScaled
+					? (domScroll / maxDomScroll) * maxUnscaledScroll
+					: domScroll;
+				cb(unscaled, true);
 			};
 			tableWrapper.addEventListener("scroll", onScroll, { passive: true });
 			return () => tableWrapper.removeEventListener("scroll", onScroll);
@@ -303,6 +380,9 @@ class WebviewChunkCache {
 			renderVirtualWindow();
 		},
 	});
+
+	// Explicitly attach the scroll element and bind observers in vanilla JS
+	virtualizer._willUpdate();
 
 	function renderVirtualWindow() {
 		if (!tableWrapper || !tableBody) return;
@@ -367,7 +447,7 @@ class WebviewChunkCache {
 			const rec = slice.records[i];
 			const rowIdx = startIndex + i;
 			if (rec === undefined) {
-				rowsHtml += renderSkeletonRows(rowIdx, 1);
+				rowsHtml += renderSkeletonRowHtml(rowIdx);
 			} else if (!isFiltered || matchesFilter(rec)) {
 				rowsHtml += renderRowHtml(rec);
 				matchCount++;
@@ -380,10 +460,6 @@ class WebviewChunkCache {
 		}
 
 		tableBody.innerHTML = rowsHtml;
-
-		if (state.liveTail && state.isFollowing) {
-			tableWrapper.scrollTop = tableWrapper.scrollHeight;
-		}
 
 		const dispStart = state.totalRecords === 0 ? 0 : startIndex + 1;
 		if (rangeIndicator) {
@@ -400,6 +476,20 @@ class WebviewChunkCache {
 				);
 			}
 		}
+	}
+
+	function renderSkeletonRowHtml(rowIdx: number): string {
+		return (
+			'<div class="table-row skeleton-row" role="row">' +
+			`<div class="table-cell col-index" role="cell">#${rowIdx.toLocaleString()}</div>` +
+			'<div class="table-cell col-time skeleton-cell" role="cell"><span class="skeleton-bar" style="width: 140px;"></span></div>' +
+			'<div class="table-cell col-price skeleton-cell" role="cell"><span class="skeleton-bar" style="width: 60px;"></span></div>' +
+			'<div class="table-cell col-qty skeleton-cell" role="cell"><span class="skeleton-bar" style="width: 40px;"></span></div>' +
+			'<div class="table-cell col-side skeleton-cell" role="cell"><span class="skeleton-bar" style="width: 30px;"></span></div>' +
+			'<div class="table-cell col-volume skeleton-cell" role="cell"><span class="skeleton-bar" style="width: 50px;"></span></div>' +
+			'<div class="table-cell col-volume skeleton-cell" role="cell"><span class="skeleton-bar" style="width: 50px;"></span></div>' +
+			"</div>"
+		);
 	}
 
 	function renderRowHtml(rec: FormattedScidRecord): string {
@@ -429,11 +519,14 @@ class WebviewChunkCache {
 	function scrollToBottom() {
 		if (state.totalRecords === 0 || !tableWrapper) return;
 		virtualizer.scrollToIndex(state.totalRecords - 1, { align: "end" });
+		const metrics = calculateVirtualScrollMetrics(state.totalRecords);
+		const viewportHeight = tableWrapper.clientHeight || 600;
+		const maxDomScroll = Math.max(
+			0,
+			metrics.totalVirtualHeight - viewportHeight,
+		);
+		tableWrapper.scrollTop = maxDomScroll;
 		renderVirtualWindow();
-		tableWrapper.scrollTop = tableWrapper.scrollHeight;
-		requestAnimationFrame(() => {
-			if (tableWrapper) tableWrapper.scrollTop = tableWrapper.scrollHeight;
-		});
 	}
 
 	function disableLiveTailIfActive() {
@@ -546,54 +639,38 @@ class WebviewChunkCache {
 			if (msg.type === "PAGE_DATA") {
 				state.totalRecords = msg.totalRecords;
 				if (msg.records && msg.records.length > 0) {
-					const baseOffset = msg.offsetIndex;
-					let currentOffset = baseOffset;
-					while (currentOffset < baseOffset + msg.records.length) {
-						const chunkIdx = Math.floor(currentOffset / CHUNK_SIZE);
-						const chunkStartInRecords = currentOffset - baseOffset;
-						const chunkEndInRecords = Math.min(
-							msg.records.length,
-							chunkStartInRecords + CHUNK_SIZE,
-						);
-						const chunkRecords = msg.records.slice(
-							chunkStartInRecords,
-							chunkEndInRecords,
-						);
-						cache.put(chunkIdx, chunkRecords.slice());
-						inFlightChunks.delete(chunkIdx);
-						currentOffset += CHUNK_SIZE;
+					cache.putRecords(msg.records);
+					for (let i = 0; i < msg.records.length; i++) {
+						const rec = msg.records[i];
+						if (rec) {
+							inFlightChunks.delete(Math.floor(rec.index / CHUNK_SIZE));
+						}
 					}
 				}
+				inFlightChunks.delete(Math.floor(msg.offsetIndex / CHUNK_SIZE));
 				virtualizer.setOptions({
 					...virtualizer.options,
 					count: state.totalRecords,
 				});
+				virtualizer._willUpdate();
 				renderVirtualWindow();
 			} else if (msg.type === "INIT") {
 				state.totalRecords = msg.summary.totalRecords;
 				if (msg.records && msg.records.length > 0) {
-					const baseOffset = msg.offsetIndex;
-					let currentOffset = baseOffset;
-					while (currentOffset < baseOffset + msg.records.length) {
-						const chunkIdx = Math.floor(currentOffset / CHUNK_SIZE);
-						const chunkStartInRecords = currentOffset - baseOffset;
-						const chunkEndInRecords = Math.min(
-							msg.records.length,
-							chunkStartInRecords + CHUNK_SIZE,
-						);
-						const chunkRecords = msg.records.slice(
-							chunkStartInRecords,
-							chunkEndInRecords,
-						);
-						cache.put(chunkIdx, chunkRecords.slice());
-						inFlightChunks.delete(chunkIdx);
-						currentOffset += CHUNK_SIZE;
+					cache.putRecords(msg.records);
+					for (let i = 0; i < msg.records.length; i++) {
+						const rec = msg.records[i];
+						if (rec) {
+							inFlightChunks.delete(Math.floor(rec.index / CHUNK_SIZE));
+						}
 					}
 				}
+				inFlightChunks.delete(Math.floor(msg.offsetIndex / CHUNK_SIZE));
 				virtualizer.setOptions({
 					...virtualizer.options,
 					count: state.totalRecords,
 				});
+				virtualizer._willUpdate();
 				renderVirtualWindow();
 			} else if (msg.type === "APPEND_RECORDS") {
 				state.totalRecords = msg.totalRecords;
@@ -605,24 +682,14 @@ class WebviewChunkCache {
 					statLastTime.textContent = msg.lastRecordIsoUtc;
 
 				if (msg.records && msg.records.length > 0) {
-					for (const rec of msg.records) {
-						const cIdx = Math.floor(rec.index / CHUNK_SIZE);
-						const existing = cache.get(cIdx);
-						if (existing) {
-							const updated = existing.slice();
-							const offsetInChunk = rec.index - cIdx * CHUNK_SIZE;
-							updated[offsetInChunk] = rec;
-							cache.put(cIdx, updated);
-						} else {
-							cache.put(cIdx, [rec]);
-						}
-					}
+					cache.putRecords(msg.records);
 				}
 
 				virtualizer.setOptions({
 					...virtualizer.options,
 					count: state.totalRecords,
 				});
+				virtualizer._willUpdate();
 
 				if (state.liveTail) {
 					if (state.isFollowing) {
@@ -651,27 +718,13 @@ class WebviewChunkCache {
 	// Initial hydration from embedded script tag
 	if (initial) {
 		if (initial.records && initial.records.length > 0) {
-			const baseOffset = initial.offsetIndex;
-			let currentOffset = baseOffset;
-			while (currentOffset < baseOffset + initial.records.length) {
-				const chunkIdx = Math.floor(currentOffset / CHUNK_SIZE);
-				const chunkStartInRecords = currentOffset - baseOffset;
-				const chunkEndInRecords = Math.min(
-					initial.records.length,
-					chunkStartInRecords + CHUNK_SIZE,
-				);
-				const chunkRecords = initial.records.slice(
-					chunkStartInRecords,
-					chunkEndInRecords,
-				);
-				cache.put(chunkIdx, chunkRecords.slice());
-				currentOffset += CHUNK_SIZE;
-			}
+			cache.putRecords(initial.records);
 		}
 		virtualizer.setOptions({
 			...virtualizer.options,
 			count: state.totalRecords,
 		});
+		virtualizer._willUpdate();
 		if (state.totalRecords > 0) {
 			scrollToBottom();
 		} else {

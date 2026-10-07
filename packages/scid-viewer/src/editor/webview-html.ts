@@ -189,6 +189,40 @@ export class LruChunkCache<T> {
 		this.chunks.set(chunkIndex, records);
 	}
 
+	putRecords(records: ReadonlyArray<T & { index: number }>): void {
+		for (let i = 0; i < records.length; i++) {
+			const rec = records[i];
+			if (!rec) continue;
+			const cIdx = Math.floor(rec.index / this.chunkSize);
+			let chunk = this.chunks.get(cIdx) as (T | undefined)[] | undefined;
+			if (!chunk) {
+				if (this.chunks.size >= this.maxChunks) {
+					const oldestKey = this.chunks.keys().next().value;
+					if (oldestKey !== undefined) {
+						this.chunks.delete(oldestKey);
+					}
+				}
+				chunk = new Array(this.chunkSize);
+				this.chunks.set(cIdx, chunk as ReadonlyArray<T>);
+			}
+			const offsetInChunk = rec.index - cIdx * this.chunkSize;
+			chunk[offsetInChunk] = rec;
+		}
+	}
+
+	isComplete(chunkIndex: number, totalRecords: number): boolean {
+		const chunk = this.chunks.get(chunkIndex);
+		if (!chunk) return false;
+		const startIdx = chunkIndex * this.chunkSize;
+		if (startIdx >= totalRecords) return true;
+		const endIdx = Math.min(totalRecords, startIdx + this.chunkSize);
+		for (let idx = startIdx; idx < endIdx; idx++) {
+			const offset = idx - startIdx;
+			if (chunk[offset] === undefined) return false;
+		}
+		return true;
+	}
+
 	getRecord(recordIndex: number): T | undefined {
 		const chunkIndex = Math.floor(recordIndex / this.chunkSize);
 		const chunk = this.get(chunkIndex);
@@ -210,7 +244,11 @@ export class LruChunkCache<T> {
 				records.push(undefined);
 			} else {
 				const offsetInChunk = recIdx - chunkIdx * this.chunkSize;
-				records.push(chunk[offsetInChunk]);
+				const rec = chunk[offsetInChunk];
+				if (rec === undefined) {
+					missingChunks.add(chunkIdx);
+				}
+				records.push(rec);
 			}
 		}
 
@@ -985,6 +1023,14 @@ export const renderWebviewHtml = (
 			<span id="pillText">0 new trades — Resume Live Tail</span>
 		</button>
 	</div>
+	<script>
+		try {
+			var w = document.getElementById('tableWrapper');
+			if (w && w.scrollHeight > 0) {
+				w.scrollTop = w.scrollHeight;
+			}
+		} catch (e) {}
+	</script>
 
 	<script id="scid-initial-data" type="application/json">${initialJson}</script>
 	${
