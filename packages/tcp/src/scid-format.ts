@@ -232,23 +232,34 @@ export const cedroTimeToScDateTimeMS = (
 		}
 	}
 
-	// Parse "HH:mm:ss.SSS" or "HH:mm:ss"
+	// Parse time string:
+	// Format 1: Colon-separated "HH:mm:ss.SSS" or "HH:mm:ss"
+	// Format 2: Compact digit string "HHmmssSSS" (e.g. 100154306) or "HHmmss" (e.g. 100154)
 	let hours = 0;
 	let minutes = 0;
 	let seconds = 0;
 	let millis = 0;
 
-	const [hms, msPart] = timeStr.split(/[.,]/);
-	if (hms) {
-		const hmsTokens = hms.split(":");
-		if (hmsTokens.length >= 3) {
-			hours = parseInt(hmsTokens[0] ?? "", 10);
-			minutes = parseInt(hmsTokens[1] ?? "", 10);
-			seconds = parseInt(hmsTokens[2] ?? "", 10);
+	if (timeStr.includes(":")) {
+		const [hms, msPart] = timeStr.split(/[.,]/);
+		if (hms) {
+			const hmsTokens = hms.split(":");
+			if (hmsTokens.length >= 3) {
+				hours = parseInt(hmsTokens[0] ?? "", 10);
+				minutes = parseInt(hmsTokens[1] ?? "", 10);
+				seconds = parseInt(hmsTokens[2] ?? "", 10);
+			}
 		}
-	}
-	if (msPart) {
-		millis = parseInt(msPart.padEnd(3, "0").slice(0, 3), 10);
+		if (msPart) {
+			millis = parseInt(msPart.padEnd(3, "0").slice(0, 3), 10);
+		}
+	} else if (/^\d{6,9}$/.test(timeStr)) {
+		hours = parseInt(timeStr.slice(0, 2), 10);
+		minutes = parseInt(timeStr.slice(2, 4), 10);
+		seconds = parseInt(timeStr.slice(4, 6), 10);
+		if (timeStr.length > 6) {
+			millis = parseInt(timeStr.slice(6, 9).padEnd(3, "0"), 10);
+		}
 	}
 
 	const unixMs = Date.UTC(year, month, day, hours, minutes, seconds, millis);

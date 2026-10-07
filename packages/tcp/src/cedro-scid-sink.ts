@@ -143,10 +143,7 @@ export const makeCedroScidSink = (
 		const batchSize = options.batchSize ?? 50;
 		const flushInterval = options.flushInterval ?? "500 millis";
 
-		let activeDate =
-			options.sessionDate ??
-			options.getCurrentDate?.() ??
-			new Date().toISOString().slice(0, 10);
+		let manualDateOverride: string | undefined = options.sessionDate;
 
 		const resolvePath =
 			options.resolveFilePath ??
@@ -157,6 +154,11 @@ export const makeCedroScidSink = (
 		const sem = yield* Semaphore.make(1);
 		let totalTradesProcessed = 0;
 		let totalRecordsFlushed = 0;
+
+		const getCurrentDate = (): string =>
+			manualDateOverride ??
+			options.getCurrentDate?.() ??
+			new Date().toISOString().slice(0, 10);
 
 		const flushTickerInternal = (
 			state: TickerState,
@@ -188,8 +190,20 @@ export const makeCedroScidSink = (
 			});
 
 		const flushAllInternal = Effect.gen(function* () {
-			for (const state of tickers.values()) {
-				yield* flushTickerInternal(state);
+			const currentDate = getCurrentDate();
+			for (const [ticker, state] of tickers.entries()) {
+				if (partitionMode === "daily" && state.currentDate !== currentDate) {
+					// Date rollover detected: flush previous day's buffer and rotate path
+					yield* flushTickerInternal(state);
+					const newFilePath = resolvePath(ticker, currentDate);
+					state.filePath = newFilePath;
+					state.currentDate = currentDate;
+					state.lastTimestamp = yield* Effect.promise(() =>
+						getLastTimestampFromFile(newFilePath),
+					);
+				} else {
+					yield* flushTickerInternal(state);
+				}
 			}
 		});
 
@@ -200,7 +214,7 @@ export const makeCedroScidSink = (
 			sem
 				.withPermit(
 					Effect.gen(function* () {
-						activeDate = newDate;
+						manualDateOverride = newDate;
 						if (partitionMode === "daily") {
 							for (const [ticker, state] of tickers.entries()) {
 								if (state.currentDate !== newDate) {
@@ -220,9 +234,6 @@ export const makeCedroScidSink = (
 					}),
 				)
 				.pipe(Effect.uninterruptible);
-
-		const getCurrentDate = (): string =>
-			options.getCurrentDate?.() ?? activeDate;
 
 		const writeLine = (line: string): Effect.Effect<void, never> =>
 			Effect.gen(function* () {

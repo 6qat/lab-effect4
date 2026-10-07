@@ -130,6 +130,32 @@ describe("SCID Binary Serialization & Cedro Trade Parsing", () => {
 		expect(tsLater > ts3).toBe(true);
 	});
 
+	it("accurately parses compact Cedro trade time without colons (HHmmssSSS and HHmmss)", () => {
+		const sessionDate = "2026-10-06";
+		// 10:01:54.306 in compact format "100154306"
+		const tsCompact = cedroTimeToScDateTimeMS("100154306", sessionDate);
+		const tsColon = cedroTimeToScDateTimeMS("10:01:54.306", sessionDate);
+		expect(tsCompact).toBe(tsColon);
+
+		// 10:01:54 with 0 ms in compact format "100154"
+		const tsCompactNoMs = cedroTimeToScDateTimeMS("100154", sessionDate);
+		const tsColonNoMs = cedroTimeToScDateTimeMS("10:01:54", sessionDate);
+		expect(tsCompactNoMs).toBe(tsColonNoMs);
+
+		// Parse actual wire line from Cedro
+		const rawLine = "V:WINV26:A:100154306:206395:3:3:1:16942040:2:I:RL";
+		const opt = parseCedroTradeLine(rawLine);
+		expect(Option.isSome(opt)).toBe(true);
+		if (Option.isSome(opt)) {
+			expect(opt.value.ticker).toBe("WINV26");
+			expect(opt.value.timeStr).toBe("100154306");
+			expect(opt.value.price).toBe(206395);
+			expect(opt.value.quantity).toBe(1);
+			expect(opt.value.tradeId).toBe("16942040");
+			expect(opt.value.aggressor).toBe("I");
+		}
+	});
+
 	it("writes 56-byte header on file creation and appends 40-byte records", async () => {
 		const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "scid-test-"));
 		const filePath = path.join(tmpDir, "PETR4.scid");

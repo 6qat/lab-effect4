@@ -476,4 +476,97 @@ describe("CedroScidSink: Multi-Ticker Routing & Buffered I/O", () => {
 			await fs.rm(tmpDir, { recursive: true, force: true });
 		}
 	});
+
+	it("processes real Cedro compact wire format trades without colon separators", async () => {
+		const tmpDir = await fs.mkdtemp(
+			path.join(os.tmpdir(), "scid-sink-compact-"),
+		);
+		const winFile = path.join(tmpDir, "WINV26", "WINV26-2026-10-07.scid");
+
+		try {
+			await Effect.runPromise(
+				Effect.scoped(
+					Effect.gen(function* () {
+						const sink = yield* makeCedroScidSink({
+							baseDir: tmpDir,
+							sessionDate: "2026-10-07",
+							partitionMode: "daily",
+							flushInterval: "1 hour",
+						});
+
+						// Real wire format trade from datafeedcd3.cedrotech.com
+						yield* sink.writeLine(
+							"V:WINV26:A:100154306:206395:3:3:1:16942040:2:I:RL",
+						);
+						yield* sink.flush();
+					}),
+				),
+			);
+
+			const buf = await fs.readFile(winFile);
+			expect(buf.byteLength).toBe(SCID_HEADER_SIZE + SCID_RECORD_SIZE);
+
+			const record = deserializeScidRecord(buf, SCID_HEADER_SIZE);
+			expect(record.close).toBe(206395);
+			expect(record.totalVolume).toBe(1);
+			expect(record.numTrades).toBe(1);
+		} finally {
+			await fs.rm(tmpDir, { recursive: true, force: true });
+		}
+	});
+
+	it("rotates file during flushAllInternal when date rolls over before next trade", async () => {
+		const tmpDir = await fs.mkdtemp(
+			path.join(os.tmpdir(), "scid-sink-flush-rollover-"),
+		);
+		let mockDate = "2026-10-06";
+
+		try {
+			await Effect.runPromise(
+				Effect.scoped(
+					Effect.gen(function* () {
+						const sink = yield* makeCedroScidSink({
+							baseDir: tmpDir,
+							getCurrentDate: () => mockDate,
+							partitionMode: "daily",
+							flushInterval: "1 hour",
+						});
+
+						// Day 1 trade buffered
+						yield* sink.writeLine(
+							"V:WINV26:A:235959000:206000:1:2:5:1001:0:A:0",
+						);
+
+						// Midnight passes before next trade arrives
+						mockDate = "2026-10-07";
+
+						// Periodic or manual flush executes
+						yield* sink.flush();
+
+						// Day 2 trade arrives after flush
+						yield* sink.writeLine(
+							"V:WINV26:A:090001000:206100:1:2:10:1002:0:A:0",
+						);
+						yield* sink.flush();
+					}),
+				),
+			);
+
+			const day1File = path.join(tmpDir, "WINV26", "WINV26-2026-10-06.scid");
+			const day2File = path.join(tmpDir, "WINV26", "WINV26-2026-10-07.scid");
+
+			const d1Buf = await fs.readFile(day1File);
+			const d2Buf = await fs.readFile(day2File);
+
+			expect(d1Buf.byteLength).toBe(SCID_HEADER_SIZE + SCID_RECORD_SIZE);
+			expect(d2Buf.byteLength).toBe(SCID_HEADER_SIZE + SCID_RECORD_SIZE);
+
+			const r1 = deserializeScidRecord(d1Buf, SCID_HEADER_SIZE);
+			const r2 = deserializeScidRecord(d2Buf, SCID_HEADER_SIZE);
+			expect(r1.close).toBe(206000);
+			expect(r2.close).toBe(206100);
+		} finally {
+			await fs.rm(tmpDir, { recursive: true, force: true });
+		}
+	});
 });
