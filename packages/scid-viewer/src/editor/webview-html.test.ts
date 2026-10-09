@@ -152,7 +152,11 @@ describe("Webview HTML & Messaging Protocol", () => {
 				records: [],
 			};
 
-			const html = renderWebviewHtml("WINV26-2026-10-06.scid", initMessage);
+			const html = renderWebviewHtml(
+				"WINV26-2026-10-06.scid",
+				initMessage,
+				"vscode-resource://dist/webview.js",
+			);
 
 			expect(html).toContain("<!DOCTYPE html>");
 			expect(html).toContain("WINV26-2026-10-06.scid");
@@ -163,11 +167,14 @@ describe("Webview HTML & Messaging Protocol", () => {
 			expect(html).toContain("btnTop");
 			expect(html).toContain("btnTail");
 			expect(html).toContain("jumpIndexInput");
-			expect(html).toContain("acquireVsCodeApi()");
-			expect(html).toContain("REQUEST_PAGE");
-			expect(html).toContain("PAGE_DATA");
-			expect(html).toContain("APPEND_RECORDS");
-			expect(html).toContain("TOGGLE_LIVE_TAIL");
+			expect(html).toContain(
+				'<script src="vscode-resource://dist/webview.js">',
+			);
+			expect(html).not.toContain("acquireVsCodeApi()");
+			expect(html).not.toContain("REQUEST_PAGE");
+			expect(html).not.toContain("PAGE_DATA");
+			expect(html).not.toContain("APPEND_RECORDS");
+			expect(html).not.toContain("TOGGLE_LIVE_TAIL");
 			expect(html).toContain("btnLiveTail");
 			expect(html).toContain("btnToggleTime");
 			expect(html).toContain("filterMinVol");
@@ -342,7 +349,11 @@ describe("Webview HTML & Messaging Protocol", () => {
 		});
 
 		it("streamlines toolbar by including Top and Tail buttons and excluding page buttons", () => {
-			const html = renderWebviewHtml("test.scid");
+			const html = renderWebviewHtml(
+				"test.scid",
+				undefined,
+				"vscode-resource://dist/webview.js",
+			);
 			expect(html).toContain('id="btnTop"');
 			expect(html).toContain('id="btnTail"');
 			expect(html).not.toContain('id="btnFirst"');
@@ -626,7 +637,11 @@ describe("Webview HTML & Messaging Protocol", () => {
 		});
 
 		it("renders floating follow pill in webview HTML markup and defaults Live Tail to OFF", () => {
-			const html = renderWebviewHtml("test.scid");
+			const html = renderWebviewHtml(
+				"test.scid",
+				undefined,
+				"vscode-resource://dist/webview.js",
+			);
 			expect(html).toContain('id="floatingFollowPill"');
 			expect(html).toContain('id="pillText"');
 			expect(html).toContain("Live Tail: OFF");
@@ -897,6 +912,33 @@ describe("Webview HTML & Messaging Protocol", () => {
 			expect(html).toContain('id="spacerBottom" class="spacer"');
 			expect(html).toContain("w.scrollTop = w.scrollHeight;");
 			expect(html).not.toContain("acquireVsCodeApi()");
+		});
+
+		it("emits exactly one executable external script and no inline engine", () => {
+			const scriptUri = "vscode-resource://dist/webview.js";
+			const html = renderWebviewHtml(
+				"WINV26-2026-10-06.scid",
+				undefined,
+				scriptUri,
+			);
+
+			const scriptTags = html.match(/<script\b[^>]*>/g) ?? [];
+			const withSrc = scriptTags.filter((tag) => tag.includes("src="));
+			// The only engine shipped is the external bundle.
+			expect(withSrc).toHaveLength(1);
+			expect(withSrc[0]).toContain(`src="${scriptUri}"`);
+
+			// The lone remaining executable inline script is the pin-to-bottom bootstrap.
+			const inlineExecutable = scriptTags.filter(
+				(tag) =>
+					!tag.includes("src=") && !tag.includes('type="application/json"'),
+			);
+			expect(inlineExecutable).toHaveLength(1);
+
+			// No inline engine survived the deletion.
+			expect(html).not.toContain("acquireVsCodeApi()");
+			expect(html).not.toContain("WebviewChunkCache");
+			expect(html).not.toContain("REQUEST_PAGE");
 		});
 
 		it("verifies TanStack Virtual lifecycle, scroll proxy, and coordinate downscaling", async () => {

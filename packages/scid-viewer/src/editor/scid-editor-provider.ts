@@ -25,7 +25,7 @@ export class ScidEditorProvider
 
 	constructor(
 		private readonly reader: ScidReaderShape,
-		private readonly extensionUri?: vscode.Uri,
+		private readonly extensionUri: vscode.Uri,
 	) {}
 
 	openCustomDocument(uri: vscode.Uri): ScidCustomDocument {
@@ -40,19 +40,17 @@ export class ScidEditorProvider
 		const webview = webviewPanel.webview;
 		webview.options = {
 			enableScripts: true,
-			localResourceRoots: this.extensionUri ? [this.extensionUri] : [],
+			localResourceRoots: [this.extensionUri],
 		};
 
 		const filePath = document.uri.fsPath;
 		const fileName = path.basename(filePath);
 
-		const scriptUri = this.extensionUri
-			? webview
-					.asWebviewUri(
-						vscode.Uri.joinPath(this.extensionUri, "dist", "webview.js"),
-					)
-					.toString()
-			: undefined;
+		const scriptUri = webview
+			.asWebviewUri(
+				vscode.Uri.joinPath(this.extensionUri, "dist", "webview.js"),
+			)
+			.toString();
 
 		const reader = this.reader;
 
