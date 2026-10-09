@@ -9,6 +9,7 @@ import {
 	SCID_MAGIC,
 	SCID_RECORD_SIZE,
 	type ScidHeader,
+	type ScidRecord,
 } from "tcp/scid-format";
 import {
 	InvalidScidHeaderError,
@@ -99,19 +100,19 @@ export interface ScidReaderShape {
 		filePath: string,
 	) => Effect.Effect<ScidFileSummary, ScidReaderError>;
 
+	/**
+	 * Reads a window of records. Omitting `limit` reads to the end of the file.
+	 * Returns the records alongside the file's record count and size.
+	 */
 	readonly readSlice: (
 		filePath: string,
 		offsetIndex: number,
-		limit: number,
-	) => Effect.Effect<ReadonlyArray<FormattedScidRecord>, ScidReaderError>;
-
-	readonly readAppends: (
-		filePath: string,
-		fromIndex: number,
+		limit?: number,
 	) => Effect.Effect<
 		{
 			readonly records: ReadonlyArray<FormattedScidRecord>;
 			readonly totalRecords: number;
+			readonly fileSize: number;
 		},
 		ScidReaderError
 	>;
@@ -120,6 +121,12 @@ export interface ScidReaderShape {
 export class ScidReader extends Context.Service<ScidReader, ScidReaderShape>()(
 	"ScidReader",
 ) {}
+
+interface RecordWindow {
+	readonly records: ReadonlyArray<ScidRecord>;
+	readonly totalRecords: number;
+	readonly fileSize: number;
+}
 
 const withFileHandle = <A, E>(
 	filePath: string,
@@ -138,90 +145,172 @@ const withFileHandle = <A, E>(
 		(handle) => Effect.promise(() => handle.close().catch(() => {})),
 	);
 
+/**
+ * Runs a file operation, mapping an unexpected failure to a corrupted-read
+ * error anchored at `offset` — the single place file-read failures are wrapped.
+ */
+const attemptFileOp = <A>(
+	filePath: string,
+	offset: number,
+	op: () => Promise<A>,
+): Effect.Effect<A, ScidReadCorruptedError> =>
+	Effect.tryPromise({
+		try: op,
+		catch: (e) =>
+			new ScidReadCorruptedError({
+				filePath,
+				offset,
+				reason: e instanceof Error ? e.message : String(e),
+			}),
+	});
+
+/** Byte offset of the record at `index` in the on-disk layout. */
+const recordByteOffset = (index: number): number =>
+	SCID_HEADER_SIZE + index * SCID_RECORD_SIZE;
+
+/** The complete record count and size of an open file. */
+const countRecords = (
+	handle: fs.FileHandle,
+	filePath: string,
+): Effect.Effect<
+	{ readonly totalRecords: number; readonly fileSize: number },
+	ScidReadCorruptedError
+> =>
+	Effect.gen(function* () {
+		const stat = yield* attemptFileOp(filePath, 0, () => handle.stat());
+		return {
+			totalRecords: Math.max(
+				0,
+				Math.floor((stat.size - SCID_HEADER_SIZE) / SCID_RECORD_SIZE),
+			),
+			fileSize: stat.size,
+		};
+	});
+
+/**
+ * Reads a window of raw records from an open file. Omitting `limit` reads to the
+ * end of the file. Returns the window alongside the file's record count and size.
+ */
+const readRecordWindow = (
+	handle: fs.FileHandle,
+	filePath: string,
+	fromIndex: number,
+	limit?: number,
+): Effect.Effect<RecordWindow, ScidReadCorruptedError> =>
+	Effect.gen(function* () {
+		const { totalRecords, fileSize } = yield* countRecords(handle, filePath);
+		const available = totalRecords - fromIndex;
+		if (fromIndex < 0 || available <= 0) {
+			return { records: [], totalRecords, fileSize };
+		}
+		const count = limit === undefined ? available : Math.min(limit, available);
+		if (count <= 0) {
+			return { records: [], totalRecords, fileSize };
+		}
+
+		const byteOffset = recordByteOffset(fromIndex);
+		const byteLength = count * SCID_RECORD_SIZE;
+		const buf = Buffer.alloc(byteLength);
+		const { bytesRead } = yield* attemptFileOp(filePath, byteOffset, () =>
+			handle.read(buf, 0, byteLength, byteOffset),
+		);
+		if (bytesRead < byteLength) {
+			return yield* Effect.fail(
+				new ScidReadCorruptedError({
+					filePath,
+					offset: byteOffset,
+					reason: `Expected ${byteLength} bytes for ${count} records, got ${bytesRead}`,
+				}),
+			);
+		}
+
+		const records: ScidRecord[] = [];
+		for (let i = 0; i < count; i++) {
+			records.push(deserializeScidRecord(buf, i * SCID_RECORD_SIZE));
+		}
+		return { records, totalRecords, fileSize };
+	});
+
+const formatRecord = (raw: ScidRecord, index: number): FormattedScidRecord => ({
+	index,
+	dateTimeRaw: raw.dateTime.toString(),
+	isoUtc: scDateTimeMSToIsoUtc(raw.dateTime),
+	localFormatted: scDateTimeMSToLocal(raw.dateTime),
+	open: raw.open,
+	high: raw.high,
+	low: raw.low,
+	close: raw.close,
+	price: raw.close,
+	numTrades: raw.numTrades,
+	totalVolume: raw.totalVolume,
+	bidVolume: raw.bidVolume,
+	askVolume: raw.askVolume,
+	side: determineAggressorSide(raw.bidVolume, raw.askVolume),
+});
+
+const formatRecords = (
+	records: ReadonlyArray<ScidRecord>,
+	fromIndex: number,
+): FormattedScidRecord[] =>
+	records.map((raw, i) => formatRecord(raw, fromIndex + i));
+
 const readHeaderInternal = (
 	handle: fs.FileHandle,
 	filePath: string,
 ): Effect.Effect<ScidHeader, InvalidScidHeaderError | ScidReadCorruptedError> =>
-	Effect.tryPromise({
-		try: async () => {
-			const stat = await handle.stat();
-			if (stat.size < SCID_HEADER_SIZE) {
-				throw new InvalidScidHeaderError({
+	Effect.gen(function* () {
+		const stat = yield* attemptFileOp(filePath, 0, () => handle.stat());
+		if (stat.size < SCID_HEADER_SIZE) {
+			return yield* Effect.fail(
+				new InvalidScidHeaderError({
 					filePath,
 					reason: `File size (${stat.size} bytes) is smaller than SCID header size (${SCID_HEADER_SIZE} bytes)`,
-				});
-			}
-			const buf = Buffer.alloc(SCID_HEADER_SIZE);
-			const { bytesRead } = await handle.read(buf, 0, SCID_HEADER_SIZE, 0);
-			if (bytesRead < SCID_HEADER_SIZE) {
-				throw new ScidReadCorruptedError({
+				}),
+			);
+		}
+		const buf = Buffer.alloc(SCID_HEADER_SIZE);
+		const { bytesRead } = yield* attemptFileOp(filePath, 0, () =>
+			handle.read(buf, 0, SCID_HEADER_SIZE, 0),
+		);
+		if (bytesRead < SCID_HEADER_SIZE) {
+			return yield* Effect.fail(
+				new ScidReadCorruptedError({
 					filePath,
 					offset: 0,
 					reason: `Expected ${SCID_HEADER_SIZE} bytes for header, read only ${bytesRead}`,
-				});
-			}
-			const header = deserializeScidHeader(buf);
-			if (header.fileType !== SCID_MAGIC) {
-				throw new InvalidScidHeaderError({
+				}),
+			);
+		}
+		const header = yield* Effect.try({
+			try: () => deserializeScidHeader(buf),
+			catch: (e) =>
+				new ScidReadCorruptedError({
+					filePath,
+					offset: 0,
+					reason: e instanceof Error ? e.message : String(e),
+				}),
+		});
+		if (header.fileType !== SCID_MAGIC) {
+			return yield* Effect.fail(
+				new InvalidScidHeaderError({
 					filePath,
 					reason: `Invalid SCID magic identifier: expected '${SCID_MAGIC}', got '${header.fileType}'`,
-				});
-			}
-			if (
-				header.headerSize !== SCID_HEADER_SIZE ||
-				header.recordSize !== SCID_RECORD_SIZE
-			) {
-				throw new InvalidScidHeaderError({
+				}),
+			);
+		}
+		if (
+			header.headerSize !== SCID_HEADER_SIZE ||
+			header.recordSize !== SCID_RECORD_SIZE
+		) {
+			return yield* Effect.fail(
+				new InvalidScidHeaderError({
 					filePath,
 					reason: `Invalid header metadata: HeaderSize=${header.headerSize} (expected ${SCID_HEADER_SIZE}), RecordSize=${header.recordSize} (expected ${SCID_RECORD_SIZE})`,
-				});
-			}
-			return header;
-		},
-		catch: (e) => {
-			if (
-				e instanceof InvalidScidHeaderError ||
-				e instanceof ScidReadCorruptedError
-			) {
-				return e;
-			}
-			return new ScidReadCorruptedError({
-				filePath,
-				offset: 0,
-				reason: e instanceof Error ? e.message : String(e),
-			});
-		},
+				}),
+			);
+		}
+		return header;
 	});
-
-const parseRecordsFromBuffer = (
-	buf: Buffer,
-	offsetIndex: number,
-	count: number,
-): FormattedScidRecord[] => {
-	const records: FormattedScidRecord[] = [];
-	for (let i = 0; i < count; i++) {
-		const recordOffset = i * SCID_RECORD_SIZE;
-		const rawRecord = deserializeScidRecord(buf, recordOffset);
-		const currentIndex = offsetIndex + i;
-		records.push({
-			index: currentIndex,
-			dateTimeRaw: rawRecord.dateTime.toString(),
-			isoUtc: scDateTimeMSToIsoUtc(rawRecord.dateTime),
-			localFormatted: scDateTimeMSToLocal(rawRecord.dateTime),
-			open: rawRecord.open,
-			high: rawRecord.high,
-			low: rawRecord.low,
-			close: rawRecord.close,
-			price: rawRecord.close,
-			numTrades: rawRecord.numTrades,
-			totalVolume: rawRecord.totalVolume,
-			bidVolume: rawRecord.bidVolume,
-			askVolume: rawRecord.askVolume,
-			side: determineAggressorSide(rawRecord.bidVolume, rawRecord.askVolume),
-		});
-	}
-	return records;
-};
 
 export const makeScidReader = (): ScidReaderShape => ({
 	getHeader: (filePath: string) =>
@@ -231,19 +320,8 @@ export const makeScidReader = (): ScidReaderShape => ({
 		withFileHandle(filePath, (handle) =>
 			Effect.gen(function* () {
 				yield* readHeaderInternal(handle, filePath);
-				const stat = yield* Effect.tryPromise({
-					try: () => handle.stat(),
-					catch: (e) =>
-						new ScidReadCorruptedError({
-							filePath,
-							offset: 0,
-							reason: e instanceof Error ? e.message : String(e),
-						}),
-				});
-				return Math.max(
-					0,
-					Math.floor((stat.size - SCID_HEADER_SIZE) / SCID_RECORD_SIZE),
-				);
+				const { totalRecords } = yield* countRecords(handle, filePath);
+				return totalRecords;
 			}),
 		),
 
@@ -251,18 +329,9 @@ export const makeScidReader = (): ScidReaderShape => ({
 		withFileHandle(filePath, (handle) =>
 			Effect.gen(function* () {
 				const header = yield* readHeaderInternal(handle, filePath);
-				const stat = yield* Effect.tryPromise({
-					try: () => handle.stat(),
-					catch: (e) =>
-						new ScidReadCorruptedError({
-							filePath,
-							offset: 0,
-							reason: e instanceof Error ? e.message : String(e),
-						}),
-				});
-				const totalRecords = Math.max(
-					0,
-					Math.floor((stat.size - SCID_HEADER_SIZE) / SCID_RECORD_SIZE),
+				const { totalRecords, fileSize } = yield* countRecords(
+					handle,
+					filePath,
 				);
 
 				let firstRecordDateTime: bigint | undefined;
@@ -271,44 +340,29 @@ export const makeScidReader = (): ScidReaderShape => ({
 				let lastRecordIsoUtc: string | undefined;
 
 				if (totalRecords > 0) {
-					// Read first record
-					const firstBuf = Buffer.alloc(SCID_RECORD_SIZE);
-					yield* Effect.tryPromise({
-						try: () =>
-							handle.read(firstBuf, 0, SCID_RECORD_SIZE, SCID_HEADER_SIZE),
-						catch: (e) =>
-							new ScidReadCorruptedError({
-								filePath,
-								offset: SCID_HEADER_SIZE,
-								reason: e instanceof Error ? e.message : String(e),
-							}),
-					});
-					const firstRecord = deserializeScidRecord(firstBuf, 0);
-					firstRecordDateTime = firstRecord.dateTime;
-					firstRecordIsoUtc = scDateTimeMSToIsoUtc(firstRecord.dateTime);
-
-					// Read last record
-					const lastOffset =
-						SCID_HEADER_SIZE + (totalRecords - 1) * SCID_RECORD_SIZE;
-					const lastBuf = Buffer.alloc(SCID_RECORD_SIZE);
-					yield* Effect.tryPromise({
-						try: () => handle.read(lastBuf, 0, SCID_RECORD_SIZE, lastOffset),
-						catch: (e) =>
-							new ScidReadCorruptedError({
-								filePath,
-								offset: lastOffset,
-								reason: e instanceof Error ? e.message : String(e),
-							}),
-					});
-					const lastRecord = deserializeScidRecord(lastBuf, 0);
-					lastRecordDateTime = lastRecord.dateTime;
-					lastRecordIsoUtc = scDateTimeMSToIsoUtc(lastRecord.dateTime);
+					const head = yield* readRecordWindow(handle, filePath, 0, 1);
+					const tail = yield* readRecordWindow(
+						handle,
+						filePath,
+						totalRecords - 1,
+						1,
+					);
+					const firstRecord = head.records[0];
+					const lastRecord = tail.records[0];
+					if (firstRecord) {
+						firstRecordDateTime = firstRecord.dateTime;
+						firstRecordIsoUtc = scDateTimeMSToIsoUtc(firstRecord.dateTime);
+					}
+					if (lastRecord) {
+						lastRecordDateTime = lastRecord.dateTime;
+						lastRecordIsoUtc = scDateTimeMSToIsoUtc(lastRecord.dateTime);
+					}
 				}
 
 				return {
 					header,
 					totalRecords,
-					fileSize: stat.size,
+					fileSize,
 					firstRecordDateTime,
 					lastRecordDateTime,
 					firstRecordIsoUtc,
@@ -317,107 +371,21 @@ export const makeScidReader = (): ScidReaderShape => ({
 			}),
 		),
 
-	readSlice: (filePath: string, offsetIndex: number, limit: number) =>
+	readSlice: (filePath: string, offsetIndex: number, limit?: number) =>
 		withFileHandle(filePath, (handle) =>
 			Effect.gen(function* () {
 				yield* readHeaderInternal(handle, filePath);
-				const stat = yield* Effect.tryPromise({
-					try: () => handle.stat(),
-					catch: (e) =>
-						new ScidReadCorruptedError({
-							filePath,
-							offset: 0,
-							reason: e instanceof Error ? e.message : String(e),
-						}),
-				});
-
-				const totalRecords = Math.max(
-					0,
-					Math.floor((stat.size - SCID_HEADER_SIZE) / SCID_RECORD_SIZE),
+				const { records, totalRecords, fileSize } = yield* readRecordWindow(
+					handle,
+					filePath,
+					offsetIndex,
+					limit,
 				);
-
-				if (offsetIndex < 0 || offsetIndex >= totalRecords || limit <= 0) {
-					return [];
-				}
-
-				const actualCount = Math.min(limit, totalRecords - offsetIndex);
-				const byteOffset = SCID_HEADER_SIZE + offsetIndex * SCID_RECORD_SIZE;
-				const byteLength = actualCount * SCID_RECORD_SIZE;
-				const buf = Buffer.alloc(byteLength);
-
-				const { bytesRead } = yield* Effect.tryPromise({
-					try: () => handle.read(buf, 0, byteLength, byteOffset),
-					catch: (e) =>
-						new ScidReadCorruptedError({
-							filePath,
-							offset: byteOffset,
-							reason: e instanceof Error ? e.message : String(e),
-						}),
-				});
-
-				if (bytesRead < byteLength) {
-					yield* Effect.fail(
-						new ScidReadCorruptedError({
-							filePath,
-							offset: byteOffset,
-							reason: `Expected ${byteLength} bytes for ${actualCount} records, got ${bytesRead}`,
-						}),
-					);
-				}
-
-				return parseRecordsFromBuffer(buf, offsetIndex, actualCount);
-			}),
-		),
-
-	readAppends: (filePath: string, fromIndex: number) =>
-		withFileHandle(filePath, (handle) =>
-			Effect.gen(function* () {
-				const stat = yield* Effect.tryPromise({
-					try: () => handle.stat(),
-					catch: (e) =>
-						new ScidReadCorruptedError({
-							filePath,
-							offset: 0,
-							reason: e instanceof Error ? e.message : String(e),
-						}),
-				});
-
-				const totalRecords = Math.max(
-					0,
-					Math.floor((stat.size - SCID_HEADER_SIZE) / SCID_RECORD_SIZE),
-				);
-
-				if (totalRecords <= fromIndex || fromIndex < 0) {
-					return { records: [], totalRecords };
-				}
-
-				const actualCount = totalRecords - fromIndex;
-				const byteOffset = SCID_HEADER_SIZE + fromIndex * SCID_RECORD_SIZE;
-				const byteLength = actualCount * SCID_RECORD_SIZE;
-				const buf = Buffer.alloc(byteLength);
-
-				const { bytesRead } = yield* Effect.tryPromise({
-					try: () => handle.read(buf, 0, byteLength, byteOffset),
-					catch: (e) =>
-						new ScidReadCorruptedError({
-							filePath,
-							offset: byteOffset,
-							reason: e instanceof Error ? e.message : String(e),
-						}),
-				});
-
-				if (bytesRead < byteLength) {
-					yield* Effect.fail(
-						new ScidReadCorruptedError({
-							filePath,
-							offset: byteOffset,
-							reason: `Expected ${byteLength} bytes for ${actualCount} records, got ${bytesRead}`,
-						}),
-					);
-				}
-
-				const records = parseRecordsFromBuffer(buf, fromIndex, actualCount);
-				return { records, totalRecords };
+				return {
+					records: formatRecords(records, offsetIndex),
+					totalRecords,
+					fileSize,
+				};
 			}),
 		),
 });

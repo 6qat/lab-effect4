@@ -531,7 +531,7 @@ describe("Virtual Scroll Engine", () => {
 
 				// Head slice
 				const t0 = performance.now();
-				const headSlice = yield* reader.readSlice(fixturePath, 0, 50);
+				const headSlice = (yield* reader.readSlice(fixturePath, 0, 50)).records;
 				const headDur = performance.now() - t0;
 				expect(headDur).toBeLessThan(1000);
 				expect(headSlice.length).toBe(50);
@@ -540,7 +540,8 @@ describe("Virtual Scroll Engine", () => {
 				// Middle slice
 				const midIdx = Math.floor(summary.totalRecords / 2);
 				const t1 = performance.now();
-				const midSlice = yield* reader.readSlice(fixturePath, midIdx, 50);
+				const midSlice = (yield* reader.readSlice(fixturePath, midIdx, 50))
+					.records;
 				const midDur = performance.now() - t1;
 				expect(midDur).toBeLessThan(1000);
 				expect(midSlice.length).toBe(50);
@@ -549,7 +550,11 @@ describe("Virtual Scroll Engine", () => {
 				// Tail slice
 				const tailIdx = summary.totalRecords - 50;
 				const t2 = performance.now();
-				const tailSlice = yield* reader.readSlice(fixturePath, tailIdx, 50);
+				const { records: tailSlice } = yield* reader.readSlice(
+					fixturePath,
+					tailIdx,
+					50,
+				);
 				const tailDur = performance.now() - t2;
 				expect(tailDur).toBeLessThan(1000);
 				expect(tailSlice.length).toBe(50);

@@ -187,12 +187,14 @@ describe("ScidReader Effect Service", () => {
 				return yield* reader.readSlice(filePath, 0, 10);
 			}).pipe(Effect.provide(ScidReaderLive));
 
-			const slice = await Effect.runPromise(program);
-			expect(slice.length).toBe(10);
-			expect(slice[0]?.index).toBe(0);
-			expect(slice[0]?.open).toBe(125000);
-			expect(slice[0]?.side).toBe("BUY");
-			expect(slice[9]?.index).toBe(9);
+			const result = await Effect.runPromise(program);
+			expect(result.records.length).toBe(10);
+			expect(result.records[0]?.index).toBe(0);
+			expect(result.records[0]?.open).toBe(125000);
+			expect(result.records[0]?.side).toBe("BUY");
+			expect(result.records[9]?.index).toBe(9);
+			expect(result.totalRecords).toBe(50);
+			expect(result.fileSize).toBe(2056);
 		});
 
 		it("slices arbitrary middle window instantaneously", async () => {
@@ -202,11 +204,12 @@ describe("ScidReader Effect Service", () => {
 				return yield* reader.readSlice(filePath, 25, 5);
 			}).pipe(Effect.provide(ScidReaderLive));
 
-			const slice = await Effect.runPromise(program);
-			expect(slice.length).toBe(5);
-			expect(slice[0]?.index).toBe(25);
-			expect(slice[0]?.open).toBe(125000 + 25 * 5);
-			expect(slice[4]?.index).toBe(29);
+			const result = await Effect.runPromise(program);
+			expect(result.records.length).toBe(5);
+			expect(result.records[0]?.index).toBe(25);
+			expect(result.records[0]?.open).toBe(125000 + 25 * 5);
+			expect(result.records[4]?.index).toBe(29);
+			expect(result.totalRecords).toBe(100);
 		});
 
 		it("returns empty array when offset exceeds total records", async () => {
@@ -216,8 +219,9 @@ describe("ScidReader Effect Service", () => {
 				return yield* reader.readSlice(filePath, 50, 10);
 			}).pipe(Effect.provide(ScidReaderLive));
 
-			const slice = await Effect.runPromise(program);
-			expect(slice).toEqual([]);
+			const result = await Effect.runPromise(program);
+			expect(result.records).toEqual([]);
+			expect(result.totalRecords).toBe(20);
 		});
 
 		it("clamps limit when slice extends past end of file", async () => {
@@ -227,24 +231,25 @@ describe("ScidReader Effect Service", () => {
 				return yield* reader.readSlice(filePath, 20, 100);
 			}).pipe(Effect.provide(ScidReaderLive));
 
-			const slice = await Effect.runPromise(program);
-			expect(slice.length).toBe(5); // records 20, 21, 22, 23, 24
-			expect(slice[0]?.index).toBe(20);
-			expect(slice[4]?.index).toBe(24);
+			const result = await Effect.runPromise(program);
+			expect(result.records.length).toBe(5); // records 20, 21, 22, 23, 24
+			expect(result.records[0]?.index).toBe(20);
+			expect(result.records[4]?.index).toBe(24);
 		});
 	});
 
-	describe("Append Slicing (readAppends)", () => {
+	describe("Read to end of file (readSlice without limit)", () => {
 		it("returns empty when fromIndex equals or exceeds totalRecords", async () => {
 			const filePath = await createTempScidFile(10);
 			const program = Effect.gen(function* () {
 				const reader = yield* ScidReader;
-				return yield* reader.readAppends(filePath, 10);
+				return yield* reader.readSlice(filePath, 10);
 			}).pipe(Effect.provide(ScidReaderLive));
 
 			const result = await Effect.runPromise(program);
 			expect(result.totalRecords).toBe(10);
 			expect(result.records).toEqual([]);
+			expect(result.fileSize).toBe(456);
 		});
 
 		it("reads newly appended records starting from fromIndex", async () => {
@@ -273,7 +278,7 @@ describe("ScidReader Effect Service", () => {
 
 			const program = Effect.gen(function* () {
 				const reader = yield* ScidReader;
-				return yield* reader.readAppends(filePath, 10);
+				return yield* reader.readSlice(filePath, 10);
 			}).pipe(Effect.provide(ScidReaderLive));
 
 			const result = await Effect.runPromise(program);
@@ -282,6 +287,7 @@ describe("ScidReader Effect Service", () => {
 			expect(result.records[0]?.index).toBe(10);
 			expect(result.records[0]?.open).toBe(125050);
 			expect(result.records[2]?.index).toBe(12);
+			expect(result.fileSize).toBe(576);
 		});
 	});
 

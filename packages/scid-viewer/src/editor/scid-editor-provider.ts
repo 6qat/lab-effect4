@@ -62,7 +62,7 @@ export class ScidEditorProvider
 			lastKnownRecordCount = summary.totalRecords;
 			const pageSize = 500;
 			const initialOffset = Math.max(0, summary.totalRecords - pageSize);
-			const records = yield* reader.readSlice(
+			const { records } = yield* reader.readSlice(
 				filePath,
 				initialOffset,
 				pageSize,
@@ -126,12 +126,13 @@ export class ScidEditorProvider
 				while (true) {
 					yield* Effect.sleep("250 millis");
 					const appendResult = yield* reader
-						.readAppends(filePath, lastKnownRecordCount)
+						.readSlice(filePath, lastKnownRecordCount)
 						.pipe(
 							Effect.catch(() =>
 								Effect.succeed({
 									records: [],
 									totalRecords: lastKnownRecordCount,
+									fileSize: 0,
 								}),
 							),
 						);
@@ -144,7 +145,7 @@ export class ScidEditorProvider
 							type: "APPEND_RECORDS",
 							records: appendResult.records,
 							totalRecords: appendResult.totalRecords,
-							fileSize: 56 + appendResult.totalRecords * 40,
+							fileSize: appendResult.fileSize,
 							lastRecordIsoUtc: lastRec?.isoUtc,
 						};
 						yield* Effect.promise(() => webview.postMessage(appendMsg));
@@ -162,7 +163,7 @@ export class ScidEditorProvider
 					if (totalRecords > lastKnownRecordCount) {
 						lastKnownRecordCount = totalRecords;
 					}
-					const records = yield* reader.readSlice(
+					const { records } = yield* reader.readSlice(
 						filePath,
 						message.offsetIndex,
 						message.pageSize,
