@@ -38,59 +38,6 @@ export const calculateVirtualScrollMetrics = (
 	};
 };
 
-export const scrollTopToIndex = (
-	scrollTop: number,
-	viewportHeight: number,
-	totalRecords: number,
-	rowHeight = ROW_HEIGHT,
-	maxContainerHeight = MAX_CONTAINER_HEIGHT,
-): number => {
-	if (totalRecords <= 0) return 0;
-	const visibleRows = Math.ceil(viewportHeight / rowHeight);
-	const maxStartIndex = Math.max(0, totalRecords - visibleRows);
-	const metrics = calculateVirtualScrollMetrics(
-		totalRecords,
-		rowHeight,
-		maxContainerHeight,
-	);
-	const maxScrollTop = Math.max(1, metrics.totalVirtualHeight - viewportHeight);
-	const clampedScrollTop = Math.max(0, Math.min(maxScrollTop, scrollTop));
-
-	if (!metrics.isScaled) {
-		return Math.min(maxStartIndex, Math.floor(clampedScrollTop / rowHeight));
-	}
-	return Math.min(
-		maxStartIndex,
-		Math.round((clampedScrollTop / maxScrollTop) * maxStartIndex),
-	);
-};
-
-export const indexToScrollTop = (
-	index: number,
-	viewportHeight: number,
-	totalRecords: number,
-	rowHeight = ROW_HEIGHT,
-	maxContainerHeight = MAX_CONTAINER_HEIGHT,
-): number => {
-	if (totalRecords <= 0) return 0;
-	const visibleRows = Math.ceil(viewportHeight / rowHeight);
-	const maxStartIndex = Math.max(0, totalRecords - visibleRows);
-	const clampedIndex = Math.max(0, Math.min(maxStartIndex, index));
-	const metrics = calculateVirtualScrollMetrics(
-		totalRecords,
-		rowHeight,
-		maxContainerHeight,
-	);
-	const maxScrollTop = Math.max(0, metrics.totalVirtualHeight - viewportHeight);
-
-	if (!metrics.isScaled) {
-		return clampedIndex * rowHeight;
-	}
-	return maxStartIndex === 0
-		? 0
-		: Math.round((clampedIndex / maxStartIndex) * maxScrollTop);
-};
-
 export const calculateSpacerHeights = (
 	startIndex: number,
 	renderedCount: number,
@@ -338,38 +285,6 @@ export interface AppendFollowResult {
 	readonly nextState: FollowScrollState;
 	readonly shouldSnapToBottom: boolean;
 }
-
-export const handleFollowAppend = (
-	currentState: FollowScrollState,
-	newRecordCount: number,
-): AppendFollowResult => {
-	if (!currentState.liveTail) {
-		return {
-			nextState: currentState,
-			shouldSnapToBottom: false,
-		};
-	}
-
-	if (currentState.isFollowing) {
-		return {
-			nextState: {
-				liveTail: true,
-				isFollowing: true,
-				unreadCount: 0,
-			},
-			shouldSnapToBottom: true,
-		};
-	}
-
-	return {
-		nextState: {
-			liveTail: true,
-			isFollowing: false,
-			unreadCount: currentState.unreadCount + newRecordCount,
-		},
-		shouldSnapToBottom: false,
-	};
-};
 
 export const resumeFollow = (
 	_currentState: FollowScrollState,

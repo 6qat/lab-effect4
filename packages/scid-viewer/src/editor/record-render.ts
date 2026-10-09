@@ -8,26 +8,6 @@ export const formatFileSize = (bytes: number): string => {
 	return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 };
 
-export const renderSkeletonRows = (
-	startIndex: number,
-	count: number,
-): string => {
-	const rows: string[] = [];
-	for (let i = 0; i < count; i++) {
-		const idx = startIndex + i;
-		rows.push(`<tr>
-			<td class="col-index">#${idx.toLocaleString()}</td>
-			<td class="col-time skeleton-cell"><span class="skeleton-bar" style="width: 140px;"></span></td>
-			<td class="col-price skeleton-cell"><span class="skeleton-bar" style="width: 60px;"></span></td>
-			<td class="col-qty skeleton-cell"><span class="skeleton-bar" style="width: 40px;"></span></td>
-			<td class="col-side skeleton-cell"><span class="skeleton-bar" style="width: 30px;"></span></td>
-			<td class="col-volume skeleton-cell"><span class="skeleton-bar" style="width: 50px;"></span></td>
-			<td class="col-volume skeleton-cell"><span class="skeleton-bar" style="width: 50px;"></span></td>
-		</tr>`);
-	}
-	return rows.join("\n");
-};
-
 export interface PriceFilter {
 	readonly op: ">=" | "<=" | ">" | "<" | "=";
 	readonly val: number;

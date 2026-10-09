@@ -3,7 +3,6 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { Effect } from "effect";
 import { ScidReader, ScidReaderLive } from "../reader/scid-reader.js";
-import { renderSkeletonRows } from "./record-render.js";
 import {
 	CHUNK_SIZE,
 	calculatePrefetchChunkIndices,
@@ -11,9 +10,7 @@ import {
 	calculateVirtualScrollMetrics,
 	FOLLOW_THRESHOLD_PX,
 	formatUnreadPillText,
-	handleFollowAppend,
 	handleFollowScroll,
-	indexToScrollTop,
 	isScrolledToBottom,
 	LruChunkCache,
 	MAX_CACHED_CHUNKS,
@@ -22,7 +19,6 @@ import {
 	PREFETCH_MARGIN,
 	ROW_HEIGHT,
 	resumeFollow,
-	scrollTopToIndex,
 } from "./virtual-scroll.js";
 import { renderWebviewHtml } from "./webview-html.js";
 
@@ -60,44 +56,6 @@ describe("Virtual Scroll Engine", () => {
 			);
 		});
 
-		it("maps scrollTop to continuous record indices accurately without scaling", () => {
-			const viewportHeight = 560; // 20 visible rows
-			const totalRecords = 1000;
-			expect(scrollTopToIndex(0, viewportHeight, totalRecords)).toBe(0);
-			expect(scrollTopToIndex(280, viewportHeight, totalRecords)).toBe(10);
-			const maxScroll = 1000 * ROW_HEIGHT - viewportHeight;
-			expect(scrollTopToIndex(maxScroll, viewportHeight, totalRecords)).toBe(
-				1000 - 20,
-			);
-		});
-
-		it("maps scrollTop to record indices with virtual ratio for scaled massive files", () => {
-			const viewportHeight = 700; // 25 visible rows
-			const totalRecords = 5_000_000;
-			expect(scrollTopToIndex(0, viewportHeight, totalRecords)).toBe(0);
-			const maxScroll = MAX_CONTAINER_HEIGHT - viewportHeight;
-			// At half scroll, should map to approximately half total records
-			const midIndex = scrollTopToIndex(
-				maxScroll / 2,
-				viewportHeight,
-				totalRecords,
-			);
-			expect(midIndex).toBeGreaterThan(2_400_000);
-			expect(midIndex).toBeLessThan(2_600_000);
-			// At max scroll, maps to end
-			expect(scrollTopToIndex(maxScroll, viewportHeight, totalRecords)).toBe(
-				totalRecords - 25,
-			);
-		});
-
-		it("maps index to scrollTop bidirectionally", () => {
-			const viewportHeight = 560;
-			const totalRecords = 1000;
-			const scroll = indexToScrollTop(100, viewportHeight, totalRecords);
-			expect(scroll).toBe(100 * ROW_HEIGHT);
-			expect(scrollTopToIndex(scroll, viewportHeight, totalRecords)).toBe(100);
-		});
-
 		it("calculates top and bottom spacer heights correctly", () => {
 			const totalRecords = 1000;
 			const startIndex = 100;
@@ -109,14 +67,6 @@ describe("Virtual Scroll Engine", () => {
 			);
 			expect(spacers.topSpacerHeight).toBe(100 * ROW_HEIGHT);
 			expect(spacers.bottomSpacerHeight).toBe((1000 - 150) * ROW_HEIGHT);
-		});
-
-		it("renders skeleton placeholder rows for unloaded ranges", () => {
-			const html = renderSkeletonRows(1000, 3);
-			expect(html).toContain('col-index">#1,000</td>');
-			expect(html).toContain('col-index">#1,001</td>');
-			expect(html).toContain('col-index">#1,002</td>');
-			expect(html).toContain("skeleton-cell");
 		});
 
 		it("streamlines toolbar by including Top and Tail buttons and excluding page buttons", () => {
@@ -359,34 +309,6 @@ describe("Virtual Scroll Engine", () => {
 			expect(nextState.unreadCount).toBe(0);
 		});
 
-		it("accumulates unread count and suppresses snap-to-bottom on APPEND_RECORDS when detached", () => {
-			const detachedState = {
-				liveTail: true,
-				isFollowing: false,
-				unreadCount: 5,
-			};
-			const result = handleFollowAppend(detachedState, 15);
-
-			expect(result.shouldSnapToBottom).toBe(false);
-			expect(result.nextState.liveTail).toBe(true);
-			expect(result.nextState.isFollowing).toBe(false);
-			expect(result.nextState.unreadCount).toBe(20);
-		});
-
-		it("snaps to bottom and keeps unread count 0 on APPEND_RECORDS when actively following", () => {
-			const followingState = {
-				liveTail: true,
-				isFollowing: true,
-				unreadCount: 0,
-			};
-			const result = handleFollowAppend(followingState, 15);
-
-			expect(result.shouldSnapToBottom).toBe(true);
-			expect(result.nextState.liveTail).toBe(true);
-			expect(result.nextState.isFollowing).toBe(true);
-			expect(result.nextState.unreadCount).toBe(0);
-		});
-
 		it("resumes follow mode and clears unread count on resumeFollow()", () => {
 			const detachedState = {
 				liveTail: true,
@@ -416,66 +338,6 @@ describe("Virtual Scroll Engine", () => {
 			expect(html).toContain('id="floatingFollowPill"');
 			expect(html).toContain('id="pillText"');
 			expect(html).toContain("Live Tail: OFF");
-		});
-	});
-
-	describe("Instant Teleportation & Jump Navigation", () => {
-		it("snaps to index 0 on Top navigation", () => {
-			const totalRecords = 5_166_909;
-			const viewportHeight = 600;
-			const targetScroll = indexToScrollTop(0, viewportHeight, totalRecords);
-			expect(targetScroll).toBe(0);
-			expect(scrollTopToIndex(targetScroll, viewportHeight, totalRecords)).toBe(
-				0,
-			);
-		});
-
-		it("snaps to maximum scroll offset on Tail navigation", () => {
-			const totalRecords = 5_166_909;
-			const viewportHeight = 600;
-			const metrics = calculateVirtualScrollMetrics(totalRecords);
-			const maxScrollTop = Math.max(
-				0,
-				metrics.totalVirtualHeight - viewportHeight,
-			);
-			const targetIndex = scrollTopToIndex(
-				maxScrollTop,
-				viewportHeight,
-				totalRecords,
-			);
-			const visibleRows = Math.ceil(viewportHeight / ROW_HEIGHT);
-			expect(targetIndex).toBe(totalRecords - visibleRows);
-		});
-
-		it("teleports to arbitrary jump indices with coordinate clamping", () => {
-			const totalRecords = 5_166_909;
-			const viewportHeight = 600;
-
-			// Negative target clamps to 0
-			expect(indexToScrollTop(-100, viewportHeight, totalRecords)).toBe(0);
-
-			// Target beyond total records clamps to max index
-			const maxScrollTop =
-				calculateVirtualScrollMetrics(totalRecords).totalVirtualHeight -
-				viewportHeight;
-			expect(indexToScrollTop(10_000_000, viewportHeight, totalRecords)).toBe(
-				maxScrollTop,
-			);
-
-			// Middle jump (e.g. index 2,500,000) calculates scaled offset
-			const midScroll = indexToScrollTop(
-				2_500_000,
-				viewportHeight,
-				totalRecords,
-			);
-			expect(midScroll).toBeGreaterThan(0);
-			expect(midScroll).toBeLessThan(maxScrollTop);
-			const roundTripIndex = scrollTopToIndex(
-				midScroll,
-				viewportHeight,
-				totalRecords,
-			);
-			expect(Math.abs(roundTripIndex - 2_500_000)).toBeLessThan(5);
 		});
 	});
 

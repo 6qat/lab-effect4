@@ -22,9 +22,11 @@ import {
 	calculateVirtualScrollMetrics,
 	FOLLOW_THRESHOLD_PX,
 	formatUnreadPillText,
-	MAX_CACHED_CHUNKS,
+	handleFollowScroll,
+	LruChunkCache,
 	OVERSCAN_ROWS,
 	ROW_HEIGHT,
+	resumeFollow,
 } from "../virtual-scroll.js";
 
 declare function acquireVsCodeApi(): {
@@ -41,107 +43,6 @@ interface WebviewState {
 	unreadCount: number;
 	minVolume: number;
 	priceFilter: PriceFilter | null;
-}
-
-class WebviewChunkCache {
-	private readonly chunks = new Map<
-		number,
-		(FormattedScidRecord | undefined)[]
-	>();
-	constructor(
-		private readonly maxChunks = MAX_CACHED_CHUNKS,
-		private readonly chunkSize = CHUNK_SIZE,
-	) {}
-
-	get size(): number {
-		return this.chunks.size;
-	}
-
-	has(chunkIndex: number): boolean {
-		return this.chunks.has(chunkIndex);
-	}
-
-	get(chunkIndex: number): (FormattedScidRecord | undefined)[] | undefined {
-		const chunk = this.chunks.get(chunkIndex);
-		if (chunk === undefined) return undefined;
-		this.chunks.delete(chunkIndex);
-		this.chunks.set(chunkIndex, chunk);
-		return chunk;
-	}
-
-	put(chunkIndex: number, records: (FormattedScidRecord | undefined)[]): void {
-		if (this.chunks.has(chunkIndex)) {
-			this.chunks.delete(chunkIndex);
-		} else if (this.chunks.size >= this.maxChunks) {
-			const oldestKey = this.chunks.keys().next().value;
-			if (oldestKey !== undefined) this.chunks.delete(oldestKey);
-		}
-		this.chunks.set(chunkIndex, records);
-	}
-
-	putRecords(records: ReadonlyArray<FormattedScidRecord>): void {
-		for (let i = 0; i < records.length; i++) {
-			const rec = records[i];
-			if (!rec) continue;
-			const cIdx = Math.floor(rec.index / this.chunkSize);
-			let chunk = this.chunks.get(cIdx);
-			if (!chunk) {
-				if (this.chunks.size >= this.maxChunks) {
-					const oldestKey = this.chunks.keys().next().value;
-					if (oldestKey !== undefined) this.chunks.delete(oldestKey);
-				}
-				chunk = new Array(this.chunkSize);
-				this.chunks.set(cIdx, chunk);
-			}
-			const offset = rec.index - cIdx * this.chunkSize;
-			chunk[offset] = rec;
-		}
-	}
-
-	isComplete(chunkIndex: number, totalRecords: number): boolean {
-		const chunk = this.chunks.get(chunkIndex);
-		if (!chunk) return false;
-		const startIdx = chunkIndex * this.chunkSize;
-		if (startIdx >= totalRecords) return true;
-		const endIdx = Math.min(totalRecords, startIdx + this.chunkSize);
-		for (let idx = startIdx; idx < endIdx; idx++) {
-			const offset = idx - startIdx;
-			if (chunk[offset] === undefined) return false;
-		}
-		return true;
-	}
-
-	getSlice(
-		startIndex: number,
-		count: number,
-	): {
-		records: (FormattedScidRecord | undefined)[];
-		missingChunkIndices: number[];
-	} {
-		const records: (FormattedScidRecord | undefined)[] = [];
-		const missing = new Set<number>();
-		for (let i = 0; i < count; i++) {
-			const idx = startIndex + i;
-			const cIdx = Math.floor(idx / this.chunkSize);
-			const chunk = this.get(cIdx);
-			if (!chunk) {
-				missing.add(cIdx);
-				records.push(undefined);
-			} else {
-				const offset = idx - cIdx * this.chunkSize;
-				const rec = chunk[offset];
-				if (rec === undefined) {
-					missing.add(cIdx);
-				}
-				records.push(rec);
-			}
-		}
-		return { records, missingChunkIndices: Array.from(missing) };
-	}
-
-	clear(): void {
-		this.chunks.clear();
-	}
 }
 
 // Bootstrap Webview
@@ -219,7 +120,7 @@ class WebviewChunkCache {
 		priceFilter: null,
 	};
 
-	const cache = new WebviewChunkCache();
+	const cache = new LruChunkCache<FormattedScidRecord>();
 	const inFlightChunks = new Set<number>();
 
 	function requestChunk(chunkIndex: number) {
@@ -257,33 +158,20 @@ class WebviewChunkCache {
 
 	function checkFollowScroll() {
 		if (!state.liveTail || !tableWrapper) return;
-		const metrics = calculateVirtualScrollMetrics(state.totalRecords);
-		const maxScroll = Math.max(
-			0,
-			metrics.totalVirtualHeight - tableWrapper.clientHeight,
+		const next = handleFollowScroll(
+			state,
+			tableWrapper.scrollTop,
+			tableWrapper.clientHeight,
+			calculateVirtualScrollMetrics(state.totalRecords).totalVirtualHeight,
+			FOLLOW_THRESHOLD_PX,
 		);
-		if (maxScroll <= 0) {
-			if (!state.isFollowing || state.unreadCount > 0) {
-				state.isFollowing = true;
-				state.unreadCount = 0;
-				updateFollowPill();
-			}
-			return;
-		}
-		const distanceFromBottom = Math.max(0, maxScroll - tableWrapper.scrollTop);
-		const atBottom = distanceFromBottom <= FOLLOW_THRESHOLD_PX;
-
-		if (atBottom) {
-			if (!state.isFollowing || state.unreadCount > 0) {
-				state.isFollowing = true;
-				state.unreadCount = 0;
-				updateFollowPill();
-			}
-		} else {
-			if (state.isFollowing) {
-				state.isFollowing = false;
-				updateFollowPill();
-			}
+		if (
+			next.isFollowing !== state.isFollowing ||
+			next.unreadCount !== state.unreadCount
+		) {
+			state.isFollowing = next.isFollowing;
+			state.unreadCount = next.unreadCount;
+			updateFollowPill();
 		}
 	}
 
@@ -580,8 +468,7 @@ class WebviewChunkCache {
 	});
 
 	floatingFollowPill?.addEventListener("click", () => {
-		state.isFollowing = true;
-		state.unreadCount = 0;
+		Object.assign(state, resumeFollow(state));
 		updateFollowPill();
 		scrollToBottom();
 	});
