@@ -141,3 +141,9 @@ Use the default canonical triage labels: `needs-triage`, `needs-info`, `ready-fo
 ### Domain docs
 
 The TCP domain uses root-level `GLOSSARY.md` and `docs/adr/`; the `lab` workspace contains learning examples without a separate business context. Read `docs/agents/domain.md` when exploring domain terminology or architectural decisions.
+
+---
+
+## 6. HTML Generation & UI Styling
+
+- **Dark Theme Mandatory**: When generating any standalone HTML pages, reports, diagrams, or webviews, always default to a dark theme (e.g. `#0b0f19`, `bg-slate-950`, `bg-slate-900`, light foreground text, dark card surfaces). Never generate light-themed HTML by default.

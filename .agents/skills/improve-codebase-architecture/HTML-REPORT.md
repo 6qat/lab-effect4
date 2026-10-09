@@ -23,7 +23,7 @@ The architectural review is rendered as a single self-contained HTML file in the
       .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
     </style>
   </head>
-  <body class="bg-stone-50 text-slate-900 font-sans">
+  <body class="bg-slate-950 text-slate-100 font-sans">
     <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
       <header>...</header>
       <section id="candidates" class="space-y-10">...</section>
@@ -93,6 +93,7 @@ Before: a tree of function calls rendered as nested boxes. After: the same tree 
 
 ## Style guidance
 
+- **Always dark theme**: background `bg-slate-950`, cards `bg-slate-900` / `border-slate-800`, text `text-slate-100` / `text-slate-300`. Never light backgrounds.
 - Lean editorial, not corporate-dashboard. Generous whitespace. Serif optional for headings (`font-serif` works well with stone/slate).
 - Colour sparingly: one accent (emerald or indigo) plus red for leakage and amber for warnings.
 - Keep diagrams ~320px tall so before/after sits comfortably side by side without scrolling.
