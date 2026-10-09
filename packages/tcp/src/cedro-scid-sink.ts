@@ -189,21 +189,34 @@ export const makeCedroScidSink = (
 				);
 			});
 
+		/**
+		 * Rotates a ticker onto the current day's file when the date has advanced
+		 * in daily mode: flush the old day's buffer to its own path, then move to
+		 * the new path and re-read its last timestamp. A no-op otherwise.
+		 */
+		const rolloverTicker = (
+			state: TickerState,
+			ticker: string,
+			currentDate: string,
+		): Effect.Effect<void, never> =>
+			Effect.gen(function* () {
+				if (partitionMode !== "daily" || state.currentDate === currentDate) {
+					return;
+				}
+				yield* flushTickerInternal(state);
+				const newFilePath = resolvePath(ticker, currentDate);
+				state.filePath = newFilePath;
+				state.currentDate = currentDate;
+				state.lastTimestamp = yield* Effect.promise(() =>
+					getLastTimestampFromFile(newFilePath),
+				);
+			});
+
 		const flushAllInternal = Effect.gen(function* () {
 			const currentDate = getCurrentDate();
 			for (const [ticker, state] of tickers.entries()) {
-				if (partitionMode === "daily" && state.currentDate !== currentDate) {
-					// Date rollover detected: flush previous day's buffer and rotate path
-					yield* flushTickerInternal(state);
-					const newFilePath = resolvePath(ticker, currentDate);
-					state.filePath = newFilePath;
-					state.currentDate = currentDate;
-					state.lastTimestamp = yield* Effect.promise(() =>
-						getLastTimestampFromFile(newFilePath),
-					);
-				} else {
-					yield* flushTickerInternal(state);
-				}
+				yield* rolloverTicker(state, ticker, currentDate);
+				yield* flushTickerInternal(state);
 			}
 		});
 
@@ -215,22 +228,7 @@ export const makeCedroScidSink = (
 				.withPermit(
 					Effect.gen(function* () {
 						manualDateOverride = newDate;
-						if (partitionMode === "daily") {
-							for (const [ticker, state] of tickers.entries()) {
-								if (state.currentDate !== newDate) {
-									yield* flushTickerInternal(state);
-									const newFilePath = resolvePath(ticker, newDate);
-									state.filePath = newFilePath;
-									state.currentDate = newDate;
-									state.lastTimestamp = yield* Effect.promise(() =>
-										getLastTimestampFromFile(newFilePath),
-									);
-								}
-							}
-						} else {
-							// In monolithic mode, flush existing records and keep appending
-							yield* flushAllInternal;
-						}
+						yield* flushAllInternal;
 					}),
 				)
 				.pipe(Effect.uninterruptible);
@@ -251,19 +249,7 @@ export const makeCedroScidSink = (
 
 						if (existingState) {
 							state = existingState;
-							if (
-								partitionMode === "daily" &&
-								state.currentDate !== currentDate
-							) {
-								// Date rollover detected: flush previous day's buffer and rotate path
-								yield* flushTickerInternal(state);
-								const newFilePath = resolvePath(trade.ticker, currentDate);
-								state.filePath = newFilePath;
-								state.currentDate = currentDate;
-								state.lastTimestamp = yield* Effect.promise(() =>
-									getLastTimestampFromFile(newFilePath),
-								);
-							}
+							yield* rolloverTicker(state, trade.ticker, currentDate);
 						} else {
 							const filePath = resolvePath(trade.ticker, currentDate);
 							const lastTimestamp = yield* Effect.promise(() =>
