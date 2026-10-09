@@ -7,6 +7,13 @@ export class CedroProtocolError extends Data.TaggedError("CedroProtocolError")<{
 	readonly cause?: unknown;
 }> {}
 
+/** Unusable local credentials. Fatal: the supervisor never retries this. */
+export class CedroConfigurationError extends Data.TaggedError(
+	"CedroConfigurationError",
+)<{
+	readonly message: string;
+}> {}
+
 export interface CedroConfigShape {
 	readonly magicToken: string;
 	readonly username: string;
@@ -19,11 +26,39 @@ export class CedroConfig extends Context.Service<
 	CedroConfigShape
 >()("CedroConfig") {}
 
+/**
+ * Validates Cedro login credentials: every field present, none containing a
+ * line break. Reports the first failure in check order.
+ */
+export const validateCedroCredentials = (
+	config: CedroConfigShape,
+): Result.Result<void, CedroConfigurationError> => {
+	if (!config.magicToken || !config.username || !config.password) {
+		return Result.fail(
+			new CedroConfigurationError({
+				message: "Missing required Cedro credentials or magic token",
+			}),
+		);
+	}
+	if (
+		[config.magicToken, config.username, config.password].some((value) =>
+			/[\r\n]/.test(value),
+		)
+	) {
+		return Result.fail(
+			new CedroConfigurationError({
+				message: "Cedro login fields must not contain line breaks",
+			}),
+		);
+	}
+	return Result.succeed(undefined);
+};
+
 export interface CedroClientShape {
 	/** Sends login fields in order; completion does not confirm server acceptance. */
 	readonly authenticate: () => Effect.Effect<
 		void,
-		TcpStreamError | CedroProtocolError
+		TcpStreamError | CedroConfigurationError
 	>;
 	readonly subscribe: (
 		tickers: ReadonlyArray<string>,
@@ -84,29 +119,11 @@ export const makeCedroClient = Effect.gen(function* () {
 
 	const formatAuthCommand = (
 		config: CedroConfigShape,
-	): Result.Result<string, CedroProtocolError> => {
-		if (!config.magicToken || !config.username || !config.password) {
-			return Result.fail(
-				new CedroProtocolError({
-					message: "Missing required Cedro credentials or magic token",
-				}),
-			);
-		}
-		if (
-			[config.magicToken, config.username, config.password].some((value) =>
-				/[\r\n]/.test(value),
-			)
-		) {
-			return Result.fail(
-				new CedroProtocolError({
-					message: "Cedro login fields must not contain line breaks",
-				}),
-			);
-		}
-		return Result.succeed(
-			`${config.magicToken}\n${config.username}\n${config.password}\n`,
+	): Result.Result<string, CedroConfigurationError> =>
+		Result.map(
+			validateCedroCredentials(config),
+			() => `${config.magicToken}\n${config.username}\n${config.password}\n`,
 		);
-	};
 
 	const authenticate = () =>
 		Effect.gen(function* () {

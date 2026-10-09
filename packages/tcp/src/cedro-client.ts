@@ -20,8 +20,10 @@ import {
 	CedroClientLive,
 	CedroConfigLive,
 	type CedroConfigShape,
+	CedroConfigurationError,
 	CedroProtocolError,
 	isCedroAuthRejection,
+	validateCedroCredentials,
 } from "./cedro-protocol.js";
 import {
 	type CedroScidSinkShape,
@@ -73,6 +75,7 @@ export const runCedroSession = <E = never, R = never>(
 	void,
 	| TcpStreamError
 	| CedroProtocolError
+	| CedroConfigurationError
 	| CedroAuthTimeoutError
 	| CedroAuthRejectionError
 	| E,
@@ -173,7 +176,11 @@ export interface CedroSupervisorOptions extends CedroSessionOptions {
 export const runCedroSupervisor = <E = never, R = never>(
 	onLine: (line: string) => Effect.Effect<void, E, R>,
 	options: CedroSupervisorOptions,
-): Effect.Effect<void, CedroAuthRejectionError | CedroProtocolError | E, R> =>
+): Effect.Effect<
+	void,
+	CedroAuthRejectionError | CedroConfigurationError | CedroProtocolError | E,
+	R
+> =>
 	Effect.gen(function* () {
 		const delays = options.backoffDelays ?? [
 			"1 second",
@@ -188,30 +195,7 @@ export const runCedroSupervisor = <E = never, R = never>(
 		const attemptRef = yield* Ref.make(0);
 
 		// Validate credentials upfront (so invalid local config fails fast before loop)
-		if (
-			!options.credentials.magicToken ||
-			!options.credentials.username ||
-			!options.credentials.password
-		) {
-			return yield* Effect.fail(
-				new CedroProtocolError({
-					message: "Missing required Cedro credentials or magic token",
-				}),
-			);
-		}
-		if (
-			[
-				options.credentials.magicToken,
-				options.credentials.username,
-				options.credentials.password,
-			].some((val) => /[\r\n]/.test(val))
-		) {
-			return yield* Effect.fail(
-				new CedroProtocolError({
-					message: "Cedro login fields must not contain line breaks",
-				}),
-			);
-		}
+		yield* Effect.fromResult(validateCedroCredentials(options.credentials));
 
 		while (true) {
 			const attempt = yield* Ref.get(attemptRef);
@@ -279,11 +263,7 @@ export const runCedroSupervisor = <E = never, R = never>(
 					);
 					return yield* Effect.fail(failure);
 				}
-				if (
-					failure instanceof CedroProtocolError &&
-					(failure.message.includes("line breaks") ||
-						failure.message.includes("Missing required"))
-				) {
+				if (failure instanceof CedroConfigurationError) {
 					yield* onStatus(
 						`[cedro] Fatal configuration error: ${failure.message}`,
 					);

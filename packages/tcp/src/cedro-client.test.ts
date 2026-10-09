@@ -319,7 +319,7 @@ describe("Cedro client", () => {
 				);
 				expect(Exit.isFailure(exit)).toBe(true);
 				if (Exit.isFailure(exit)) {
-					expect(exit.cause.toString()).toContain("CedroProtocolError");
+					expect(exit.cause.toString()).toContain("CedroConfigurationError");
 				}
 				expect(sent).toEqual([]);
 			});

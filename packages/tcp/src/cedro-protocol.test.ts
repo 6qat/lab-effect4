@@ -65,7 +65,7 @@ describe("CedroProtocol", () => {
 		}
 	});
 
-	it("fails with CedroProtocolError when credentials are missing", async () => {
+	it("fails with CedroConfigurationError when credentials are missing", async () => {
 		const port = 59231;
 
 		const server = Bun.listen({
@@ -103,7 +103,7 @@ describe("CedroProtocol", () => {
 			const exit = await Effect.runPromiseExit(program);
 			expect(Exit.isFailure(exit)).toBe(true);
 			if (Exit.isFailure(exit)) {
-				expect(exit.cause.toString()).toContain("CedroProtocolError");
+				expect(exit.cause.toString()).toContain("CedroConfigurationError");
 			}
 		} finally {
 			server.stop(true);
