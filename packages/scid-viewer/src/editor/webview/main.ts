@@ -7,23 +7,25 @@ import type {
 	ToggleLiveTailMessage,
 } from "../protocol.js";
 import {
+	escapeHtml,
+	formatFileSize,
+	formatFilteredRangeIndicator,
+	formatRangeIndicator,
+	matchesRecordFilter,
+	type PriceFilter,
+	parsePriceFilter,
+} from "../record-render.js";
+import {
 	CHUNK_SIZE,
 	calculatePrefetchChunkIndices,
 	calculateSpacerHeights,
 	calculateVirtualScrollMetrics,
-	escapeHtml,
 	FOLLOW_THRESHOLD_PX,
-	formatFileSize,
-	formatFilteredRangeIndicator,
-	formatRangeIndicator,
 	formatUnreadPillText,
 	MAX_CACHED_CHUNKS,
-	matchesRecordFilter,
 	OVERSCAN_ROWS,
-	type PriceFilter,
-	parsePriceFilter,
 	ROW_HEIGHT,
-} from "../webview-html.js";
+} from "../virtual-scroll.js";
 
 declare function acquireVsCodeApi(): {
 	postMessage(msg: unknown): void;
