@@ -1,22 +1,10 @@
 {
-  "worktrees": {
-    "wt-1789607505485-1": {
-      "branch": "(detached)",
-      "path": "/home/guiga/Devel-NT/lab-effect4/.kilo/worktrees/juvenile-twist",
-      "parentBranch": "master",
-      "createdAt": "2026-09-16T15:56:34.923Z",
-      "remote": "origin",
-      "originalBranch": "HEAD"
-    }
-  },
+  "worktrees": {},
   "sessions": {},
   "tabOrder": {
     "local": [
       "pending:ddeca29e-2206-44fa-ad1c-999ad0c6b195"
     ]
   },
-  "worktreeOrder": [
-    "wt-1789607505485-1"
-  ],
   "sessionsCollapsed": true
 }

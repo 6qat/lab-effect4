@@ -5,3 +5,5 @@ example.txt
 dist/
 data/
 *.vsix
+.commandcode/
+.qoder/skills/

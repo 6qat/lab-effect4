@@ -4,7 +4,7 @@ How the engineering skills should consume this repo's domain documentation when 
 
 ## Before exploring, read these
 
-- **[`CONTEXT.md`](../../CONTEXT.md)** at the repo root defines the TCP domain vocabulary.
+- **[`GLOSSARY.md`](../../GLOSSARY.md)** at the repo root defines the TCP domain vocabulary.
 - **[`docs/adr/`](../adr/)** at the repo root: read ADRs that touch the area you're about to work in, including workspace decisions.
 - **[`docs/research/`](../research/)**: protocol and API reference notes (e.g. [`cedro-times-and-trades.md`](../research/cedro-times-and-trades.md) for Cedro `V:` trade messages). Read the relevant note before parsing or emitting protocol messages.
 
@@ -16,7 +16,7 @@ The two workspaces share the root documentation. `tcp` contains the networking d
 
 ```
 /
-├── CONTEXT.md
+├── GLOSSARY.md
 ├── docs/adr/
 └── packages/
     ├── lab/src/
@@ -25,7 +25,7 @@ The two workspaces share the root documentation. `tcp` contains the networking d
 
 ## Use the glossary's vocabulary
 
-When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in `CONTEXT.md`. Don't drift to synonyms the glossary explicitly avoids.
+When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in `GLOSSARY.md`. Don't drift to synonyms the glossary explicitly avoids.
 
 If the concept you need isn't in the glossary yet, that's a signal: either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/domain-modeling`).
 

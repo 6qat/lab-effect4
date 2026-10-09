@@ -140,4 +140,4 @@ Use the default canonical triage labels: `needs-triage`, `needs-info`, `ready-fo
 
 ### Domain docs
 
-The TCP domain uses root-level `CONTEXT.md` and `docs/adr/`; the `lab` workspace contains learning examples without a separate business context. Read `docs/agents/domain.md` when exploring domain terminology or architectural decisions.
+The TCP domain uses root-level `GLOSSARY.md` and `docs/adr/`; the `lab` workspace contains learning examples without a separate business context. Read `docs/agents/domain.md` when exploring domain terminology or architectural decisions.

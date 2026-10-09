@@ -98,4 +98,4 @@ bun run --cwd packages/tcp format:check
 
 Use `bun run --cwd packages/tcp format` to apply formatting and Biome fixes. Tests remain beside their source files, including the shared conformance suite used by all three engines. They run with Bun and create local TCP/TLS servers.
 
-See the root [domain glossary](../../CONTEXT.md), [ADRs](../../docs/adr/), and [research](../../docs/research/) for terminology and design history. General Effect learning examples live in [lab](../lab/README.md); this workspace has no dependency on them.
+See the root [domain glossary](../../GLOSSARY.md), [ADRs](../../docs/adr/), and [research](../../docs/research/) for terminology and design history. General Effect learning examples live in [lab](../lab/README.md); this workspace has no dependency on them.

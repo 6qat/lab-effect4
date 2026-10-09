@@ -51,4 +51,4 @@ Examples can execute work at module load. File I/O examples resolve relative fil
 
 ## Design and conventions
 
-The TCP domain vocabulary stays in [CONTEXT.md](CONTEXT.md), with decisions in [docs/adr](docs/adr/) and supporting material in [docs/research](docs/research/). The learning examples do not introduce a separate business context. See [ADR 0009](docs/adr/0009-private-lab-and-tcp-workspaces.md) for the workspace boundary and [AGENTS.md](AGENTS.md) for repository conventions.
+The TCP domain vocabulary stays in [GLOSSARY.md](GLOSSARY.md), with decisions in [docs/adr](docs/adr/) and supporting material in [docs/research](docs/research/). The learning examples do not introduce a separate business context. See [ADR 0009](docs/adr/0009-private-lab-and-tcp-workspaces.md) for the workspace boundary and [AGENTS.md](AGENTS.md) for repository conventions.
